@@ -26,6 +26,9 @@ build/
 /models/**/*.pt
 /models/**/*.onnx
 /models/**/*.pth
+/models/**/*.data
+/models/**/*.gguf
+/models/**/*.npz
 
 # Experiment outputs (track plots, results & scripts; ignore heavy weights & DBs)
 /experiments/checkpoints/*.pt

@@ -3,10 +3,10 @@
 - **Motivation/Background**: Data-Science-Major-Project implements a modular, reproducible deep-learning pipeline designed for robust research, high-performance training, and AI-assisted engineering.
 - **Purpose**: Serve as the central portfolio entry point, architecture map, installation guide, and execution manual.
 - **Overview Pipeline**: Follows strict Separation of Concerns (SoC) where all training runs as logged, resumable Python scripts, while notebooks are reserved for exploration, testing, and visualization.
-- **Detailed Plan**: §1 Architecture; §2 Repository Layout; §3 Environment & Packaging; §4 Testing; §5 Governance.
+- **Detailed Plan**: §1 Architecture; §2 Repository Layout; §3 Setup & Models; §4 Running Simulation & ASR; §5 Testing & Verification; §6 Governance.
 - **References**: `agents/rules/`, `docs/`, `pyproject.toml`, `requirements.txt`.
 - **Created**: 2026-07-25T00:00:00+07:00
-- **Last Updated**: 2026-09-06T21:05:00+07:00
+- **Last Updated**: 2026-10-21T21:40:00+07:00
 
 
 ---
@@ -124,44 +124,114 @@ Data-Science-Major-Project/
 
 ## ⚙️ Installation & Setup
 
-### 1. Environment Creation
+### 1. Python Environment (Repository Root)
+
+All Python services, servers, and scripts execute from the **single root virtual environment**:
 
 ```bash
-# Windows
+# Windows (PowerShell)
 python -m venv .venv
-.\.venv\Scripts\activate
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
 
 # Linux / macOS
 python3 -m venv .venv
 source .venv/bin/activate
+pip install -r requirements.txt
 ```
 
-### 2. Dependency Installation
+> [!TIP]
+> **GPU Acceleration (NVIDIA CUDA):**
+> On Windows with NVIDIA GPUs (e.g. RTX 4060), install the PyTorch CUDA wheels for real-time speech and vision performance:
+> ```bash
+> pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
+> ```
+
+---
+
+## 📥 Required Models & Weight Downloads
+
+Both models run **100% offline** and are excluded from Git commits via `.gitignore`:
+
+### 1. YOLOv8n (Person Detection)
+Download the pretrained YOLOv8n weights directly to `models/yolov8n/`:
+```bash
+# Windows PowerShell / Linux / macOS
+curl.exe -L -o models/yolov8n/yolov8n.pt https://github.com/ultralytics/assets/releases/download/v8.4.0/yolov8n.pt
+# Copy for sim_vision fallback
+Copy-Item models/yolov8n/yolov8n.pt sim_vision/python/yolov8n.pt
+```
+
+### 2. PhoASR Whisper Small (Vietnamese Speech Recognition)
+Download the complete Hugging Face model locally (no background cache dependency):
+```bash
+python scripts/download_phoasr.py
+```
+*Saves all 14 model files directly to `models/PhoASR-whisper-small/` (~927 MB).*
+
+---
+
+## 🎮 Running the Simulation & Vision Pipeline
+
+### Step 1: Initialize Godot Project (First Time Only)
+On a fresh clone, run Godot in headless editor mode once so it compiles `.godot/global_script_class_cache.cfg` and imports 3D textures/models:
+```bash
+# Replace with your local Godot 4.3+ console binary path
+& "C:\Users\TDV\Downloads\Godot4\Godot_v4.7.2-stable_win64_console.exe" --headless --editor --quit --path sim_vision/godot
+```
+
+### Step 2: Start the YOLO WebSocket Server (Terminal 1)
+```bash
+python sim_vision/python/yolo_server.py --model models/yolov8n/yolov8n.pt
+```
+*Listens on `ws://127.0.0.1:8765`. It captures frames streamed by the robot, runs YOLOv8n inference on GPU/CPU, and returns bounding box coordinates.*
+
+### Step 3: Launch Godot Simulation (Terminal 2)
+```bash
+& "C:\Users\TDV\Downloads\Godot4\Godot_v4.7.2-stable_win64_console.exe" --path sim_vision/godot
+```
+*Or open `sim_vision/godot/project.godot` inside Godot Editor and press **F5**.*
+
+#### Interactive Controls in Simulation:
+* **`R`**: Resets the robot and human to new random locations (≥ 3m apart).
+* **`Esc`**: Quits the simulation.
+* **Top-Right Overlay**: Live robot camera viewport, detection bounding boxes, state indicator (`SEARCH` / `APPROACH` / `ARRIVED`), and server connection status (`YOLO: đã kết nối` / `YOLO: mất kết nối`).
+
+---
+
+## 🎙️ Speech-to-Text (ASR) Pipeline
+
+The speech pipeline evaluates Vietnamese voice commands for hospital navigation:
 
 ```bash
-# Upgrade pip
-python -m pip install --upgrade pip
+# 1. Convert audio samples to standardized 16kHz mono PCM WAV
+python scripts/convert_audio.py
 
-# Standard / CPU Installation
-pip install -r requirements.txt
-pip install -e .
+# 2. Test single audio transcription
+python scripts/test_asr.py data/processed/real_voice/sample_001.wav
 
-# Optional: NVIDIA GPU Workstations (CUDA 13.0 wheels)
-# pip install torch torchvision --index-url https://download.pytorch.org/whl/cu130
-# pip install -r requirements.txt
-# pip install -e .
+# 3. Run full 70-sample benchmark suite (with WER, CER, RTF metrics)
+python scripts/evaluate_asr.py
 ```
+*Benchmark metrics and summary are saved to `experiments/results/asr_summary.json`.*
 
 ---
 
 ## 🧪 Testing & Verification
 
-Run the test battery:
+Run both test batteries to ensure integrity across both engines:
+
+### Python Test Battery (Pytest)
 ```bash
-pytest tests/ -v -m "not gpu"
-ruff check src tests
-python -c "import src; print('Package import verified!')"
+pytest
 ```
+*Runs all 44 unit tests across project architecture, smoke tests, and WebSocket protocol/fake detector.*
+
+### Godot Test Battery (GUT Headless)
+```bash
+& "C:\Users\TDV\Downloads\Godot4\Godot_v4.7.2-stable_win64_console.exe" --headless --path sim_vision/godot -s addons/gut/gut_cmdln.gd -gconfig=res://.gutconfig.json
+```
+*Runs all 81 unit/integration tests across room geometry, raycast safety, kinematics, FSM controller, and vision client.*
 
 ---
 
@@ -170,3 +240,4 @@ python -c "import src; print('Package import verified!')"
 - AI agents adhere to the 6-stage lifecycle: `AUDIT → PLAN → IMPLEMENT → VERIFY → COMMIT → MERGE` ([agents/rules/AGENT_AI.md](agents/rules/AGENT_AI.md)).
 - Setup procedures are codified in [docs/shared/HOW_TO_SETUP_AI_AGENT.md](docs/shared/HOW_TO_SETUP_AI_AGENT.md).
 - Inter-agent checkpoints follow [docs/shared/HANDOFF_TEMPLATE.md](docs/shared/HANDOFF_TEMPLATE.md).
+- Architectural choices and audit logs are recorded in [docs/AI-Human-logs/Vuong.md](docs/AI-Human-logs/Vuong.md).

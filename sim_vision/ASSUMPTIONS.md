@@ -111,3 +111,82 @@
 - [G10] Tham số dòng lệnh `-- --runs=N --max-time=S` (mặc định 10 lượt và 30 s). Batch cần cửa sổ có render; khi `--headless` thì tự thoát với mã 2.
 - [G10] `analyze_logs.py` đọc mọi file `logs/run_*.csv` ở thư mục gốc `logs/` (không đọc thư mục con) và `logs/batch_summary.csv`; biểu đồ lưu ở `logs/h_vs_distance.png`. Log chạy thử trước batch đã chuyển sang `logs/archive_pre_batch/`.
 - [G10] Thêm `pandas==3.0.6`, `matplotlib==3.11.2` vào `requirements.txt`.
+
+# Sim_Voice (G11–G17, `docs/PROMPT/godot_npc_stt_prompt.md`)
+
+## Quyết định của người dùng (2026-10-21), khác kế hoạch
+- [G11–G17] Model STT là **Qualcomm PhoASR-whisper-small** bản local ở `models/PhoASR-whisper-small`, không phải `vinai/PhoWhisper-small`. `STT_MODEL_ID` mặc định trỏ tới thư mục này (đổi được qua biến môi trường `STT_MODEL_ID`); không tải gì từ mạng.
+- [G11] Dữ liệu nguồn ở `data/raw/real_voice/` (một thư mục phẳng, file `.m4a`), không phải `data/A`, `data/B` như Mục 2.4. Hằng số `RAW_SUBDIR = "raw/real_voice"`. File `data/processed/real_voice/*.wav` có sẵn từ `scripts/convert_audio.py` không được dùng và không bị đụng tới.
+- [G11] Câu chung đặt tên `Nam_Cxx.m4a` (một lần thu) được coi là `A_Cxx_r` (đọc rõ, `ref_verified = true`); `A_Cxx_n` nằm trong `missing.csv`. Tương tự `Nu_Cxx` ➔ `B_Cxx_r` (giả định theo cùng quy ước, chưa có file).
+- [G11–G17] Hiện chỉ có giọng A (nam, 70 clip). Code hỗ trợ đủ A và B; B nằm trong `missing.csv`, chạy lại G11 khi có file.
+
+## G11
+- [G11] Kịch bản đọc từ `docs/kich_ban_thu_am.md` (kế hoạch ghi `recordings/kich_ban_thu_am.md`, thư mục này không tồn tại).
+- [G11] Văn bản kịch bản được chuẩn hóa Unicode NFC khi đọc. Mã câu trùng ➔ báo lỗi (không âm thầm ghi đè).
+- [G11] Cắt im lặng bằng `librosa.effects.trim(top_db=40, frame_length=512, hop_length=128)` rồi giữ lại tối đa 200 ms mỗi bên. Khung mặc định 2048 mẫu làm dư ~70 ms mỗi bên nên đã thu nhỏ.
+- [G11] Giới hạn độ dài (< 0.3 s, > 15 s) kiểm tra **sau khi cắt im lặng**; file toàn im lặng ➔ "too short".
+- [G11] "Chạm ±1.0" tính là `|x| ≥ 0.999` trên tín hiệu đã chuyển về 16 kHz mono (trước khi cắt). Cột `clipping` thêm vào cuối nhóm cột của manifest, trước `src_path`.
+- [G11] `.m4a` giải mã bằng `ffmpeg -ac 1 -ar 16000 -f f32le`; `.wav` đọc bằng `soundfile`, trộn kênh bằng trung bình, resample bằng `librosa`. ffmpeg báo lỗi ➔ `skipped.csv` lý do "decode error".
+- [G11] Idempotent: `data/processed/.prepare_cache.json` lưu `(src, size, mtime_ns)` và thông số của mỗi clip; khớp và file wav còn ➔ không xử lý lại. Hai file nguồn cùng `clip_id` (vd `Nam_C01.m4a` và `A_C01_r.m4a`) ➔ file sau theo thứ tự tên bị bỏ, lý do "duplicate clip_id".
+- [G11] `src_path` ghi đường dẫn tương đối so với `DATA_DIR` (không lộ đường dẫn máy).
+- [G11] `missing.csv` có cột `clip_id, text`. `transcripts_n_todo.csv` có cột `clip_id, text_script, text_fixed`; `text_fixed` cũ được giữ, kể cả khi clip đó tạm thời không còn file.
+- [G11] `sync_voices` chỉ copy file mới hoặc đã đổi nội dung, xóa wav (và `.import`) không còn trong manifest. `godot/assets/voices/` được thêm vào `.gitignore`.
+- [G11] Test voice không dùng `conftest.py` riêng (sẽ trùng tên module với `tests/conftest.py` khi `from conftest import`); fixture nằm trong `tests/voice/voice_testutil.py`.
+- [G11] Thêm `torch`, `transformers`, `librosa`, `soundfile`, `jiwer` (ghim phiên bản đã cài) vào `requirements.txt`. `transformers` 5.20.2 mới hơn bản tạo model (4.48.0) nhưng đã chạy thử được.
+
+## G12
+- [G12] Model load từ thư mục local (`--model`, mặc định `STT_MODEL_ID`); không phải thư mục ➔ báo lỗi và thoát mã 1 (không tải từ Hub). Khởi động chạy nháp 1 s im lặng để lần nhận dạng đầu không chậm (lần đầu trên MPS mất ~2.6 s).
+- [G12] `Transcriber.transcribe(audio, sr, clip_id=None)`: thêm tham số tùy chọn `clip_id` để `FakeTranscriber` trả đúng `text_ref`; model thật bỏ qua tham số này.
+- [G12] Babble: "clip khác người" ➔ ưu tiên clip của người nói khác; hiện chỉ có giọng A nên lấy các clip cùng người nhưng **khác câu** (khác `sentence_id`). Chọn 4–6 clip không lặp, mỗi clip lặp/dịch thời gian ngẫu nhiên và giảm 20 dB, rồi cả tổng được chỉnh mức để đạt đúng `snr_db` (yêu cầu SNR ±0.5 dB được ưu tiên, nên mức −20 dB chỉ ảnh hưởng tỉ lệ giữa các clip, không ảnh hưởng mức ồn cuối).
+- [G12] Công suất tiếng nói tính trên toàn clip đã cắt im lặng (còn ≤ 200 ms im lặng mỗi bên), không dùng VAD.
+- [G12] SNR đo lại = công suất tiếng nói sau giảm âm so với phần dư (tín hiệu trộn − tiếng nói); test đạt ±0.5 dB với white, babble và file ồn.
+- [G12] `noise="none"` ➔ `effective_snr_db = inf` trong `render`; trong message JSON ghi `null` (JSON không biểu diễn được inf).
+- [G12] Seed mỗi utterance = `zlib.crc32("<utt_id>:<clip_id>")` (ổn định giữa các lần chạy; `hash()` của Python bị ngẫu nhiên hóa với chuỗi).
+- [G12] Kiểm tra message theo thứ tự type ➔ utt_id ➔ clip_id ➔ distance_m (số hữu hạn, ≥ 0) ➔ snr_db (số hữu hạn) ➔ noise (chuỗi khác rỗng); lỗi `"missing field: X"`, `"invalid field: X"`, `"invalid json"`. Tên ồn không phải none/white/babble và không có `data/noise/<tên>.wav` ➔ `"noise not found: <tên>"`. Lỗi lúc chạy model ➔ `"stt failed: <loại lỗi>"` (không gửi chi tiết).
+- [G12] Một worker dùng chung model cho mọi kết nối, xử lý lần lượt theo thứ tự đến; hàng chờ tối đa 4 utterance **không tính cái đang chạy**; đầy ➔ `"stt busy"` ngay. Message lỗi định dạng được trả lời ngay, không vào hàng chờ.
+- [G12] `stt_ms` chỉ đo thời gian model (không gồm đọc file và mô phỏng âm thanh); làm tròn 1 chữ số, `audio_s` và `effective_snr_db` làm tròn 2 chữ số.
+- [G12] Thêm CLI `python -m voice.send_utterance <clip_id>` để gửi thử (tương tự `send_image.py`).
+
+## G13
+- [G13] Chuẩn hóa bỏ thêm ngoặc kép/đơn kiểu chữ in (“ ” ‘ ’) và gạch dài (– —) ngoài danh sách Mục 2.6, vì cùng nghĩa với dấu câu đã liệt kê. Dấu câu được thay bằng khoảng trắng (không xóa dính) để "X-quang" ➔ "x quang".
+- [G13] `has_number_mismatch(ref, hyp)`: `ref` có số viết bằng chữ số mà `hyp` không chứa đúng số đó (so theo token chữ số). Ref không có số ➔ false.
+- [G13] WER/CER gộp theo corpus (tổng lỗi / tổng từ của ref) cho mọi bảng; WER từng dòng vẫn ghi trong CSV. KTC 95% bootstrap theo clip: lấy lại clip có hoàn lại, cộng lỗi và độ dài mọi dòng của clip đó, 1000 lần, seed cố định.
+- [G13] `noise="none"` chạy với 1 SNR (giữ chỗ 30 dB) cho mỗi khoảng cách ➔ lưới mặc định 4 + 2 × 4 × 4 = 36 điều kiện × 70 clip = 2520 dòng. Bảng theo `snr_db` bỏ các dòng `none`.
+- [G13] Seed mỗi dòng = crc32(`"<seed>:<clip_id>:<distance>:<snr>:<noise>"`), seed mặc định 0. Cache ở `reports/stt_cache/cache.jsonl` (JSON lines, khóa `[clip_id, distance, snr, noise, seed, model, beams]`; `model` là tên thư mục model).
+- [G13] Kết quả ra `sim_vision/reports/`. `reports/*.csv` và `reports/stt_cache/` bị gitignore vì chứa văn bản nhận dạng từ giọng thật; `stt_summary.md` và 2 ảnh biểu đồ thì không.
+- [G13] Biểu đồ WER theo SNR lấy trung bình mọi khoảng cách (đường `none` là đường ngang); WER theo khoảng cách lấy trung bình mọi SNR, mỗi loại ồn một đường.
+- [G13] Có intent module (G14) thì cột `intent_pred`, `intent_ok` được điền cho mọi clip (kể cả `_n`); bảng độ chính xác intent theo `take`, `noise`, `distance_m` có trong báo cáo.
+- [G13] Thêm `--grid quick` (2 khoảng cách × 2 SNR × babble + none) và `--fake` (FakeTranscriber) để kiểm tra đường ống nhanh.
+
+## G14
+- [G14] Thêm intent `ho_tro_di_chuyen` (câu A_20 "…cho mượn xe lăn không?"): nhãn này có trong bảng kịch bản nhưng thiếu ở bảng intent Mục 6. Theo thứ tự nguồn chân lý, nhãn trong kịch bản được giữ; xếp sau `dang_ky_kham` trong nhóm "còn lại".
+- [G14] Thứ tự nhóm "các intent còn lại": khong_ho_tro ➔ nha_thuoc ➔ bao_hiem ➔ thanh_toan ➔ dang_ky_kham ➔ ho_tro_di_chuyen ➔ thoi_gian_cho ➔ tien_ich ➔ tiep_tuc ➔ cam_on. `nha_thuoc` trước `bao_hiem` vì "lấy thuốc bảo hiểm ở đâu" là `nha_thuoc`.
+- [G14] `hoi_khoa`: khớp "khoa nào", "khám khoa" hoặc tên khoa trong `hospital_map.json` ➔ 1.0; chỉ có từ "khoa" ➔ 0.6. `hoi_phong`: có từ "phòng" ➔ 1.0; hoặc tên phòng/dịch vụ trong bản đồ **kèm** từ hỏi vị trí (ở đâu, đường nào, lối nào, chỗ…) ➔ 1.0. Điều kiện kèm vị trí để "bao lâu thì có kết quả xét nghiệm" thành `thoi_gian_cho` chứ không phải `hoi_phong`.
+- [G14] Một số cụm từ được ghép thành một token trước khi khớp ("hướng dẫn", "tiếp đón", "nghỉ trưa", "nội soi") để từ đơn bên trong không khớp nhầm ("dẫn" ➔ dan_duong, "nghỉ" ➔ dung_lai).
+- [G14] Slot `room`: số 100–999 viết bằng chữ số **hoặc đọc bằng chữ** ("hai trăm linh năm", "ba không bốn" ➔ 304) vì PhoASR viết số bằng chữ; không có số thì tra tên phòng trong bản đồ (vd "nội soi" ➔ 208). `department`: tên khoa viết thường theo bản đồ ("tiêu hóa"). `floor`: số ngay sau từ "tầng" (lấy lần xuất hiện đầu tiên).
+- [G14] Thêm slot **`facility`** (key trong `facilities` của bản đồ, vd `nha_ve_sinh`) — ngoài 3 slot của G14.1 — để `tien_ich` biết người hỏi cần thang máy hay nhà vệ sinh; `slots` là dict tự do trong Mục 2.2 nên không đổi hợp đồng message. Nếu không muốn, bỏ slot này thì `tien_ich` sẽ luôn hỏi lại.
+- [G14] `hospital_map.json` là dữ liệu bịa (`is_mock: true`): 13 khoa, 15 phòng, 12 tiện ích/quầy; tầng, số phòng, vị trí đều tự đặt. Phòng không có trong bản đồ ➔ tầng = chữ số đầu của số phòng (205 ➔ tầng 2).
+- [G14] Câu trả lời chỉ chỉ đường, gọi nhân viên hoặc hỏi lại. `hoi_khoa` không có tên khoa (vd "đau bụng nên khám khoa nào") ➔ hỏi lại và gợi ý hỏi quầy tiếp đón, KHÔNG tự suy khoa từ triệu chứng (sẽ là lời khuyên y khoa). `bao_hiem`, `thanh_toan` chỉ chỉ quầy, không khẳng định chính sách (vd CCCD có thay thẻ BHYT được không).
+- [G14] **Luật được viết dựa trên chính kịch bản** ➔ độ chính xác trên `text_ref` (100%) cao hơn thực tế; số liệu đáng tin hơn là độ chính xác trên kết quả STT (G13/G17).
+
+## G15
+- [G15] `npc.gd` là node con `Npc` của `Human` (Godot chỉ gắn 1 script/node, `human.gd` giữ nguyên). Khi NOTICE: lưu `walks`, đặt `walks = false`; khi `on_reply_shown()`, `reset()` hoặc dừng nói giữa chừng thì khôi phục.
+- [G15] Node `Head` (Node3D tại cao 1.6 m, lệch 8 cm ra phía trước mặt) chứa `AudioStreamPlayer3D` tên `Voice`. Không gắn vào xương đầu (BoneAttachment) vì NPC đứng yên khi nói.
+- [G15] Chưa có animation `talk` ➔ dùng `idle`. Chỉ có model người nam ➔ speaker B (khi có) dùng chung model.
+- [G15] Robot cần cho NPC được truyền qua `setup(robot, state_fn)`; `state_fn` trả trạng thái robot lúc gọi. Chưa setup ➔ NPC không làm gì (scene G4/G10 không bị ảnh hưởng).
+- [G15] `clips.json` chỉ được đọc khi NPC bắt đầu nói lần đầu (không đọc trong `_ready`), để máy chưa chạy G11 không báo lỗi ở mọi scene có Human. Clip không nạp được ➔ `push_error`, về IDLE và đặt cooldown `NPC_COOLDOWN_S` để không báo lỗi mỗi khung hình.
+- [G15] Wav nạp bằng `load()` nếu đã import, không thì `AudioStreamWAV.load_from_file()` (thư mục voices bị gitignore nên có thể chưa import). Thư mục voices đổi được qua biến `voices_dir` (test dùng `user://test_voices`).
+- [G15] Chọn clip ngẫu nhiên: lọc theo `speaker`, ưu tiên intent chưa dùng; dùng hết intent thì xóa danh sách và chọn lại. Danh sách clip sắp xếp theo tên trước khi chọn ➔ cùng seed cùng kết quả.
+- [G15] Thêm signal `talk_started(clip_id)` (để robot vào LISTEN) và `talk_aborted(clip_id)` (robot rời xa khi NPC đang nói) ngoài `utterance_finished`. Dừng giữa chừng không tính lượt và không đặt cooldown.
+- [G15] Ngưỡng "robot bỏ đi" dùng `>` (đúng 3.0 m chưa tính); ngưỡng bắt đầu dùng `≤ TALK_TRIGGER_DIST` như pseudocode.
+
+## G16
+- [G16] `Config.RobotState` thêm LISTEN, THINK, RESPOND sau ARRIVED (giá trị 3, 4, 5; các giá trị cũ giữ nguyên). Thêm hằng số Sim_Voice dùng phía Godot vào `config.gd` (`DATA_DIR`, `STT_MODEL_ID`, `SAMPLE_RATE` chỉ dùng phía Python nên không thêm).
+- [G16] `main.gd` chỉ sửa đúng phần Mục 2.3 cho phép: ở LISTEN/THINK/RESPOND không gọi controller (cả khi có detection lẫn khi mất người), lệnh robot = (0, 0), log G9 vẫn ghi với v = omega = 0. Thêm `is_dialogue_state()` và `set_dialogue_state()`; phím R còn đặt lại NPC và hội thoại. Về ARRIVED thì controller chạy lại từ frame nhận diện sau.
+- [G16] `DialogueManager` là con của Main, tìm NPC / SttClient / Subtitle qua `NodePath` export. utt_id tăng mỗi lượt và không reset khi nhấn R, để transcript muộn của lượt trước bị bỏ.
+- [G16] Timeout, `error` của server (đúng utt_id), mất kết nối khi đang THINK, hoặc gửi không được (chưa kết nối) ➔ câu xin lỗi hiện `SUBTITLE_S` giây nhưng robot về ARRIVED và `npc.on_reply_shown()` **ngay** (theo pseudocode `show_sorry(); log(error); finish()`). Lỗi trong log: `timeout`, `stt disconnected`, `server: <message>`.
+- [G16] Server không có intent (`response = null`) ➔ dòng "Robot:" hiện câu xin lỗi.
+- [G16] Thêm signal `turn_completed(row)` trên DialogueManager (cùng nội dung dòng log) cho batch G17.
+- [G16] Log hội thoại do `DialogueLogger` riêng ghi (không dùng RunLogger của G9) vì `hyp_text` có dấu phẩy cần ngoặc kép; mỗi lượt ghi và flush ngay. Số thực 4 chữ số thập phân, ô thiếu để trống.
+- [G16] Phụ đề dùng `SystemFont` (Helvetica Neue / Arial / Segoe UI / Noto Sans / DejaVu Sans) để có đủ dấu tiếng Việt; dòng trả lời 24 px, dòng "Nghe được" 18 px màu xám nhạt; nền đen 62% bo góc, cách đáy 24 px.
+- [G16] Ô góc nhìn chỉ hiện dòng STT khi scene có hội thoại (sau lần gọi `set_stt_connected` đầu tiên), đặt ngay trên dòng YOLO.

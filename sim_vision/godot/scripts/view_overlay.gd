@@ -11,6 +11,8 @@ const FONT_SIZE: int = 13
 var _dets: Array = []
 var _state: String = ""
 var _connected: bool = false
+var _stt_shown: bool = false        # dòng STT chỉ hiện khi scene có hội thoại (G16)
+var _stt_connected: bool = false
 
 @onready var _view: TextureRect = $View
 @onready var _boxes: Control = $Boxes
@@ -38,6 +40,16 @@ static func norm_to_pixel(det: Dictionary, size: Vector2) -> Rect2:
 	return Rect2(p1, p2 - p1)
 
 
+func set_stt_connected(connected: bool) -> void:
+	_stt_shown = true
+	_stt_connected = connected
+	_boxes.queue_redraw()
+
+
+static func stt_connection_text(connected: bool) -> String:
+	return "STT: đã kết nối" if connected else "STT: mất kết nối"
+
+
 static func label_text(det: Dictionary) -> String:
 	return "person %.2f" % float(det["conf"])
 
@@ -57,6 +69,9 @@ func _on_boxes_draw() -> void:
 	_text(font, Vector2(6, FONT_SIZE + 4), _state, TEXT_COLOR)
 	_text(font, Vector2(6, size.y - 6), ViewOverlay.connection_text(_connected),
 			TEXT_COLOR if _connected else Color(1, 0.35, 0.3))
+	if _stt_shown:
+		_text(font, Vector2(6, size.y - 8 - FONT_SIZE), ViewOverlay.stt_connection_text(_stt_connected),
+				TEXT_COLOR if _stt_connected else Color(1, 0.35, 0.3))
 
 
 func _text(font: Font, pos: Vector2, text: String, color: Color) -> void:

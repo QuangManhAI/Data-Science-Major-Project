@@ -1,4 +1,4 @@
-[gd_scene load_steps=9 format=3]
+[gd_scene load_steps=14 format=3]
 
 [ext_resource type="Script" path="res://scripts/main.gd" id="1"]
 [ext_resource type="PackedScene" path="res://scenes/room.tscn" id="2"]
@@ -8,6 +8,10 @@
 [ext_resource type="Script" path="res://scripts/vision_client.gd" id="6"]
 [ext_resource type="PackedScene" path="res://scenes/view_overlay.tscn" id="7"]
 [ext_resource type="Script" path="res://scripts/run_logger.gd" id="8"]
+[ext_resource type="Script" path="res://scripts/stt_client.gd" id="9"]
+[ext_resource type="Script" path="res://scripts/dialogue_manager.gd" id="10"]
+[ext_resource type="Script" path="res://scripts/dialogue_logger.gd" id="11"]
+[ext_resource type="PackedScene" path="res://scenes/subtitle.tscn" id="12"]
 
 [node name="Main" type="Node3D"]
 script = ExtResource("1")
@@ -27,6 +31,12 @@ script = ExtResource("6")
 [node name="RunLogger" type="Node" parent="."]
 script = ExtResource("8")
 
+[node name="SttClient" type="Node" parent="."]
+script = ExtResource("9")
+
+[node name="DialogueLogger" type="Node" parent="."]
+script = ExtResource("11")
+
 [node name="ViewerCamera" type="Camera3D" parent="."]
 transform = Transform3D(0.61095756, 0.3486231, -0.7107692, 0, 0.8978175, 0.44036785, 0.79166335, -0.26904607, 0.5485284, -3.8, 2.85, 2.75)
 current = true
@@ -42,3 +52,8 @@ offset_top = 16.0
 offset_right = 360.0
 offset_bottom = 40.0
 text = "R: đặt lại vị trí   Esc: thoát"
+
+[node name="Subtitle" parent="UI" instance=ExtResource("12")]
+
+[node name="DialogueManager" type="Node" parent="."]
+script = ExtResource("10")

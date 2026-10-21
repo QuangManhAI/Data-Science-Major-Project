@@ -1,4 +1,4 @@
-[gd_scene load_steps=17 format=3]
+[gd_scene load_steps=18 format=3]
 
 [ext_resource type="Script" path="res://scripts/human.gd" id="1"]
 [ext_resource type="PackedScene" path="res://assets/models/human_m06/Male_Adult_06.fbx" id="2"]
@@ -11,6 +11,7 @@
 [ext_resource type="Texture2D" path="res://assets/models/human_m06/textures/head_normal.png" id="9"]
 [ext_resource type="Texture2D" path="res://assets/models/human_m06/textures/head_roughness.jpg" id="10"]
 [ext_resource type="Texture2D" path="res://assets/models/human_m06/textures/opacity_color.png" id="11"]
+[ext_resource type="Script" path="res://scripts/npc.gd" id="12"]
 
 [sub_resource type="AnimationLibrary" id="lib_human"]
 _data = {
@@ -62,5 +63,16 @@ root_node = NodePath("../Model")
 libraries = {
 &"human": SubResource("lib_human")
 }
+
+[node name="Head" type="Node3D" parent="."]
+position = Vector3(0, 1.6, 0.08)
+
+[node name="Voice" type="AudioStreamPlayer3D" parent="Head"]
+attenuation_model = 0
+unit_size = 1.0
+bus = &"Master"
+
+[node name="Npc" type="Node" parent="."]
+script = ExtResource("12")
 
 [editable path="Model"]

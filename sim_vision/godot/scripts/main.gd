@@ -1,6 +1,7 @@
 class_name Main
 extends Node3D
 ## Scene chính (G8): vision_client ➔ controller.step ➔ apply_safety ➔ robot.set_command.
+## Hội thoại (G16): ở LISTEN / THINK / RESPOND robot đứng yên (v = 0, omega = 0), không gọi controller.
 ## Phím R đặt lại vị trí ngẫu nhiên, Esc thoát.
 
 ## Phát sau mỗi chu kỳ nhận diện (sau apply_safety); G9 ghi log từ đây.
@@ -29,6 +30,7 @@ var _start_ms: int = 0
 @onready var vision: VisionClient = $VisionClient
 @onready var overlay: ViewOverlay = $UI/ViewOverlay
 @onready var logger: RunLogger = get_node_or_null(^"RunLogger")  # G9; không có thì không ghi log
+@onready var dialogue: DialogueManager = get_node_or_null(^"DialogueManager")  # G16; không có thì không hội thoại
 
 
 func _ready() -> void:
@@ -60,6 +62,8 @@ func _unhandled_input(event: InputEvent) -> void:
 func _process(_delta: float) -> void:
 	# Quá LOST_TIMEOUT_S không có kết quả mới (nhưng vẫn kết nối) ➔ coi như không thấy ai.
 	var now: int = Time.get_ticks_msec()
+	if Main.is_dialogue_state(state):
+		return
 	if _connected and _last_result_ms >= 0 and now - _last_result_ms > int(Config.LOST_TIMEOUT_S * 1000.0):
 		_apply(_controller.step(state, [], _time_since_seen_s(now)))
 
@@ -73,6 +77,11 @@ func reset_positions() -> void:
 	human.rotation.y = p["human_yaw"]
 	robot.set_command(0.0, 0.0)
 	state = Config.RobotState.SEARCH
+	if dialogue != null:
+		dialogue.reset()
+	var npc: Npc = human.get_node_or_null(^"Npc")
+	if npc != null:
+		npc.reset()
 	_last_seen_ms = -1
 	_last_result_ms = Time.get_ticks_msec()
 	overlay.show_detections([], Config.state_name(state), _connected)
@@ -107,7 +116,12 @@ func _on_detections(frame_id: int, dets: Array, infer_ms: float) -> void:
 	_last_result_ms = now
 	if not dets.is_empty():
 		_last_seen_ms = now
-	var cmd: Dictionary = _apply(_controller.step(state, dets, _time_since_seen_s(now)))
+	var cmd: Dictionary
+	if Main.is_dialogue_state(state):
+		cmd = {"state": state, "v": 0.0, "omega": 0.0, "target": {}}
+		robot.set_command(0.0, 0.0)
+	else:
+		cmd = _apply(_controller.step(state, dets, _time_since_seen_s(now)))
 	overlay.show_detections(dets, Config.state_name(state), _connected)
 	if logger != null:
 		logger.log_row(build_log_row(frame_id, dets, cmd, infer_ms, now))
@@ -122,6 +136,20 @@ func _on_connection_changed(connected: bool) -> void:
 	else:
 		_last_result_ms = Time.get_ticks_msec()
 	overlay.show_detections([], Config.state_name(state), connected)
+
+
+## LISTEN / THINK / RESPOND (Mục 2.3 Sim_Voice).
+static func is_dialogue_state(s: int) -> bool:
+	return s == Config.RobotState.LISTEN or s == Config.RobotState.THINK or s == Config.RobotState.RESPOND
+
+
+## Gọi bởi DialogueManager. Trạng thái hội thoại ➔ dừng robot. Về ARRIVED ➔ controller chạy lại ở frame sau.
+func set_dialogue_state(s: int) -> void:
+	state = s
+	if Main.is_dialogue_state(s):
+		robot.set_command(0.0, 0.0)
+	_last_result_ms = Time.get_ticks_msec()
+	overlay.show_detections([], Config.state_name(state), _connected)
 
 
 ## Áp an toàn rồi gửi lệnh cho robot; trả lệnh cuối cùng.

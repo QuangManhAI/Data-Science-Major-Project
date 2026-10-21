@@ -3,3 +3,6 @@ logs/
 __pycache__/
 *.pt
 .venv/
+godot/assets/voices/
+reports/stt_cache/
+reports/*.csv

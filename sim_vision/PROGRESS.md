@@ -12,6 +12,12 @@
 | G8 | Xong | GUT 69/69 pass | H_TARGET đổi 0.65 ➔ 0.85 |
 | G9 | Xong | GUT 78/78 pass | 148 dòng / 30 s |
 | G10 | Xong | GUT 81/81, pytest 40/40 | Batch 10/10 |
+| G11 | Xong | pytest voice 26/26 | 70 clip A; 17 file gốc bị ngắt sát cuối câu |
+| G12 | Xong | pytest 118/118 (voice 78) | MPS, 250–360 ms/câu |
+| G13 | Xong | pytest 138/138 | WER 16.3% (sạch 5.4%) |
+| G14 | Xong | pytest 198/198 | Intent 100% trên text_ref, 97–99% trên STT (SNR 20, 1 m); recall cap_cuu 74% toàn lưới |
+| G15 | Xong | GUT 94/94 | NPC quay, phát clip, dừng khi robot đi |
+| G16 | Xong | GUT 115/115 | Một lượt hội thoại trọn vẹn trong cửa sổ thật |
 
 ## G1: Bootstrap & Config (2026-10-21)
 
@@ -239,3 +245,91 @@ Người dùng chọn đổi `H_TARGET` để G10 có thể đạt. Cập nhật
 | G8 | Robot tìm và tiến lại gần, an toàn ghi đè, mất kết nối thì dừng | Đạt |
 | G9 | CSV đủ cột, góc có dấu đúng, flush khi thoát | Đạt |
 | G10 | ≥ 9/10 lượt thành công, không va người, README | 10/10, 0 va chạm; chưa thử README trên máy sạch |
+
+# Sim_Voice (G11–G17)
+
+## G11: Chuẩn bị dữ liệu & manifest (2026-10-21)
+
+**Đã xong**
+- `python/voice/config.py` (Mục 2.1 + `RAW_SUBDIR`, `SCRIPT_MD`), `transcripts.py`, `prepare_data.py`, `sync_voices.py`.
+- Test `tests/voice/test_prepare_data.py` (26 test): đủ 30 + 30 + 10×2 câu kịch bản, regex tên (kể cả `Nam_Cxx`), resample 16 kHz mono, cắt im lặng giữ 200 ms, quá ngắn/rỗng/quá dài bị bỏ, cờ clipping, giải mã `.m4a` qua ffmpeg, idempotent, file nguồn đổi thì xử lý lại, `text_fixed` được ưu tiên, trùng `clip_id`, sync + `clips.json` không chứa text.
+
+**Kiểm chứng**
+- [x] `pytest tests/voice -k prepare`: 26/26 pass.
+- [x] Dữ liệu thật: 70 file ➔ manifest 70 + skipped 0 = 70. Chạy lần 2: 0 file xử lý lại, kết quả giống hệt.
+- [x] `missing.csv`: 90 dòng = 80 clip của B (chưa thu) + 10 `A_Cxx_n` (câu chung chỉ thu một lần).
+- [x] Manifest: 40 `_r` (`ref_verified = true`), 30 `_n` (false); độ dài 1.75–10.36 s (trung vị 3.99 s); RMS −31.4 đến −20.1 dBFS; 0 clip bị rè.
+- [~] Nghe thử: không nghe được bằng tai. Thay bằng đo năng lượng 50 ms đầu/cuối mỗi clip (trung vị −52.7 / −41.2 dB so với đỉnh). Ngoài ra nhận dạng thử A_07_r, A_25_r, A_07_n bằng PhoASR ra đủ câu.
+
+**Vấn đề dữ liệu (cần người dùng xem)**
+- 17 file gốc dừng ghi ngay khi vừa nói xong (50 ms cuối của file gốc chỉ thấp hơn đỉnh 8–24 dB, kịch bản yêu cầu im lặng 1 s): A_07_n, A_07_r, A_08_n, A_09_r, A_10_r, A_11_r, A_13_r, A_16_n, A_16_r, A_18_n, A_18_r, A_20_r, A_24_r, A_C01_r, A_C05_r, A_C06_r, A_C09_r. Không do bước cắt im lặng (bước này không cắt gì ở đuôi các file đó). Có thể mất một phần âm cuối; theo dõi ở G13.
+- `transcripts_n_todo.csv` (30 dòng) chờ người dùng nghe và điền `text_fixed` (việc U2) — trước đó WER chỉ tính trên 40 clip `_r`.
+
+## G12: STT server (2026-10-21)
+
+**Đã xong**
+- `voice/audio_sim.py` (`render`, `distance_gain`, `make_babble`, `fit_length`, `measured_snr_db`), `voice/transcriber.py` (`Transcriber`, `PhoWhisperTranscriber`, `FakeTranscriber`, `check_audio`, `pick_device`), `voice/stt_server.py`, `voice/send_utterance.py`.
+- Test `tests/voice/test_stt_server.py` (52 test): gain theo khoảng cách; SNR đo lại ±0.5 dB (white 16 tổ hợp khoảng cách × SNR, babble, file); ví dụ 2 m ➔ 13.98 dB; `none` ➔ inf; cùng seed cùng kết quả; kẹp [−1, 1]; kiểm tra 16 kHz/mono/float32 và cắt > 30 s; parse message; clip không có; JSON hỏng; ồn không có; hàng chờ đầy ➔ "stt busy"; lỗi model ➔ error; log không chứa text; thiếu manifest ➔ exit 1.
+
+**Kiểm chứng**
+- [x] pytest toàn bộ 118/118 (G1–G10: 40, voice: 78).
+- [x] Server thật trên **MPS** (Apple Silicon), beam 1: `A_07_r`, 1 m, không ồn ➔ "Phòng khám số hai trăm linh lăm đi đường nào?" — đúng câu, nhưng số đọc thành chữ (và "năm" ➔ "lăm").
+- [x] `stt_ms` cho câu 1.75–3.84 s: 253–360 ms (mục tiêu < 1500 ms cho câu 3 s). Lần đầu sau khi load ~2.6 s, đã xử lý bằng chạy nháp lúc khởi động.
+- [x] Ồn làm giảm chất lượng đúng hướng: A_07_r ở 3 m, SNR 5 (hiệu dụng −4.5 dB) ➔ "Hai mấy phòng khám số hai trăm năm mươi lăm." (babble), "…năm mươi liên hệ." (white).
+- [x] Log server chỉ có `utt_id, clip_id, audio_s, stt_ms`; không dòng nào chứa nội dung câu.
+
+**Lưu ý cho G13/G14:** PhoASR viết số bằng chữ ("hai trăm linh năm") ➔ cột `number_mismatch` của G13 sẽ bắt được; G14 cần đọc được số viết bằng chữ để lấy slot `room`.
+
+## G13: Đánh giá WER offline (2026-10-21)
+
+**Đã xong**
+- `voice/text_norm.py` (`normalize`, `has_number_mismatch`), `voice/eval_stt.py` (lưới, cache, WER/CER bằng jiwer, bootstrap theo clip, bảng + 2 biểu đồ, cột intent khi có G14).
+- Test `tests/voice/test_eval_stt.py` (20 test): normalize (dấu câu, hoa thường, NFC/NFD, khoảng trắng, giữ số); number_mismatch; WER = 0 khi ref = hyp; bootstrap chứa giá trị trung bình; bỏ clip chưa xác minh khỏi WER nhưng vẫn tính intent; cache trúng thì không gọi transcriber (đổi beams thì không trúng); lỗi một clip không dừng cả lượt; bảng SNR bỏ `none`; CLI `--fake` end-to-end.
+
+**Kiểm chứng**
+- [x] pytest 138/138.
+- [x] `FakeTranscriber` trên dữ liệu thật (2520 dòng): WER = 0 mọi ô.
+- [x] Chạy thật (2520 lượt nhận dạng, 14 phút trên MPS): WER tổng **16.3%** [13.1, 20.5] trên 40 clip `_r`; không ồn 5.4%.
+  - Theo SNR: 30 dB 5.9% ➔ 20 dB 7.5% ➔ 10 dB 18.7% ➔ 5 dB 38.4%.
+  - Theo khoảng cách: 0.5 m 6.8% ➔ 1 m 8.8% ➔ 2 m 18.7% ➔ 3 m 30.8%.
+  - Theo loại ồn: none 5.4%, white 13.4%, babble 21.8%.
+  - WER tăng đều khi SNR giảm và khi khoảng cách tăng ➔ `audio_sim` hoạt động đúng hướng.
+- [x] Dò vết 3 clip WER cao nhất: `reports/stt_trace_notes.md`. Hai clip đầu do **cách viết số** (205 ➔ "hai trăm linh năm"), clip thứ ba do câu ngắn và nhầm "ngân" ➔ "ngưng".
+- Báo cáo: `reports/stt_summary.md`, `reports/wer_vs_snr.png`, `reports/wer_vs_distance.png`; chi tiết `reports/stt_eval_20261021_224132.csv` (gitignore).
+
+**Lưu ý:** babble đang ghép từ chính giọng A (chưa có giọng khác) ➔ khó hơn thực tế. WER `_n` chưa có vì `transcripts_n_todo.csv` chưa được sửa tay.
+
+## G14: Intent & câu trả lời (2026-10-21)
+
+**Đã xong**
+- `voice/intent.py` (luật từ khóa theo thứ tự ưu tiên, khớp nguyên từ, cụm ghép, đọc số bằng chữ, slot department/room/floor/facility), `voice/hospital_map.json` (giả lập, `is_mock: true`, 13 khoa, 15 phòng, 12 quầy/tiện ích), `voice/responses.py`.
+- Test `tests/voice/test_intent.py` (60 test): độ chính xác trên kịch bản + in ma trận nhầm lẫn; 5 ví dụ G14.2; khớp nguyên từ ("đâu" ≠ "đau", "nhi" ≠ "nhiều", "dẫn" trong "hướng dẫn"); 10 ca thứ tự ưu tiên; đọc số ("hai trăm linh năm", "ba không bốn", "chín mươi mốt"…); mọi khoa/phòng trong kịch bản có trong bản đồ; câu trả lời (ví dụ phòng 205, cap_cuu cố định, hỏi lại khi thiếu slot, không có lời khuyên y khoa).
+- STT server tự dùng G14 (log khởi động không còn cảnh báo "intent module not available").
+
+**Kiểm chứng**
+- [x] pytest 198/198. Độ chính xác trên `text_ref`: **100%** (70/70 câu khác nhau) ≥ 95%.
+- [x] `classify` trên hyp của G13 ở SNR 20, 1 m: babble **98.6%**, white **97.1%** (70 clip, cả `_r` và `_n`); không ồn 1 m 98.6%. STT làm giảm 1.4–2.9 điểm ở điều kiện này. Toàn lưới: `_r` 86.3%, `_n` 85.6%; 0.5 m 97.3% ➔ 3 m 71.9%.
+- [x] Đọc toàn bộ câu trả lời của 70 câu kịch bản: chỉ chỉ đường / gọi nhân viên / hỏi lại; không có lời khuyên y khoa (test kiểm tra thêm danh sách cụm cấm).
+- [!] **Recall `cap_cuu` toàn lưới chỉ 74.3%** (107/144) — STT nghe sai từ khóa ("cấp cứu" ➔ "cấp cũ", "khó thở" ➔ "khó khăn"). Đã ghi vào `reports/stt_trace_notes.md`; chưa sửa luật (tránh khớp theo dữ liệu đánh giá).
+
+## G15: NPC quay lại và nói (2026-10-21)
+
+**Đã xong**
+- `godot/scripts/npc.gd` (`next_state`, `shortest_turn`, `yaw_towards`, `pick_clip`, `load_clips`, `load_voice`; tween quay mặt; phát clip; signal `talk_started`, `talk_aborted`, `utterance_finished`; `on_reply_shown`, `reset`).
+- `human.tscn`: thêm `Head/Voice` (AudioStreamPlayer3D, INVERSE_DISTANCE, unit_size 1.0) và node `Npc`. `config.gd`: hằng số Sim_Voice.
+- Test `godot/tests/test_npc.gd` (13 test): 4 ví dụ G15.3 + biên; quay 170° ➔ −170° là 20°; mọi cặp góc quay ≤ 180°; chọn clip theo speaker/intent và seed; tích hợp với `human.tscn`: NOTICE ➔ quay đúng hướng ➔ TALK ➔ phát xong ➔ WAIT_REPLY ➔ `on_reply_shown`; robot rời xa khi đang nói ➔ dừng phát, không gửi utterance; dừng/tiếp tục đi bộ; clip hỏng ➔ IDLE, không crash.
+
+**Kiểm chứng**
+- [x] GUT 94/94 (81 cũ + 13 mới). Audio phát xong và phát `finished` được cả khi chạy headless.
+- [ ] Nghe âm 3D khi đi vòng quanh NPC: không nghe được bằng tai — cần người dùng thử (`AudioStreamPlayer3D` đặt ở đầu NPC, giảm âm theo khoảng cách nghịch đảo).
+
+## G16: STT client & Dialogue manager (2026-10-21)
+
+**Đã xong**
+- `stt_client.gd` (`parse_transcript`, `build_utterance`, tự nối lại), `dialogue_manager.gd`, `dialogue_logger.gd`, `subtitle.gd` + `subtitle.tscn`. Sửa `main.gd` (giữ robot đứng yên ở LISTEN/THINK/RESPOND, R đặt lại hội thoại), `config.gd` (enum mở rộng), `view_overlay.gd` (dòng STT), `main.tscn`.
+- Test `godot/tests/test_dialogue.gd` (21 test): parse transcript (ví dụ G16.3, null từ server thiếu G14, 12 ca lỗi, error của server); logic timeout; bỏ utt_id cũ; tích hợp trên `main.tscn` với STT giả: LISTEN ➔ THINK ➔ RESPOND ➔ ARRIVED, timeout ➔ xin lỗi, lỗi server, mất kết nối, robot đứng yên dù controller muốn quay, R đặt lại.
+
+**Kiểm chứng**
+- [x] GUT 115/115 (cũ và mới).
+- [x] Cửa sổ thật, 2 server bật (seed 1): SEARCH ➔ APPROACH ➔ ARRIVED 1.50 m ➔ NPC quay (0.6 s) ➔ LISTEN ➔ THINK ➔ RESPOND ➔ ARRIVED. Clip A_06_n, hyp "Khoa tiêu hóa ở bệnh viện này ở từng máy." ➔ hoi_khoa ➔ "Dạ, khoa Tiêu hóa ở tầng 2, phòng 205. Mời anh chị đi theo tôi." Từ lúc NPC nói xong đến khi có phụ đề ~1.0 s (stt_ms 1007 khi chạy cùng Godot + YOLO). Phụ đề tiếng Việt hiển thị đúng dấu.
+- [x] Tắt STT server (seed 2): robot trả lời "Xin lỗi, tôi chưa nghe rõ…", log `stt disconnected`, về ARRIVED, không treo. Ô góc nhìn hiện "STT: mất kết nối" màu đỏ ngay từ đầu (đã sửa: trước đó dòng này chỉ hiện sau lần kết nối đầu tiên). Bật lại server giữa chừng ➔ tự nối lại, lượt sau hoàn tất bình thường.

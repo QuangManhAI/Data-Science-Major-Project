@@ -101,7 +101,7 @@ sim_vision/
 | `OMEGA_MAX` | 1.5 rad/s | Vận tốc quay tối đa |
 | `K_ANG` | 2.0 | Hệ số quay |
 | `K_LIN` | 1.5 | Hệ số tiến |
-| `H_TARGET` | 0.65 | Chiều cao box (tỉ lệ khung hình) coi là đã đến |
+| `H_TARGET` | 0.85 | Chiều cao box (tỉ lệ khung hình) coi là đã đến (đổi từ 0.65 ngày 2026-10-21: 0.65 làm robot dừng ở ~2.2 m, ngoài khoảng [0.8, 1.5] m của G10) |
 | `H_HYST` | 0.10 | Độ trễ để thoát `ARRIVED` |
 | `ALIGN_TOL` | 0.25 | Lệch tâm quá mức này thì chỉ quay, không tiến |
 | `LOST_TIMEOUT_S` | 1.5 | Mất người quá thời gian này thì về `SEARCH` |
@@ -204,7 +204,7 @@ Godot 4.3 trở lên, renderer Forward+, GDScript có kiểu tĩnh. Python 3.10+
 2. Không thêm hằng số ngoài Mục 2.1; cần thêm ➔ ghi ASSUMPTIONS.md và hỏi.
 
 ### Ví dụ:
-- `Config.H_TARGET` ➔ `0.65`; `Config.state_name(Config.RobotState.ARRIVED)` ➔ `"ARRIVED"`.
+- `Config.H_TARGET` ➔ `0.85`; `Config.state_name(Config.RobotState.ARRIVED)` ➔ `"ARRIVED"`.
 
 ### Output mong muốn:
 Các file trên; test GUT kiểm tra vài hằng số và `state_name`; cập nhật ASSUMPTIONS.md, PROGRESS.md.
@@ -529,10 +529,10 @@ Tạo `godot/scripts/controller.gd` (`class_name Controller`, `func step(...) ->
 | `APPROACH`, `[]`, 0.5 | `APPROACH`, v=0, omega=0 |
 | `APPROACH`, `[]`, 2.0 | `SEARCH`, v=0, omega=0.5 |
 | `SEARCH`, `[{cx=0.80, h=0.30, conf=0.9}]` | `APPROACH`, v=0, omega=-0.6 |
-| `APPROACH`, `[{cx=0.55, h=0.30}]` | `APPROACH`, v=0.525, omega=-0.1 |
-| `APPROACH`, `[{cx=0.50, h=0.70}]` | `ARRIVED`, v=0, omega=0 |
-| `ARRIVED`, `[{cx=0.50, h=0.58}]` | `ARRIVED` (còn trong vùng trễ) |
-| `ARRIVED`, `[{cx=0.50, h=0.50}]` | `APPROACH`, v=0.225, omega=0 |
+| `APPROACH`, `[{cx=0.55, h=0.40}]` | `APPROACH`, v=0.675, omega=-0.1 |
+| `APPROACH`, `[{cx=0.50, h=0.90}]` | `ARRIVED`, v=0, omega=0 |
+| `ARRIVED`, `[{cx=0.50, h=0.78}]` | `ARRIVED` (còn trong vùng trễ) |
+| `ARRIVED`, `[{cx=0.50, h=0.50}]` | `APPROACH`, v=0.525, omega=0 |
 | 2 người conf 0.6 và 0.9 | chọn người conf 0.9 |
 
 ### Output mong muốn:
@@ -541,7 +541,7 @@ Script + test GUT cho đủ các ví dụ trên + 5 test biên tự đề xuất
 
 ### G7.4 Quy trình kiểm chứng
 - [ ] Test GUT pass toàn bộ bảng ví dụ.
-- [ ] Dò vết bằng tay ví dụ `cx=0.55, h=0.30`: e=0.05 ➔ omega=-0.1; v=1.5×0.35=0.525.
+- [ ] Dò vết bằng tay ví dụ `cx=0.55, h=0.40`: e=0.05 ➔ omega=-0.1; v=1.5×0.45=0.675.
 - [ ] Kiểm tra dấu omega khớp Mục 2.4.
 
 ---

@@ -8,6 +8,7 @@ build/
 .eggs/
 .kilo
 
+
 # Data — raw/processed/external data stays local
 /data/raw/
 /data/processed/
@@ -16,6 +17,26 @@ build/
 /data/*.zip
 /data/*.pt
 /data/*.json
+!/data/annotations.json
+!/data/annotations.csv
+# NLU / TTS (G18–G23): dữ liệu sinh lại được; test_stt chứa văn bản STT từ giọng thật. Giữ seed viết tay.
+/data/nlu/*
+!/data/nlu/seed.csv
+!/data/nlu/stats.md
+/data/tts_cache/
+
+# Large model binaries stay local (keep configs, tokenizers, and docs tracked)
+/models/**/*.safetensors
+/models/**/*.bin
+/models/**/*.pt
+/models/**/*.onnx
+/models/**/*.pth
+/models/**/*.data
+/models/**/*.gguf
+/models/**/*.npz
+/models/VnCoreNLP/
+/models_finetuned/**/*.safetensors
+/models_finetuned/**/*.bin
 
 # Experiment outputs (track plots, results & scripts; ignore heavy weights & DBs)
 /experiments/checkpoints/*.pt
@@ -57,3 +78,4 @@ logs/
 .env
 .env.*
 *.tar.gz
+*.pt

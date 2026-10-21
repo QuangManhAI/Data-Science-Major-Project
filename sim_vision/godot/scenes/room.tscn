@@ -1,0 +1,280 @@
+[gd_scene load_steps=45 format=3]
+
+[ext_resource type="Script" path="res://scripts/room.gd" id="1"]
+[ext_resource type="Texture2D" path="res://assets/textures/floor_tiles028/Color.jpg" id="2"]
+[ext_resource type="Texture2D" path="res://assets/textures/floor_tiles028/NormalGL.jpg" id="3"]
+[ext_resource type="Texture2D" path="res://assets/textures/floor_tiles028/Roughness.jpg" id="4"]
+[ext_resource type="Texture2D" path="res://assets/textures/floor_tiles028/AmbientOcclusion.jpg" id="5"]
+[ext_resource type="Texture2D" path="res://assets/textures/wall_paintedplaster017/Color.jpg" id="6"]
+[ext_resource type="Texture2D" path="res://assets/textures/wall_paintedplaster017/NormalGL.jpg" id="7"]
+[ext_resource type="Texture2D" path="res://assets/textures/wall_paintedplaster017/Roughness.jpg" id="8"]
+[ext_resource type="Texture2D" path="res://assets/textures/ceiling_officeceiling001/Color.jpg" id="9"]
+[ext_resource type="Texture2D" path="res://assets/textures/ceiling_officeceiling001/NormalGL.jpg" id="10"]
+[ext_resource type="Texture2D" path="res://assets/textures/ceiling_officeceiling001/Roughness.jpg" id="11"]
+[ext_resource type="Texture2D" path="res://assets/textures/ceiling_officeceiling001/AmbientOcclusion.jpg" id="12"]
+[ext_resource type="PackedScene" path="res://assets/models/metal_office_desk/metal_office_desk_1k.gltf" id="13"]
+[ext_resource type="PackedScene" path="res://assets/models/modern_arm_chair_01/modern_arm_chair_01_1k.gltf" id="14"]
+[ext_resource type="PackedScene" path="res://assets/models/potted_plant_02/potted_plant_02_1k.gltf" id="15"]
+[ext_resource type="PackedScene" path="res://assets/models/wheelchair_01/wheelchair_01_1k.gltf" id="16"]
+
+[sub_resource type="StandardMaterial3D" id="mat_floor"]
+albedo_texture = ExtResource("2")
+roughness_texture = ExtResource("4")
+normal_enabled = true
+normal_texture = ExtResource("3")
+ao_enabled = true
+ao_texture = ExtResource("5")
+uv1_scale = Vector3(0.5, 0.5, 0.5)
+uv1_triplanar = true
+uv1_world_triplanar = true
+
+[sub_resource type="StandardMaterial3D" id="mat_wall"]
+albedo_texture = ExtResource("6")
+roughness_texture = ExtResource("8")
+normal_enabled = true
+normal_texture = ExtResource("7")
+uv1_scale = Vector3(0.5, 0.5, 0.5)
+uv1_triplanar = true
+uv1_world_triplanar = true
+
+[sub_resource type="StandardMaterial3D" id="mat_ceiling"]
+albedo_texture = ExtResource("9")
+roughness_texture = ExtResource("11")
+normal_enabled = true
+normal_texture = ExtResource("10")
+ao_enabled = true
+ao_texture = ExtResource("12")
+uv1_scale = Vector3(0.5, 0.5, 0.5)
+uv1_triplanar = true
+uv1_world_triplanar = true
+
+[sub_resource type="BoxMesh" id="mesh_Floor"]
+material = SubResource("mat_floor")
+size = Vector3(8.4, 0.2, 6.4)
+
+[sub_resource type="BoxShape3D" id="shape_Floor"]
+size = Vector3(8.4, 0.2, 6.4)
+
+[sub_resource type="BoxMesh" id="mesh_Ceiling"]
+material = SubResource("mat_ceiling")
+size = Vector3(8.4, 0.2, 6.4)
+
+[sub_resource type="BoxShape3D" id="shape_Ceiling"]
+size = Vector3(8.4, 0.2, 6.4)
+
+[sub_resource type="BoxMesh" id="mesh_WallSouth"]
+material = SubResource("mat_wall")
+size = Vector3(8.4, 3, 0.2)
+
+[sub_resource type="BoxShape3D" id="shape_WallSouth"]
+size = Vector3(8.4, 3, 0.2)
+
+[sub_resource type="BoxMesh" id="mesh_WallEast"]
+material = SubResource("mat_wall")
+size = Vector3(0.2, 3, 6)
+
+[sub_resource type="BoxShape3D" id="shape_WallEast"]
+size = Vector3(0.2, 3, 6)
+
+[sub_resource type="BoxMesh" id="mesh_WallWest"]
+material = SubResource("mat_wall")
+size = Vector3(0.2, 3, 6)
+
+[sub_resource type="BoxShape3D" id="shape_WallWest"]
+size = Vector3(0.2, 3, 6)
+
+[sub_resource type="BoxMesh" id="mesh_WallNorthLeft"]
+material = SubResource("mat_wall")
+size = Vector3(3.2, 3, 0.2)
+
+[sub_resource type="BoxShape3D" id="shape_WallNorthLeft"]
+size = Vector3(3.2, 3, 0.2)
+
+[sub_resource type="BoxMesh" id="mesh_WallNorthRight"]
+material = SubResource("mat_wall")
+size = Vector3(3.2, 3, 0.2)
+
+[sub_resource type="BoxShape3D" id="shape_WallNorthRight"]
+size = Vector3(3.2, 3, 0.2)
+
+[sub_resource type="BoxMesh" id="mesh_WallNorthBelowWindow"]
+material = SubResource("mat_wall")
+size = Vector3(2, 0.9, 0.2)
+
+[sub_resource type="BoxShape3D" id="shape_WallNorthBelowWindow"]
+size = Vector3(2, 0.9, 0.2)
+
+[sub_resource type="BoxMesh" id="mesh_WallNorthAboveWindow"]
+material = SubResource("mat_wall")
+size = Vector3(2, 0.7, 0.2)
+
+[sub_resource type="BoxShape3D" id="shape_WallNorthAboveWindow"]
+size = Vector3(2, 0.7, 0.2)
+
+[sub_resource type="BoxShape3D" id="shape_Desk"]
+size = Vector3(2, 0.7875, 0.947214)
+
+[sub_resource type="BoxShape3D" id="shape_ArmChair"]
+size = Vector3(0.820344, 1.02285, 0.986562)
+
+[sub_resource type="BoxShape3D" id="shape_PottedPlant"]
+size = Vector3(0.728947, 0.632574, 0.757494)
+
+[sub_resource type="BoxShape3D" id="shape_Wheelchair"]
+size = Vector3(0.824091, 1.1035, 1.09087)
+
+[sub_resource type="ProceduralSkyMaterial" id="sky_mat"]
+
+
+[sub_resource type="Sky" id="sky"]
+sky_material = SubResource("sky_mat")
+
+[sub_resource type="Environment" id="env"]
+background_mode = 2
+sky = SubResource("sky")
+ambient_light_source = 3
+ambient_light_energy = 0.5
+tonemap_mode = 3
+ssao_enabled = true
+sdfgi_enabled = true
+sdfgi_use_occlusion = true
+
+[node name="Room" type="Node3D"]
+script = ExtResource("1")
+
+[node name="Shell" type="StaticBody3D" parent="."]
+
+[node name="Floor" type="MeshInstance3D" parent="Shell"]
+position = Vector3(0, -0.1, 0)
+mesh = SubResource("mesh_Floor")
+
+[node name="FloorCollision" type="CollisionShape3D" parent="Shell"]
+position = Vector3(0, -0.1, 0)
+shape = SubResource("shape_Floor")
+
+[node name="Ceiling" type="MeshInstance3D" parent="Shell"]
+position = Vector3(0, 3.1, 0)
+mesh = SubResource("mesh_Ceiling")
+
+[node name="CeilingCollision" type="CollisionShape3D" parent="Shell"]
+position = Vector3(0, 3.1, 0)
+shape = SubResource("shape_Ceiling")
+
+[node name="WallSouth" type="MeshInstance3D" parent="Shell"]
+position = Vector3(0, 1.5, 3.1)
+mesh = SubResource("mesh_WallSouth")
+
+[node name="WallSouthCollision" type="CollisionShape3D" parent="Shell"]
+position = Vector3(0, 1.5, 3.1)
+shape = SubResource("shape_WallSouth")
+
+[node name="WallEast" type="MeshInstance3D" parent="Shell"]
+position = Vector3(4.1, 1.5, 0)
+mesh = SubResource("mesh_WallEast")
+
+[node name="WallEastCollision" type="CollisionShape3D" parent="Shell"]
+position = Vector3(4.1, 1.5, 0)
+shape = SubResource("shape_WallEast")
+
+[node name="WallWest" type="MeshInstance3D" parent="Shell"]
+position = Vector3(-4.1, 1.5, 0)
+mesh = SubResource("mesh_WallWest")
+
+[node name="WallWestCollision" type="CollisionShape3D" parent="Shell"]
+position = Vector3(-4.1, 1.5, 0)
+shape = SubResource("shape_WallWest")
+
+[node name="WallNorthLeft" type="MeshInstance3D" parent="Shell"]
+position = Vector3(-2.6, 1.5, -3.1)
+mesh = SubResource("mesh_WallNorthLeft")
+
+[node name="WallNorthLeftCollision" type="CollisionShape3D" parent="Shell"]
+position = Vector3(-2.6, 1.5, -3.1)
+shape = SubResource("shape_WallNorthLeft")
+
+[node name="WallNorthRight" type="MeshInstance3D" parent="Shell"]
+position = Vector3(2.6, 1.5, -3.1)
+mesh = SubResource("mesh_WallNorthRight")
+
+[node name="WallNorthRightCollision" type="CollisionShape3D" parent="Shell"]
+position = Vector3(2.6, 1.5, -3.1)
+shape = SubResource("shape_WallNorthRight")
+
+[node name="WallNorthBelowWindow" type="MeshInstance3D" parent="Shell"]
+position = Vector3(0, 0.45, -3.1)
+mesh = SubResource("mesh_WallNorthBelowWindow")
+
+[node name="WallNorthBelowWindowCollision" type="CollisionShape3D" parent="Shell"]
+position = Vector3(0, 0.45, -3.1)
+shape = SubResource("shape_WallNorthBelowWindow")
+
+[node name="WallNorthAboveWindow" type="MeshInstance3D" parent="Shell"]
+position = Vector3(0, 2.65, -3.1)
+mesh = SubResource("mesh_WallNorthAboveWindow")
+
+[node name="WallNorthAboveWindowCollision" type="CollisionShape3D" parent="Shell"]
+position = Vector3(0, 2.65, -3.1)
+shape = SubResource("shape_WallNorthAboveWindow")
+
+[node name="Furniture" type="Node3D" parent="."]
+
+[node name="Desk" type="StaticBody3D" parent="Furniture"]
+position = Vector3(-1.8, 0, 2.5)
+rotation = Vector3(0, 0, 0)
+
+[node name="Model" parent="Furniture/Desk" instance=ExtResource("13")]
+
+[node name="Collision" type="CollisionShape3D" parent="Furniture/Desk"]
+position = Vector3(0, 0.39375, 0.004497)
+shape = SubResource("shape_Desk")
+
+[node name="ArmChair" type="StaticBody3D" parent="Furniture"]
+position = Vector3(3.25, 0, 2.25)
+rotation = Vector3(0, -2.35619, 0)
+
+[node name="Model" parent="Furniture/ArmChair" instance=ExtResource("14")]
+
+[node name="Collision" type="CollisionShape3D" parent="Furniture/ArmChair"]
+position = Vector3(0.003363, 0.511808, -0.082171)
+shape = SubResource("shape_ArmChair")
+
+[node name="PottedPlant" type="StaticBody3D" parent="Furniture"]
+position = Vector3(-3.5, 0.096632, -2.5)
+rotation = Vector3(0, 0, 0)
+
+[node name="Model" parent="Furniture/PottedPlant" instance=ExtResource("15")]
+
+[node name="Collision" type="CollisionShape3D" parent="Furniture/PottedPlant"]
+position = Vector3(-0.029282, 0.219655, -0.042252)
+shape = SubResource("shape_PottedPlant")
+
+[node name="Wheelchair" type="StaticBody3D" parent="Furniture"]
+position = Vector3(3.4, 0, -1.3)
+rotation = Vector3(0, -1.5708, 0)
+
+[node name="Model" parent="Furniture/Wheelchair" instance=ExtResource("16")]
+
+[node name="Collision" type="CollisionShape3D" parent="Furniture/Wheelchair"]
+position = Vector3(-0.001646, 0.55753, 0.059764)
+shape = SubResource("shape_Wheelchair")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("env")
+
+[node name="Sun" type="DirectionalLight3D" parent="."]
+rotation = Vector3(-0.610865, 3.14159, 0)
+light_energy = 2.0
+shadow_enabled = true
+directional_shadow_max_distance = 20.0
+
+[node name="CeilingLight1" type="OmniLight3D" parent="."]
+position = Vector3(-2, 2.7, 0)
+light_energy = 1.2
+shadow_enabled = true
+omni_range = 7.0
+
+[node name="CeilingLight2" type="OmniLight3D" parent="."]
+position = Vector3(2, 2.7, 0)
+light_energy = 1.2
+shadow_enabled = true
+omni_range = 7.0

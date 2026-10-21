@@ -19,6 +19,11 @@ build/
 /data/*.json
 !/data/annotations.json
 !/data/annotations.csv
+# NLU / TTS (G18–G23): dữ liệu sinh lại được; test_stt chứa văn bản STT từ giọng thật. Giữ seed viết tay.
+/data/nlu/*
+!/data/nlu/seed.csv
+!/data/nlu/stats.md
+/data/tts_cache/
 
 # Large model binaries stay local (keep configs, tokenizers, and docs tracked)
 /models/**/*.safetensors
@@ -29,6 +34,9 @@ build/
 /models/**/*.data
 /models/**/*.gguf
 /models/**/*.npz
+/models/VnCoreNLP/
+/models_finetuned/**/*.safetensors
+/models_finetuned/**/*.bin
 
 # Experiment outputs (track plots, results & scripts; ignore heavy weights & DBs)
 /experiments/checkpoints/*.pt

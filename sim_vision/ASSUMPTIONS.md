@@ -190,3 +190,56 @@
 - [G16] Log hội thoại do `DialogueLogger` riêng ghi (không dùng RunLogger của G9) vì `hyp_text` có dấu phẩy cần ngoặc kép; mỗi lượt ghi và flush ngay. Số thực 4 chữ số thập phân, ô thiếu để trống.
 - [G16] Phụ đề dùng `SystemFont` (Helvetica Neue / Arial / Segoe UI / Noto Sans / DejaVu Sans) để có đủ dấu tiếng Việt; dòng trả lời 24 px, dòng "Nghe được" 18 px màu xám nhạt; nền đen 62% bo góc, cách đáy 24 px.
 - [G16] Ô góc nhìn chỉ hiện dòng STT khi scene có hội thoại (sau lần gọi `set_stt_connected` đầu tiên), đặt ngay trên dòng YOLO.
+
+## G18 (nlu_tts_dialogue_prompt.md)
+- [G18] **20 lớp intent, không phải 19**: bảng Mục 6 của `kich_ban_thu_am.md` thiếu `ho_tro_di_chuyen`, nhưng câu A_20 và luật G14 dùng nhãn này. Người dùng chọn giữ (2026-10-22) ➔ 19 intent + `unknown`. `nlu.config.INTENTS` = tập intent của G14, sắp chữ cái.
+- [G18] Java: máy chưa có ➔ người dùng đồng ý cho cài `openjdk@17` qua Homebrew (keg-only). `segment.py` tự đặt `JAVA_HOME=/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home` nếu chưa có (pyjnius cần thư mục Home chứa `lib/server/libjvm.dylib`).
+- [G18] VnCoreNLP: chỉ tải phần tách từ (`VnCoreNLP-1.2.jar`, `models/wordsegmenter/{vi-vocab,wordsegmenter.rdr}`) vào `models/VnCoreNLP/`, không tải POS/NER/parse. Đổi thư mục qua biến `VNCORENLP_DIR`. `py_vncorenlp` chdir vào thư mục model và không trả lại ➔ `segment.py` tự chdir lại.
+- [G18] Tách từ trên văn bản đã `text_norm.normalize` (chữ thường, bỏ dấu câu), cho cả train, test và lúc chạy, để PhoBERT thấy cùng một dạng.
+- [G18] `seed.csv` có thêm cột `kind` (`q` câu hỏi / `c` đề nghị, mệnh lệnh) để chọn từ đệm đầu và cuối câu phù hợp. Placeholder: `{department}`, `{room}`, `{room_name}`, `{facility}`; một loại placeholder mỗi câu.
+- [G18] Giá trị slot: khoa = tên khoa viết thường + bí danh không chứa chữ "khoa" (bỏ khoa Cấp cứu vì A_26 "Khoa cấp cứu ở đâu" là `cap_cuu`); phòng = số phòng viết bằng chữ số, đọc theo hàng ("hai trăm linh năm") và đọc từng số ("hai không năm") vì STT viết số bằng chữ (G13); tên phòng = bí danh phòng trừ "kết quả", "xét nghiệm" (quá chung); tiện ích cho `tien_ich` = danh từ tự đặt ứng với 5 key trong `facilities` (thang máy, nhà vệ sinh, gửi xe, ghế chờ, căng tin), có kiểm tra key tồn tại.
+- [G18] Biến đổi có quy tắc: đổi "tôi" ➔ em / mình / bác / cháu; bỏ chủ ngữ "tôi" đầu câu; từ đệm đầu câu (dạ, ờ, à, bạn ơi, robot ơi, cho X hỏi…) và cuối câu (ạ, vậy, nhỉ, nhé, nha, với…); chuyển "bạn ơi" ra cuối câu là phép đổi trật tự. Câu đã kết thúc bằng tiểu từ không thêm hậu tố.
+- [G18] `unknown` có thêm 30 câu vô nghĩa ghép ngẫu nhiên từ 20 âm tiết (seed cố định).
+- [G18] Pool đầy đủ (~54 nghìn câu) ➔ lấy tối đa 120 câu mỗi intent, **xoay vòng giữa các câu seed** để seed nào cũng có mặt ➔ chia 85/15 phân tầng ➔ thêm lỗi STT cho 30% câu train (câu lỗi là câu **thêm vào**, giữ câu gốc). Vì vậy train ~130 câu mỗi intent.
+- [G18] Lọc rò rỉ so với **mọi câu trong `kich_ban_thu_am.md`** (cả B chưa thu âm) cộng `test_ref` và `test_stt`, không chỉ tập test, để tuân thủ "không đưa câu kịch bản vào train". So sánh trên văn bản đã chuẩn hóa.
+- [G18] Chia train/val theo câu (đúng đặc tả), không theo nhóm seed ➔ câu val thường là biến thể của câu seed có trong train, nên **điểm val sẽ lạc quan**; số liệu đáng tin là trên test (G23).
+- [G18] `test_ref` = 40 câu (40 clip `_r` của A, `ref_verified = true`). `test_stt` = 1440 dòng (40 clip × 36 điều kiện của lưới G13, file `reports/stt_eval_20261021_224132.csv`); có thêm cột `clip_id` (cả `test_ref`) để G23 tách theo điều kiện. Lỗi lớn của tập test: chỉ có 1 người nói, `dieu_chinh_am_luong`, `nhac_lai`, `unknown` chưa có câu test (là câu của B).
+- [G18] Lỗi giả kiểu STT: bảng 23 cặp gần âm tự đặt (có "khám ➔ khá" thấy thật ở G13), bỏ dấu một chữ, xóa hoặc nhân đôi một từ ≤ 3 ký tự; mỗi câu 1–2 phép.
+
+## G17
+- [G17] Người dùng chọn **cách 1** (2026-10-22): `h_target` 0.75 / 0.80 / 0.85 thay cho 0.45 / 0.55 / 0.65 của đặc tả (các mức đó làm robot dừng ở 2.3–3.2 m, ngoài `TALK_TRIGGER_DIST` 2.0 m nên NPC không bao giờ nói). Làm bằng `tools/h_target_controller.gd` (kế thừa `Controller`, phóng chiều cao box theo tỉ lệ `Config.H_TARGET / h_target`), chỉ dùng trong batch; `controller.gd` không đổi.
+- [G17] Mỗi episode: seed = chỉ số episode; clip theo vòng (intent sắp chữ cái, episode `e` lấy intent `e mod số intent`), gồm cả take `_r` và `_n`; điều kiện ồn xoay vòng `babble 20`, `babble 10`, `white 20`, `none`; `h_target` xoay vòng 3 mức. Speaker chỉ có A.
+- [G17] Batch bỏ `RunLogger` và `DialogueLogger` của từng episode (không sinh 80 file), tự ghi `logs/dialogue_batch_<thời gian>.csv`. Episode "hoàn thành" = có `turn_completed` mà không có lỗi STT. `latency_ms` = thời gian thực từ `utterance_finished` của NPC đến `turn_completed` (lúc có phụ đề; từ G22 là lúc robot bắt đầu nói). Sau G22 thêm 7 cột TTS ở cuối, cột cũ giữ nguyên.
+- [G17] WER trong báo cáo chỉ tính clip `ref_verified`; intent accuracy tính mọi lượt hoàn thành. So với G13: cùng clip, cùng noise/SNR, cột 1 m và 2 m.
+
+## G19
+- [G19] Không dùng `datasets`, `evaluate`, `Trainer` (chưa cài, cần thêm `accelerate`): vòng lặp torch thuần, AdamW, lịch tuyến tính có warmup 10%, kẹp gradient 1.0, không fp16. Tham số đúng G19.1.
+- [G19] **Early stopping**: macro-F1 val bão hòa 1.0 từ epoch 2–3 (val là biến thể của câu seed có trong train, xem G18). Nếu chỉ tính "F1 tăng hẳn" thì checkpoint giữ lại là epoch 2 (loss 1.2, model chưa chắc chắn, ngưỡng tin cậy vô nghĩa). Đổi: **bằng F1 thì epoch có val loss thấp hơn được coi là cải thiện**. Lượt train đầu (luật cũ) bị dừng giữa chừng và chạy lại.
+- [G19] Ngưỡng: các ngưỡng cho cùng macro-F1 cao nhất ➔ chọn ngưỡng gần 0.6 (điểm khởi đầu) nhất.
+- [G19] `--repeat` train lần 2 cùng seed (không lưu) để ghi sai lệch vào `train_report.md`; MPS không tất định tuyệt đối.
+
+## G20
+- [G20] `IntentResult` mới ở `nlu/nlu.py` (intent, intent_conf, slots, source, top3), khác `voice.intent.IntentResult` của G14. Chế độ `rule` cũng chạy luật khẩn cấp trước (cùng thứ tự với `phobert`), rồi `voice.intent.classify`; ngưỡng của `rule` cố định 0.6 (khớp mức "khớp từ đơn" của G14), của `phobert` lấy `threshold.json`.
+- [G20] Luật khẩn cấp = toàn bộ cụm mạnh và từ đơn của `cap_cuu` trong G14 (kể cả "ngã", "ngất", "xỉu"), khớp ➔ conf 1.0.
+- [G20] Slot giữ thêm `facility` (key tiện ích trong bản đồ) như G14 vì mẫu câu `tien_ich`, `dang_ky_kham` cần nó. Số phòng chỉ thành slot khi có trong `rooms` của bản đồ (G14 chấp nhận mọi số 100–999).
+- [G20] `target`: bản đồ không có id ➔ tự đặt `dept_<tên khoa không dấu>` (vd `dept_tim_mach`, khớp ví dụ G20.3) và `room_<số>`.
+- [G20] Policy: `hoi_khoa`, `hoi_phong`, `dan_duong` có khoa hoặc phòng trong bản đồ ➔ `guide` (hoi_phong ưu tiên phòng, còn lại ưu tiên khoa); thiếu ➔ hỏi lại bằng "Dạ, anh chị muốn đến khoa nào ạ?", riêng `hoi_phong` dùng `ASK_ROOM` của G14 ("…phòng nào ạ?") cho hợp câu hỏi. **Mọi** lần hỏi lại (kể cả thiếu slot) khi `clarify_count ≥ MAX_CLARIFY` ➔ `call_staff`. `nhac_lai` không có câu trước ➔ câu chào hỏi chung của G14. `gap_nhan_vien` theo bảng là `answer` (câu G14 "đang gọi nhân viên"); có thể đổi sang `call_staff` khi làm RL.
+- [G20] `clarify_count` và `last_response` do STT server giữ **theo từng kết nối WebSocket** (message `utterance` không có các trường này): `clarify` ➔ +1, action khác ➔ về 0; `repeat` không đổi `last_response`. Kết nối mới ➔ trạng thái mới.
+- [G20] `transcript` luôn có thêm `action`, `target` (null khi server chạy không có G20). `stt_server` mặc định `--nlu rule`.
+
+## G21
+- [G21] **Nạp local (đọc mã nguồn vieneu 3.8.3, người dùng duyệt cách làm 2026-10-22):** model chính bằng tham số công khai `Vieneu(mode="v3turbo", backend="onnx", backbone_repo=VIENEU_DIR, onnx_dir=VIENEU_DIR/onnx_update)`. Codec: `OnnxV3LiteEngine` có `codec_dir` nhưng `V3TurboVieNeuTTS` không chuyển tham số này xuống ➔ `tts_engine.prepare_codec_cache` dựng `data/tts_cache/hf_hub/models--OpenMOSS-Team--MOSS-Audio-Tokenizer-Nano-ONNX/{refs/main, snapshots/local/*}` (symlink tới `models/MOSS-Audio-Tokenizer-Nano-ONNX`), đặt `HF_HUB_CACHE` + `HF_HUB_OFFLINE=1` trước khi import `huggingface_hub`. Không sửa thư viện, không copy file. Giọng có sẵn nằm trong gói (`vieneu/assets/voices_v3_turbo.json`, 25 giọng). Bản PyTorch của codec (`MOSS_CODEC_DIR`) không dùng.
+- [G21] `vieneu` cài trong venv riêng `python/.venv-tts` (kéo theo gradio, onnxruntime…), chỉ để chạy `tts_server`, `pregen`, `pick_voice`. Test chạy ở venv chính với `FakeTTS`; `tts_engine` chỉ import `vieneu` trong `VieneuEngine`.
+- [G21] fp32 (`onnx_update`); không dùng int8 (cần CPU có VNNI, Apple Silicon không có). Không thử PyTorch/MPS.
+- [G21] `ROBOT_VOICE` **tạm** là "Ngọc Huyền" (nữ, Bắc, giọng đọc tự nhiên) chờ người dùng nghe `reports/voices/` (U4). Đổi giọng: sửa `tts/config.py` và `godot/scripts/config.gd` rồi chạy lại `pregen`.
+- [G21] `text_for_tts`: số sau "phòng"/"phòng số" đọc từng chữ số; số khác ≤ 999 đọc theo hàng ("tầng 2" ➔ "tầng hai", "15" ➔ "mười lăm"); số bắt đầu bằng 0 đọc từng chữ số; viết tắt BHYT, CCCD, WC, X-quang, CT. Cache theo văn bản **sau** chuẩn hóa. Resample bằng `soxr` (đã có qua librosa). `MODEL_VERSION` gồm phiên bản gói, subfolder và phiên bản hậu xử lý.
+- [G21] Kiểm tra "text rỗng / > 300 ký tự" trên văn bản đã bỏ khoảng trắng đầu cuối, trước chuẩn hóa đọc số. Lỗi: `text empty`, `text too long`, `voice not found: X`, `tts failed: <Exception>`, `tts busy`. Server nới giới hạn message WebSocket lên 8 MiB.
+- [G21] "Ngắt mạng" kiểm bằng `HF_HUB_OFFLINE=1` (huggingface_hub báo lỗi thay vì tải nếu thiếu file); không rút mạng vật lý.
+
+## G22
+- [G22] Sửa thêm ngoài danh sách của prompt (cần để chạy được): `stt_client.gd` đọc thêm `action`, `target` (thiếu/null ➔ ""); `npc.gd` thêm `alternate_clip()`, `get_clips()`, `say_again()` (logic G15 cũ không đổi); test G16 đếm cột log đổi 14 ➔ 21 (7 cột G22 thêm ở cuối).
+- [G22] `TtsClient` đặt `inbound_buffer_size` 8 MiB (mặc định 64 KiB không đủ cho ~300 KB base64).
+- [G22] Có TTS: phụ đề hiện **khi âm thanh tới** và ẩn khi robot nói xong; dòng log và `turn_completed` phát lúc biết kết quả TTS. Âm thanh không báo xong sau thời lượng + 2 s ➔ coi như xong. Không có node `TtsClient`/`Robot/Head/Voice` ➔ hành vi G16 (chỉ phụ đề).
+- [G22] clarify: robot nói xong ➔ NPC nói clip cùng `sentence_id` khác `take` chưa dùng trong lượt (`Npc.alternate_clip`), robot về LISTEN; tối đa `MAX_CLARIFY` lần; hết clip ➔ kết thúc lượt. Hiện mỗi câu có tối đa 2 take nên chỉ nói lại được 1 lần; câu chung `Cxx` của A chỉ có take `r` nên không nói lại.
+- [G22] emergency: chữ đỏ "GỌI NHÂN VIÊN Y TẾ" giữa ô góc nhìn, giữ đến lượt sau hoặc phím R; guide: "Đang dẫn đến: khoa <tên>" / "phòng <số>" lấy từ slot (Godot không đọc bản đồ).
+- [G22] Loa robot: `AudioStreamPlayer3D` `Voice` (script `robot_voice.gd`) con của `Head`, cùng kiểu suy giảm với NPC (INVERSE_DISTANCE, unit_size 1).

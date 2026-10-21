@@ -104,7 +104,65 @@ python sim_vision/python/analyze_logs.py     # tỉ lệ thành công, thời gi
 - **Thành công** = robot ở `ARRIVED` với khoảng cách thật tới người trong [0.8, 1.5] m trước 30 giây mô phỏng. `collisions` = số lần robot chạm người.
 - **Không chạy được ở chế độ `--headless`**: renderer giả của headless không vẽ ảnh nên camera robot không có hình để gửi YOLO. `batch_run` tự kiểm tra và thoát với mã 2. Cần máy có màn hình (hoặc màn hình ảo như Xvfb trên Linux, kèm GPU/driver hỗ trợ Vulkan).
 
-## 6. Hằng số (Mục 2.1, `godot/scripts/config.gd`)
+## 6. Hội thoại NPC (G11–G17)
+
+NPC (giọng thu âm thật trong `data/raw/real_voice`) quay về phía robot và hỏi; Godot gửi `utterance` sang STT server (PhoASR-whisper-small, local), server trộn ồn theo khoảng cách/SNR rồi nhận dạng, trả `transcript` kèm intent và câu trả lời; robot hiện phụ đề. Kế hoạch: `docs/PROMPT/godot_npc_stt_prompt.md`.
+
+```bash
+cd sim_vision/python
+python -m voice.prepare_data          # G11: data/raw/real_voice ➔ data/processed (wav 16 kHz, manifest.csv)
+python -m voice.sync_voices           # copy wav sang godot/assets/voices (+ clips.json, không có văn bản)
+python -m voice.stt_server            # cửa sổ 2 (cổng 8766); cùng lúc với YOLO server (cửa sổ 1)
+cd ../godot && godot --path .         # cửa sổ 3: robot tới gần ➔ NPC hỏi ➔ phụ đề
+```
+
+**Batch hội thoại** (cần YOLO + STT server và cửa sổ có render):
+
+```bash
+cd sim_vision/godot
+godot --path . res://tools/dialogue_batch.tscn                 # 40 episode
+godot --path . res://tools/dialogue_batch.tscn -- --episodes=12 --max-time=60
+cd ../python && python -m voice.analyze_dialogue                # ➔ reports/dialogue_summary.md
+```
+
+- Episode `e`: seed = `e`; clip chọn theo vòng để phủ đều intent; điều kiện ồn xoay vòng `babble 20 dB`, `babble 10 dB`, `white 20 dB`, `none`; robot dừng ở `h_target` 0.75 / 0.80 / 0.85 (~1.9 / 1.65 / 1.5 m) qua `tools/h_target_controller.gd`, không sửa `controller.gd`.
+- `logs/dialogue_batch_<thời gian>.csv`: mỗi episode một dòng (clip, điều kiện, khoảng cách, `hyp_text`, intent, `stt_ms`, `latency_ms` = NPC nói xong ➔ có phụ đề / robot bắt đầu nói).
+- Báo cáo: tỉ lệ hoàn thành, WER (clip `ref_verified`), intent accuracy, **recall `cap_cuu` báo riêng**, theo khoảng cách và điều kiện ồn, so với G13.
+
+## 7. Hỏi đáp và giọng nói robot (G18–G23)
+
+STT ➔ **NLU** (luật khẩn cấp ➔ PhoBERT-base-v2 đã fine-tune ➔ slot từ `hospital_map.json`) ➔ **policy** (câu trả lời chỉ lấy từ mẫu, hỏi lại khi không chắc, gọi nhân viên) ➔ **TTS** VieNeu-TTS v3 Turbo ➔ loa 3D trên đầu robot. Kế hoạch: `docs/PROMPT/nlu_tts_dialogue_prompt.md`. Model đều chạy local, offline.
+
+Cài thêm: Java 17 (`brew install openjdk@17`, cho tách từ VnCoreNLP ở `models/VnCoreNLP`), và venv riêng cho TTS:
+
+```bash
+cd sim_vision/python
+python3.12 -m venv .venv-tts && .venv-tts/bin/pip install vieneu==3.8.3 websockets
+```
+
+**Dữ liệu và model:**
+
+```bash
+python -m nlu.build_dataset           # G18: data/nlu/{train,val,test_ref,test_stt}.csv từ seed.csv + bản đồ
+python -m nlu.train_phobert --repeat  # G19: models_finetuned/phobert-intent (+ threshold.json, train_report.md)
+.venv-tts/bin/python -m tts.pick_voice   # G21: reports/voices/*.wav, nghe rồi đặt ROBOT_VOICE (tts/config.py, config.gd)
+.venv-tts/bin/python -m tts.pregen       # G21: sinh sẵn giọng cho mọi câu trả lời ➔ data/tts_cache
+```
+
+**Chạy (4 cửa sổ):** YOLO server (mục 3), `python -m voice.stt_server --nlu phobert`, `.venv-tts/bin/python -m tts.tts_server` (cổng 8767), rồi `godot --path .`. Ô góc nhìn có thêm dòng `TTS: đã kết nối / mất kết nối`; cấp cứu ➔ chữ đỏ "GỌI NHÂN VIÊN Y TẾ"; dẫn đường ➔ "Đang dẫn đến: …" (dẫn thật làm ở giai đoạn RL). Tắt TTS server thì robot chỉ hiện phụ đề 4 giây.
+
+**Đánh giá:**
+
+```bash
+python -m nlu.eval_nlu                # reports/nlu_compare.md (+ .csv, nlu_f1_vs_snr.png): luật vs PhoBERT
+python -m tts.eval_tts_roundtrip      # reports/tts_roundtrip.md: WER khứ hồi TTS ➔ STT
+# batch đầu cuối: 3 server như trên, rồi dialogue_batch.tscn (mục 6) và
+python -m voice.analyze_e2e           # reports/e2e_summary.md: hoàn thành, action, độ trễ STT / NLU / TTS
+```
+
+Mọi câu robot có thể nói: `reports/robot_responses.md` (sinh từ `nlu.policy.all_responses()`).
+
+## 8. Hằng số (Mục 2.1, `godot/scripts/config.gd`)
 
 | Tên | Giá trị | Ý nghĩa |
 | :-- | :-- | :-- |
@@ -127,7 +185,7 @@ python sim_vision/python/analyze_logs.py     # tỉ lệ thành công, thời gi
 | `SAFE_DIST_OBSTACLE` | 0.5 m | Raycast phía trước chạm vật cản gần hơn mức này thì không cho tiến |
 | `RECONNECT_S` | 2.0 s | Chu kỳ thử kết nối lại server |
 
-## 7. Cấu trúc
+## 9. Cấu trúc
 
 ```
 sim_vision/
@@ -135,14 +193,19 @@ sim_vision/
     project.godot, .gutconfig.json
     scenes/   main, room, human, robot, view_overlay (.tscn)
     scripts/  config, room, human, robot, view_overlay, vision_client, controller, main, run_logger (.gd)
-    tools/    detect_gate, batch_run (.tscn/.gd), extract_human_anims.gd
+              npc, stt_client, dialogue_manager, dialogue_logger, subtitle (G15–G16), tts_client, robot_voice (G22)
+    tools/    detect_gate, batch_run, dialogue_batch (.tscn/.gd), h_target_controller.gd, extract_human_anims.gd
     tests/    test_*.gd (GUT)
     assets/   textures/, models/, CREDITS.md
     addons/gut/
   python/
     yolo_server.py, detector.py, protocol.py, send_image.py, analyze_logs.py
+    voice/    STT, trộn ồn, intent luật, câu trả lời, eval STT, phân tích batch (G11–G17, G23)
+    nlu/      tách từ, dữ liệu intent, fine-tune PhoBERT, NLU, policy, eval (G18–G20, G23)
+    tts/      VieNeu engine, TTS server, sinh sẵn, chọn giọng, WER khứ hồi (G21, G23)
     tests/, requirements.txt, pytest.ini, yolov8n.pt (người dùng cung cấp)
-  logs/       (bị gitignore) run_*.csv, batch_summary.csv, detect_gate.csv
+  logs/       (bị gitignore) run_*.csv, batch_summary.csv, detect_gate.csv, dialogue_*.csv
+  reports/    stt_summary.md, dialogue_summary.md, nlu_compare.md, tts_roundtrip.md, e2e_summary.md, …
   ASSUMPTIONS.md, PROGRESS.md, README.md
 ```
 

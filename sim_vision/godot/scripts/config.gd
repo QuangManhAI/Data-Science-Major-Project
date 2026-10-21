@@ -35,6 +35,13 @@ const SUBTITLE_S: float = 4.0
 const REF_DIST_M: float = 1.0
 const DEFAULT_SNR_DB: float = 20.0
 
+# NLU + TTS (nlu_tts_dialogue_prompt.md Mục 2.1), phần Godot dùng.
+const TTS_WS_URL: String = "ws://127.0.0.1:8767"
+const TTS_TIMEOUT_S: float = 8.0
+const MAX_CLARIFY: int = 2
+## Tạm chọn, chờ người dùng nghe reports/voices/ (U4); phải trùng ROBOT_VOICE của tts/config.py.
+const ROBOT_VOICE: String = "Ngọc Huyền"
+
 # LISTEN, THINK, RESPOND thêm sau ARRIVED (Mục 2.3 Sim_Voice); giá trị cũ giữ nguyên.
 enum RobotState { SEARCH, APPROACH, ARRIVED, LISTEN, THINK, RESPOND }
 

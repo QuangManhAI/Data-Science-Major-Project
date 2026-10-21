@@ -69,7 +69,8 @@ position = Vector3(0, 1.6, 0.08)
 
 [node name="Voice" type="AudioStreamPlayer3D" parent="Head"]
 attenuation_model = 0
-unit_size = 1.0
+unit_size = 5.0
+volume_db = 6.0
 bus = &"Master"
 
 [node name="Npc" type="Node" parent="."]

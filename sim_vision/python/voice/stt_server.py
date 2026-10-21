@@ -1,7 +1,7 @@
 """STT server WebSocket (G12). Nhận `utterance`, trả `transcript` hoặc `error` (Mục 2.2).
 
-Chạy: python -m voice.stt_server [--device auto|mps|cuda|cpu] [--beams 1] [--port 8766]
-Log mức info chỉ có utt_id, clip_id, audio_s, stt_ms — KHÔNG có văn bản.
+Chạy: python -m voice.stt_server [--device auto|mps|cuda|cpu] [--beams 1] [--port 8766] [--nlu rule|phobert]
+Log mức info chỉ có utt_id, clip_id, audio_s, stt_ms (và intent, action của G20) — KHÔNG có văn bản.
 """
 
 from __future__ import annotations
@@ -35,6 +35,8 @@ QUEUE_MAX: int = 4
 # classify(text) ➔ (intent, intent_conf, slots); build(intent, slots) ➔ response.
 Classify = Callable[[str], tuple[str, float, dict[str, str]]]
 Respond = Callable[[str, dict[str, str]], str]
+# G20: (text, trạng thái hội thoại của kết nối) ➔ {intent, intent_conf, slots, response, action, target, ...}.
+Dialogue = Callable[[str, dict[str, Any]], dict[str, Any]]
 
 
 class ProtocolError(Exception):
@@ -93,13 +95,14 @@ def build_error(utt_id: int | None, message: str) -> str:
 
 def build_transcript(utt: Utterance, text: str, intent: str | None, intent_conf: float | None,
                      slots: dict[str, str] | None, response: str | None, stt_ms: float, audio_s: float,
-                     effective_snr_db: float) -> str:
+                     effective_snr_db: float, action: str | None = None, target: str | None = None) -> str:
     return json.dumps({
         "type": "transcript", "utt_id": utt.utt_id, "clip_id": utt.clip_id, "text": text,
         "intent": intent, "intent_conf": intent_conf, "slots": slots, "response": response,
         "stt_ms": round(stt_ms, 1), "audio_s": round(audio_s, 2),
         # JSON không có inf: noise="none" ➔ null.
         "effective_snr_db": round(effective_snr_db, 2) if math.isfinite(effective_snr_db) else None,
+        "action": action, "target": target,
     }, ensure_ascii=False)
 
 
@@ -154,8 +157,14 @@ class ClipStore:
         return fn
 
 
-def load_nlu() -> tuple[Classify, Respond] | None:
-    """Intent và câu trả lời (G14). Chưa có module ➔ None (trả null)."""
+def load_nlu(mode: str = "rule", device: str = "auto") -> Dialogue | tuple[Classify, Respond] | None:
+    """NLU + policy (G20, `mode` rule|phobert); chưa có G20 ➔ intent và câu trả lời G14; không có gì ➔ None (null)."""
+    try:
+        from nlu.dialogue import build_engine
+    except ImportError:
+        build_engine = None
+    if build_engine is not None:
+        return build_engine(mode, device)
     try:
         from voice import intent, responses
     except ImportError:
@@ -172,7 +181,7 @@ class SttService:
     """Xử lý một utterance (chạy trong thread). Mọi lỗi ➔ message `error`."""
 
     def __init__(self, store: ClipStore, transcriber: Transcriber,
-                 nlu: tuple[Classify, Respond] | None = None) -> None:
+                 nlu: Dialogue | tuple[Classify, Respond] | None = None) -> None:
         self.store = store
         self.transcriber = transcriber
         self.nlu = nlu
@@ -183,7 +192,7 @@ class SttService:
         if not self.store.has_noise(utt.noise):
             raise ProtocolError(f"noise not found: {utt.noise}", utt.utt_id)
 
-    def process(self, utt: Utterance) -> str:
+    def process(self, utt: Utterance, state: dict[str, Any] | None = None) -> str:
         try:
             speech = self.store.speech(utt.clip_id)
             rng = np.random.default_rng(utterance_seed(utt.utt_id, utt.clip_id))
@@ -195,19 +204,24 @@ class SttService:
         except Exception as exc:  # noqa: BLE001 — lỗi một utterance không làm dừng server
             log.warning("utt_id=%d clip_id=%s error=%s", utt.utt_id, utt.clip_id, type(exc).__name__)
             return build_error(utt.utt_id, f"stt failed: {type(exc).__name__}")
-        intent = conf = slots = response = None
-        if self.nlu is not None:
+        intent = conf = slots = response = action = target = None
+        if isinstance(self.nlu, tuple):
             intent, conf, slots = self.nlu[0](text)
             response = self.nlu[1](intent, slots)
+        elif self.nlu is not None:
+            d = self.nlu(text, state if state is not None else {})
+            intent, conf, slots, response, action, target = (d["intent"], d["intent_conf"], d["slots"], d["response"],
+                                                             d["action"], d["target"])
         audio_s = audio.size / config.SAMPLE_RATE
         log.info("utt_id=%d clip_id=%s audio_s=%.2f stt_ms=%.1f", utt.utt_id, utt.clip_id, audio_s, stt_ms)
-        return build_transcript(utt, text, intent, conf, slots, response, stt_ms, audio_s, eff)
+        return build_transcript(utt, text, intent, conf, slots, response, stt_ms, audio_s, eff, action, target)
 
 
 @dataclass
 class _Job:
     utt: Utterance
     ws: ServerConnection
+    state: dict[str, Any]
 
 
 class SttServer:
@@ -221,14 +235,15 @@ class SttServer:
     async def _work(self) -> None:
         while True:
             job = await self.queue.get()
-            reply = await asyncio.to_thread(self.service.process, job.utt)
+            reply = await asyncio.to_thread(self.service.process, job.utt, job.state)
             try:
                 await job.ws.send(reply)
             except ConnectionClosed:
                 pass
             self.queue.task_done()
 
-    async def handle_message(self, text: str | bytes, ws: ServerConnection) -> str | None:
+    async def handle_message(self, text: str | bytes, ws: ServerConnection,
+                             state: dict[str, Any] | None = None) -> str | None:
         """Trả lỗi cần gửi ngay, hoặc None nếu đã xếp hàng."""
         try:
             utt = parse_utterance(text)
@@ -237,16 +252,17 @@ class SttServer:
             log.warning("utt_id=%s error=%s", e.utt_id, e.message)
             return build_error(e.utt_id, e.message)
         try:
-            self.queue.put_nowait(_Job(utt, ws))
+            self.queue.put_nowait(_Job(utt, ws, state if state is not None else {}))
         except asyncio.QueueFull:
             log.warning("utt_id=%d error=stt busy", utt.utt_id)
             return build_error(utt.utt_id, "stt busy")
         return None
 
     async def handle_connection(self, ws: ServerConnection) -> None:
+        state: dict[str, Any] = {}            # trạng thái hội thoại G20 (clarify_count, last_response) của kết nối
         try:
             async for msg in ws:
-                reply = await self.handle_message(msg, ws)
+                reply = await self.handle_message(msg, ws, state)
                 if reply is not None:
                     await ws.send(reply)
         except ConnectionClosed:
@@ -264,6 +280,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     p.add_argument("--beams", type=int, default=1, choices=range(1, 6))
     p.add_argument("--port", type=int, default=config.STT_WS_PORT)
     p.add_argument("--data-dir", type=Path, default=config.DATA_DIR)
+    p.add_argument("--nlu", default="rule", choices=["rule", "phobert"], help="G20: luật G14 hoặc PhoBERT (G19)")
     return p.parse_args(argv)
 
 
@@ -289,7 +306,8 @@ def main(argv: list[str] | None = None) -> int:
     transcriber = PhoWhisperTranscriber(args.model, args.device, args.beams)
     log.info("model %s on device=%s beams=%d, %d clips", Path(args.model).name, transcriber.device,
              args.beams, len(store.manifest))
-    nlu = load_nlu()
+    nlu = load_nlu(args.nlu, args.device)
+    log.info("nlu=%s", args.nlu if not isinstance(nlu, tuple) else "rule (G14, no policy)")
     if nlu is None:
         log.warning("intent module not available: intent/response = null")
     try:

@@ -4,9 +4,11 @@ extends Node
 ## Khác RunLogger (G9): ô chứa dấu phẩy / ngoặc kép / xuống dòng được đặt trong ngoặc kép (hyp_text).
 
 const COLUMNS: PackedStringArray = ["time_s", "utt_id", "clip_id", "speaker", "take", "distance_m", "snr_db",
-		"noise", "effective_snr_db", "hyp_text", "intent_pred", "intent_conf", "stt_ms", "error"]
+		"noise", "effective_snr_db", "hyp_text", "intent_pred", "intent_conf", "stt_ms", "error",
+		# G22
+		"action", "target", "response_len", "tts_ms", "tts_cache_hit", "tts_error", "speak_duration_s"]
 const FLOAT_COLUMNS: PackedStringArray = ["time_s", "distance_m", "snr_db", "effective_snr_db", "intent_conf",
-		"stt_ms"]
+		"stt_ms", "tts_ms", "speak_duration_s"]
 
 var path: String = ""
 

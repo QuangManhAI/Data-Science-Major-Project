@@ -101,6 +101,23 @@ static func pick_clip(clips: Dictionary, spk: String, used_intents: Array[String
 	return pool[rng.randi_range(0, pool.size() - 1)]
 
 
+## Clip để người bệnh nói lại (G22, nhánh clarify): cùng speaker và sentence_id, khác take, chưa dùng
+## (`used`); nhiều clip ➔ theo tên. Không có ➔ "".
+static func alternate_clip(clips: Dictionary, id: String, used: Array[String] = []) -> String:
+	if not clips.has(id):
+		return ""
+	var me: Dictionary = clips[id]
+	var ids: Array = clips.keys()
+	ids.sort()
+	for other: String in ids:
+		var c: Dictionary = clips[other]
+		if other != id and not used.has(other) and str(c.get("speaker", "")) == str(me.get("speaker", "")) \
+				and str(c.get("sentence_id", "")) == str(me.get("sentence_id", "")) \
+				and str(c.get("take", "")) != str(me.get("take", "")):
+			return other
+	return ""
+
+
 ## Đọc clips.json; lỗi ➔ push_error và trả {}.
 static func load_clips(path: String) -> Dictionary:
 	if not FileAccess.file_exists(path):
@@ -136,6 +153,29 @@ func reset() -> void:
 
 
 ## Gọi bởi dialogue_manager sau khi robot trả lời xong.
+## Danh sách clip (nạp khi cần lần đầu).
+func get_clips() -> Dictionary:
+	if _clips.is_empty():
+		_clips = Npc.load_clips(voices_dir.path_join("clips.json"))
+	return _clips
+
+
+## Người bệnh nói lại bằng clip `id` khi robot vừa hỏi lại (G22). Chỉ khi đang WAIT_REPLY; lỗi ➔ false.
+func say_again(id: String) -> bool:
+	if state != WAIT_REPLY:
+		return false
+	var stream: AudioStream = Npc.load_voice(id, voices_dir)
+	if stream == null:
+		push_error("Npc: cannot load voice clip '%s'" % id)
+		return false
+	current_clip = id
+	state = TALK
+	player.stream = stream
+	player.play()
+	talk_started.emit(id)
+	return true
+
+
 func on_reply_shown() -> void:
 	if state == IDLE:
 		return

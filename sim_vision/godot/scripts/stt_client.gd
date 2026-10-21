@@ -76,12 +76,13 @@ static func build_utterance(utt_id: int, clip_id: String, distance_m: float, snr
 
 
 ## Parse message server. Trả {ok, type, utt_id, clip_id, text, intent, intent_conf, slots, response,
-## stt_ms, audio_s, effective_snr_db, error}. `type == "error"` ➔ ok = false, `error` = message của server.
+## stt_ms, audio_s, effective_snr_db, action, target, error}. `type == "error"` ➔ ok = false, `error` = message của server.
 ## intent / intent_conf / response / effective_snr_db có thể là null (server chưa có G14, hoặc không ồn).
+## action / target (G20) có thể thiếu hoặc null ➔ "".
 static func parse_transcript(text: String) -> Dictionary:
 	var out: Dictionary = {"ok": false, "type": "", "utt_id": -1, "clip_id": "", "text": "", "intent": "",
 			"intent_conf": 0.0, "slots": {}, "response": "", "stt_ms": 0.0, "audio_s": 0.0,
-			"effective_snr_db": null, "error": ""}
+			"effective_snr_db": null, "action": "", "target": "", "error": ""}
 	var json := JSON.new()
 	var msg: Variant = json.data if json.parse(text) == OK else null
 	if not msg is Dictionary:
@@ -113,7 +114,7 @@ static func parse_transcript(text: String) -> Dictionary:
 	for f: String in ["stt_ms", "audio_s"]:
 		if not _is_number(m[f]) or float(m[f]) < 0.0:
 			return _invalid(out, f)
-	for f: String in ["intent", "response"]:
+	for f: String in ["intent", "response", "action", "target"]:
 		if m.get(f) != null and not m[f] is String:
 			return _invalid(out, f)
 	if m.get("intent_conf") != null and not _is_number(m["intent_conf"]):
@@ -132,6 +133,8 @@ static func parse_transcript(text: String) -> Dictionary:
 	out["stt_ms"] = float(m["stt_ms"])
 	out["audio_s"] = float(m["audio_s"])
 	out["effective_snr_db"] = float(m["effective_snr_db"]) if m.get("effective_snr_db") != null else null
+	out["action"] = m.get("action") if m.get("action") != null else ""
+	out["target"] = m.get("target") if m.get("target") != null else ""
 	return out
 
 

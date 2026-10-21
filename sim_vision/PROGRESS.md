@@ -18,6 +18,13 @@
 | G14 | Xong | pytest 198/198 | Intent 100% trên text_ref, 97–99% trên STT (SNR 20, 1 m); recall cap_cuu 74% toàn lưới |
 | G15 | Xong | GUT 94/94 | NPC quay, phát clip, dừng khi robot đi |
 | G16 | Xong | GUT 115/115 | Một lượt hội thoại trọn vẹn trong cửa sổ thật |
+| G17 | Xong | GUT 5, pytest 6 | 38/40 (95%), recall cap_cuu 3/3; 2 episode NPC không nói (sát ngưỡng 2.0 m) |
+| G18 | Xong | pytest 223/223 | 20 lớp; train 2642, val 360, test_ref 40, test_stt 1440 |
+| G19 | Xong (thiếu đo lặp lại) | pytest 9/9 | val macro-F1 1.0 (lạc quan), ngưỡng 0.6; nạp lại giống hệt |
+| G20 | Xong | pytest 16/16 | `--nlu rule|phobert`, `action`/`target`; 83 câu trả lời, không lời khuyên y khoa |
+| G21 | Xong | pytest 19/19 | VieNeu offline từ local; cache hit < 10 ms, miss ~2 s/câu (CPU) |
+| G22 | Xong | GUT 135/135 | Robot nói qua loa 3D; TTS lỗi ➔ phụ đề 4 s |
+| G23 | Xong một phần | pytest 279/279 | PhoBERT kém luật trên test (McNemar p 0.0014); e2e 38/40, trễ 1.2 s; WER khứ hồi 2.2% |
 
 ## G1: Bootstrap & Config (2026-10-21)
 
@@ -333,3 +340,99 @@ Người dùng chọn đổi `H_TARGET` để G10 có thể đạt. Cập nhật
 - [x] GUT 115/115 (cũ và mới).
 - [x] Cửa sổ thật, 2 server bật (seed 1): SEARCH ➔ APPROACH ➔ ARRIVED 1.50 m ➔ NPC quay (0.6 s) ➔ LISTEN ➔ THINK ➔ RESPOND ➔ ARRIVED. Clip A_06_n, hyp "Khoa tiêu hóa ở bệnh viện này ở từng máy." ➔ hoi_khoa ➔ "Dạ, khoa Tiêu hóa ở tầng 2, phòng 205. Mời anh chị đi theo tôi." Từ lúc NPC nói xong đến khi có phụ đề ~1.0 s (stt_ms 1007 khi chạy cùng Godot + YOLO). Phụ đề tiếng Việt hiển thị đúng dấu.
 - [x] Tắt STT server (seed 2): robot trả lời "Xin lỗi, tôi chưa nghe rõ…", log `stt disconnected`, về ARRIVED, không treo. Ô góc nhìn hiện "STT: mất kết nối" màu đỏ ngay từ đầu (đã sửa: trước đó dòng này chỉ hiện sau lần kết nối đầu tiên). Bật lại server giữa chừng ➔ tự nối lại, lượt sau hoàn tất bình thường.
+
+## G18: Dữ liệu intent & tách từ (2026-10-22)
+
+**Đã xong**
+- Cài `openjdk@17` (Homebrew), `py_vncorenlp`, tải RDRSegmenter vào `models/VnCoreNLP/`.
+- `python/nlu/{config,vi_numbers,segment,asr_noise,build_dataset}.py`; `data/nlu/seed.csv` (100 câu, 5 mỗi intent, tự viết).
+- `python -m nlu.build_dataset` ➔ `data/nlu/{train,val,test_ref,test_stt,leak_removed}.csv`, `stats.md`.
+- Test `tests/nlu/test_nlu_dataset.py` (25 test): cache tách từ, đọc số, ghép đủ slot, chỉ dùng giá trị trong bản đồ, biến đổi có quy tắc, lọc rò rỉ, chia phân tầng, lấy mẫu đều theo seed, asr_noise cùng seed cùng kết quả, chạy trọn và dừng khi thiếu câu.
+
+**Kiểm chứng**
+- [x] pytest 223/223.
+- [x] Đọc 2 lượt × 30 câu train ngẫu nhiên: 60/60 đúng nhãn. Lượt 1 thấy hậu tố chồng ("được không với", "nhé nha") ➔ sửa quy tắc hậu tố, chạy lại.
+- [x] `leak_removed.csv`: 8 câu, đều đúng lý do: 7 biến thể của "cho tôi hỏi khoa tim mạch ở đâu" (= C01) và "nhà vệ sinh nam ở đâu ạ" (gần B_14 "nhà vệ sinh nữ ở đâu ạ", 0.913).
+- [x] Mỗi intent ≥ 125 câu train (tối thiểu 60).
+- [ ] U3: người dùng đọc 30 câu train ngẫu nhiên, sửa nhãn sai nếu có.
+
+## G19: Fine-tune PhoBERT-base-v2 (2026-10-22)
+
+**Đã xong**
+- `python/nlu/train_phobert.py` (vòng lặp torch thuần, MPS), test đường ống 9 test (model Roberta nhỏ giả, 40 câu giả).
+- `models_finetuned/phobert-intent/`: model, tokenizer, `label_map.json`, `threshold.json` (`conf_threshold` 0.6), `train_report.md`.
+
+**Kiểm chứng**
+- [x] Train offline 10 epoch × ~87 s; val macro-F1 1.0 từ epoch 2, val loss 0.0205 ở epoch 10 (checkpoint giữ lại). **Val lạc quan** vì là biến thể của câu seed có trong train (ASSUMPTIONS G18).
+- [x] Ma trận nhầm lẫn val: không có câu sai, nên không có cặp nhầm nào để ghi. Cặp nhầm thật thấy ở test (G23): `hoi_phong` ➔ `tien_ich` ("… đi đường nào").
+- [x] Nạp lại từ `PHOBERT_FT_DIR`: 100% cùng dự đoán, chênh lệch xác suất 0.
+- [ ] Chạy lại cùng seed để đo sai lệch: lượt `--repeat` bị dừng theo yêu cầu người dùng. Hai lần train đầy đủ trước đó cho epoch 1 khác nhau nhẹ (val F1 0.95 / 0.91 / 0.94) ➔ MPS không tất định tuyệt đối. Lần đầu dừng giữa chừng làm mất model vì script chỉ lưu sau lượt 2; đã sửa để lưu ngay sau lượt 1.
+
+## G20: NLU + Dialogue policy (2026-10-22)
+
+**Đã xong**
+- `python/nlu/{slots,nlu,policy,phobert_intent,dialogue}.py`; `stt_server.py` thêm `--nlu rule|phobert`, trường `action`, `target`, trạng thái hỏi lại theo kết nối.
+- Test `tests/nlu/test_nlu_policy.py` (16 test, `FakeIntentModel`): luật khẩn cấp chạy trước PhoBERT, ngưỡng, từng dòng bảng policy, số phòng không có trong bản đồ, ví dụ G20.3, trạng thái clarify ➔ call_staff, stt_server trả đủ trường cũ + mới.
+
+**Kiểm chứng**
+- [x] pytest pass.
+- [x] `stt_server --nlu phobert`, 5 clip (babble 20 dB, 1.5 m): A_25 ➔ cap_cuu/emergency; A_06 ➔ hoi_khoa/guide `dept_tieu_hoa`; A_10 ➔ khong_ho_tro/refuse; A_22 ➔ dieu_chinh_toc_do/adjust; **A_07 "phòng khám số hai trăm linh năm đi đường nào" ➔ tien_ich (sai)**, do seed `tien_ich` có "đi … lối nào" còn seed `hoi_phong` thiếu kiểu câu này.
+- [x] In hết câu trả lời có thể có (`reports/robot_responses.md`, 83 câu): chỉ chỉ đường / gọi nhân viên / hỏi lại / từ chối; số phòng đều có trong bản đồ (test kiểm tra).
+- [ ] U5: người dùng duyệt `reports/robot_responses.md`.
+
+## G21: TTS server VieNeu-TTS v3 Turbo (2026-10-22)
+
+**Đã xong**
+- Đọc mã nguồn `vieneu` 3.8.3 ➔ cách nạp local (ASSUMPTIONS G21), người dùng duyệt cách vòng qua cho codec.
+- `python/tts/{config,text_for_tts,tts_engine,tts_server,pregen,pick_voice}.py`; venv riêng `.venv-tts`.
+- Test `tests/tts/test_tts.py` (19 test, `FakeTTS`): đọc số / viết tắt, cache hit/miss, resample 24 kHz, RMS −20 dBFS ±1, 100 ms im lặng, PCM đúng độ dài, text rỗng / quá dài / sai giọng, hàng chờ đầy ➔ `tts busy`, engine lỗi, dựng cache codec.
+
+**Kiểm chứng**
+- [x] `HF_HUB_OFFLINE=1`: server khởi động (nạp model ~5 s, 25 giọng) và tổng hợp được; không có request tải mạng.
+- [x] `tts_ms` cache miss: câu 20 từ 2477 ms; `pregen` 83 câu trung bình 1982 ms (0.5–5.3 s), cùng lúc đang train PhoBERT trên MPS ➔ số thật khi máy rảnh có thể thấp hơn. Cache hit 0.8–7 ms.
+- [x] `pregen.py`: 83/83 câu đã có trong `data/tts_cache` (giọng tạm "Ngọc Huyền").
+- [ ] U4: người dùng nghe `reports/voices/*.wav` (25 giọng) và chọn `ROBOT_VOICE`; nghe 10 câu trả lời (đọc đúng dấu, số phòng rõ).
+
+## G22: Robot nói trong Godot (2026-10-22)
+
+**Đã xong**
+- `godot/scripts/tts_client.gd` (`parse_audio`, `pcm16_to_stream`, tự nối lại, bộ đệm 8 MiB), `robot_voice.gd` (`Robot/Head/Voice`); cập nhật `dialogue_manager.gd`, `view_overlay.gd` (dòng TTS, cảnh báo đỏ, "Đang dẫn đến"), `config.gd`, `stt_client.gd` (action/target), `npc.gd` (nói lại), `dialogue_logger.gd` (7 cột), `main.tscn`, `robot.tscn`.
+- Test `godot/tests/test_tts_dialogue.gd` (15 test): parse_audio (đúng + 10 lỗi), 9600 byte ➔ 0.2 s, loa ở đầu robot, lượt có TTS (bỏ audio utt cũ, phụ đề đến khi nói xong), TTS timeout, TTS tắt ➔ phụ đề 4 s + `tts_error = disconnected`, lỗi server, clarify ➔ NPC nói lại take khác, hết take ➔ kết thúc, emergency ➔ chữ đỏ.
+
+**Kiểm chứng**
+- [x] GUT 135/135 (120 cũ + 15 mới).
+- [x] Batch 40 episode với 3 server thật (YOLO, STT `--nlu phobert`, TTS): robot trả lời thành tiếng, 38/38 lượt hoàn thành có âm thanh (không lỗi TTS, cache hit 100%).
+- [x] **Sửa sau phản hồi người dùng** ("không nghe robot nói, NPC nhỏ"): (1) batch cũ kết thúc episode ngay khi audio tới nên cắt mất tiếng robot ➔ chờ robot nói xong (tối đa 15 s); (2) tai ở camera góc phòng cách 3–7 m, `unit_size` 1 m làm giảm 10–17 dB, clip gốc RMS −25.6 dBFS ➔ `unit_size` 5 m cho NPC và robot, NPC +6 dB (test G15 cập nhật).
+- [x] Nhánh clarify chạy trong batch thật (A_05_n "đau bụng nên khám khoa nào" ➔ robot hỏi lại ➔ NPC nói lại); phát hiện batch ghi đè mốc thời gian ➔ độ trễ âm ở 1 episode, đã sửa batch và bỏ giá trị âm khi phân tích.
+- [ ] Cửa sổ thật: tắt TTS server giữa chừng ➔ chỉ phụ đề (đã kiểm bằng GUT, chưa thử bằng tay); nghe âm lượng sau khi chỉnh (người dùng).
+
+## G17: Batch hội thoại & báo cáo (2026-10-22)
+
+**Đã xong**
+- `godot/tools/dialogue_batch.{gd,tscn}`, `tools/h_target_controller.gd`, `python/voice/analyze_dialogue.py`, README mục 6. Test: GUT `test_dialogue_batch.gd` (5), pytest `test_analyze_dialogue.py` (6).
+- Batch 40 episode (`logs/dialogue_batch_20261022_012217.csv`, chạy cùng TTS và NLU PhoBERT), `reports/dialogue_summary.md`.
+
+**Kiểm chứng**
+- [x] 38/40 = **95.0%** hoàn thành (đạt ngưỡng sát). 2 episode `episode timeout` không phải lỗi code STT/TTS: dò vết (`ep 6`, `ep 11` chạy lại riêng đều xong lượt, muộn). ep 6 (h_target 0.75) robot dừng ở **2.00 m, đúng ngưỡng `TALK_TRIGGER_DIST`** ➔ trong batch nhiều khả năng dừng ở 2.01 m nên NPC không nói. Mức 0.75 cho khoảng cách TB 1.97 m, quá sát ngưỡng; đề xuất 0.77 hoặc nới ngưỡng 2.1 m (chưa sửa, chờ người dùng). ep 11: chưa tái hiện.
+- [x] Recall `cap_cuu` báo riêng: **3/3**; không lượt nào bỏ sót.
+- [x] WER (20 lượt ref_verified) 7.2% [2.3%, 14.4%]; theo cặp noise/SNR nằm quanh cột 1 m – 2 m của G13 (babble 10 dB: 14.5% vs 4.2% / 18.1%), dao động lớn vì mỗi ô 4–6 lượt. Intent accuracy 92.1%. NPC nói xong ➔ robot bắt đầu nói: TB 1212 ms, p95 1476 ms.
+
+## G23: So sánh luật và PhoBERT & batch đầu cuối (2026-10-22)
+
+**Đã xong**
+- `python/nlu/eval_nlu.py`, `python/tts/eval_tts_roundtrip.py`, `python/voice/analyze_e2e.py`, README mục 7; test `tests/nlu/test_eval_g23.py` (6).
+- `reports/nlu_compare.md` (+ `.csv`, `nlu_f1_vs_snr.png`), `reports/tts_roundtrip.md`, `reports/e2e_summary.md`.
+
+**Kết quả**
+- test_ref (40 câu): luật 100% / F1 1.000; PhoBERT 92.5% / F1 0.964 [0.907, 1.000]; McNemar b 3, c 0, p 0.25.
+- test_stt (1440): luật 86.3% / F1 0.917; PhoBERT 83.8% / F1 0.880; McNemar b 78, c 42, **p 0.0014 ➔ luật tốt hơn có ý nghĩa**. PhoBERT ít hỏi lại hơn (clarify 4.5% vs 12.1%), recall cap_cuu 77.8% vs 76.4% (luật khẩn cấp chung). Ở 5 dB và 10 dB PhoBERT gần bằng / nhỉnh accuracy.
+- Lỗi PhoBERT lớn nhất: `hoi_phong` ➔ `tien_ich` (61 lượt STT; 2/3 lỗi test_ref) với câu "… đi đường nào": seed `hoi_phong` thiếu kiểu câu này còn seed `tien_ich` có "đi … lối nào". Theo G23.2 không sửa dựa trên test; sửa sẽ là bổ sung seed (G18) rồi train lại.
+- NLU: luật 0.8 ms, PhoBERT 10.6 ms TB / 13.8 ms p95 trên test_stt (36.6 ms TB trên test_ref do lần chạy đầu của JVM/MPS).
+- TTS khứ hồi: WER nguyên văn 18.0% nhưng chủ yếu do STT viết số bằng chữ số; **sau khi đổi số sang chữ 2.2%**, 60/83 câu đúng hoàn toàn. Lỗi nghe hay gặp: "Mời" ➔ "mười/người/ngồi".
+- E2E 40 episode: 95% hoàn thành; action: answer 24, adjust 5, emergency 3, guide 3, clarify 2, refuse 1; độ trễ STT 1122 ms, TTS 3 ms (cache), NLU + mạng + khung hình 88 ms.
+
+**Kiểm chứng**
+- [x] Recall cap_cuu = 1.0 ở cả 2 cách trên test_ref (2 câu).
+- [x] Cùng số câu cho luật và PhoBERT (40 / 1440).
+- [x] test_stt thấp hơn test_ref ở cả 2 cách.
+- [x] Batch ≥ 95% (38/40).

@@ -116,7 +116,7 @@ func test_scene_has_voice_player() -> void:
 	add_child_autofree(human)
 	var voice := human.get_node("Head/Voice") as AudioStreamPlayer3D
 	assert_eq(voice.attenuation_model, AudioStreamPlayer3D.ATTENUATION_INVERSE_DISTANCE)
-	assert_eq(voice.unit_size, 1.0)
+	assert_eq(voice.unit_size, 5.0, "không suy giảm trong 5 m (tai ở camera góc phòng), người dùng thấy NPC quá nhỏ")
 	assert_between((human.get_node("Head") as Node3D).position.y, 1.45, 1.75)
 	assert_eq((human.get_node("Npc") as Npc).state, Npc.IDLE)
 

@@ -13,6 +13,14 @@ var _state: String = ""
 var _connected: bool = false
 var _stt_shown: bool = false        # dòng STT chỉ hiện khi scene có hội thoại (G16)
 var _stt_connected: bool = false
+var _tts_shown: bool = false        # dòng TTS (G22)
+var _tts_connected: bool = false
+var _alert: String = ""             # cảnh báo đỏ (G22, cap_cuu)
+var _status: String = ""            # vd "Đang dẫn đến: khoa tim mạch" (G22, guide)
+
+const ALERT_COLOR := Color(1, 0.15, 0.1)
+const ALERT_FONT_SIZE: int = 22
+const EMERGENCY_TEXT: String = "GỌI NHÂN VIÊN Y TẾ"
 
 @onready var _view: TextureRect = $View
 @onready var _boxes: Control = $Boxes
@@ -46,6 +54,42 @@ func set_stt_connected(connected: bool) -> void:
 	_boxes.queue_redraw()
 
 
+func set_tts_connected(connected: bool) -> void:
+	_tts_shown = true
+	_tts_connected = connected
+	_boxes.queue_redraw()
+
+
+func set_alert(text: String) -> void:
+	_alert = text
+	_boxes.queue_redraw()
+
+
+func set_status(text: String) -> void:
+	_status = text
+	_boxes.queue_redraw()
+
+
+func get_alert() -> String:
+	return _alert
+
+
+func get_status() -> String:
+	return _status
+
+
+static func tts_connection_text(connected: bool) -> String:
+	return "TTS: đã kết nối" if connected else "TTS: mất kết nối"
+
+
+static func guide_text(slots: Dictionary) -> String:
+	if slots.has("department"):
+		return "Đang dẫn đến: khoa %s" % str(slots["department"])
+	if slots.has("room"):
+		return "Đang dẫn đến: phòng %s" % str(slots["room"])
+	return ""
+
+
 static func stt_connection_text(connected: bool) -> String:
 	return "STT: đã kết nối" if connected else "STT: mất kết nối"
 
@@ -69,9 +113,22 @@ func _on_boxes_draw() -> void:
 	_text(font, Vector2(6, FONT_SIZE + 4), _state, TEXT_COLOR)
 	_text(font, Vector2(6, size.y - 6), ViewOverlay.connection_text(_connected),
 			TEXT_COLOR if _connected else Color(1, 0.35, 0.3))
+	var line: int = 1
 	if _stt_shown:
-		_text(font, Vector2(6, size.y - 8 - FONT_SIZE), ViewOverlay.stt_connection_text(_stt_connected),
+		_text(font, Vector2(6, size.y - 6 - (FONT_SIZE + 2) * line), ViewOverlay.stt_connection_text(_stt_connected),
 				TEXT_COLOR if _stt_connected else Color(1, 0.35, 0.3))
+		line += 1
+	if _tts_shown:
+		_text(font, Vector2(6, size.y - 6 - (FONT_SIZE + 2) * line), ViewOverlay.tts_connection_text(_tts_connected),
+				TEXT_COLOR if _tts_connected else Color(1, 0.35, 0.3))
+	if _status != "":
+		_text(font, Vector2(6, 2 * FONT_SIZE + 8), _status, Color(1, 0.85, 0.3))
+	if _alert != "":
+		var w: float = font.get_string_size(_alert, HORIZONTAL_ALIGNMENT_LEFT, -1, ALERT_FONT_SIZE).x
+		var pos := Vector2((size.x - w) / 2.0, size.y / 2.0)
+		_boxes.draw_rect(Rect2(pos - Vector2(8, ALERT_FONT_SIZE + 4), Vector2(w + 16, ALERT_FONT_SIZE + 14)),
+				Color(0, 0, 0, 0.7))
+		_boxes.draw_string(font, pos, _alert, HORIZONTAL_ALIGNMENT_LEFT, -1, ALERT_FONT_SIZE, ALERT_COLOR)
 
 
 func _text(font: Font, pos: Vector2, text: String, color: Color) -> void:

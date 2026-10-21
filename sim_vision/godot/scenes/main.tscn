@@ -1,4 +1,4 @@
-[gd_scene load_steps=14 format=3]
+[gd_scene load_steps=15 format=3]
 
 [ext_resource type="Script" path="res://scripts/main.gd" id="1"]
 [ext_resource type="PackedScene" path="res://scenes/room.tscn" id="2"]
@@ -12,6 +12,7 @@
 [ext_resource type="Script" path="res://scripts/dialogue_manager.gd" id="10"]
 [ext_resource type="Script" path="res://scripts/dialogue_logger.gd" id="11"]
 [ext_resource type="PackedScene" path="res://scenes/subtitle.tscn" id="12"]
+[ext_resource type="Script" path="res://scripts/tts_client.gd" id="13"]
 
 [node name="Main" type="Node3D"]
 script = ExtResource("1")
@@ -33,6 +34,9 @@ script = ExtResource("8")
 
 [node name="SttClient" type="Node" parent="."]
 script = ExtResource("9")
+
+[node name="TtsClient" type="Node" parent="."]
+script = ExtResource("13")
 
 [node name="DialogueLogger" type="Node" parent="."]
 script = ExtResource("11")

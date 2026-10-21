@@ -6,3 +6,5 @@ __pycache__/
 godot/assets/voices/
 reports/stt_cache/
 reports/*.csv
+.venv-tts/
+reports/voices/*.wav

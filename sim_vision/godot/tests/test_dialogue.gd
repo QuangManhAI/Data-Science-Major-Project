@@ -148,7 +148,8 @@ func test_dialogue_log_row_escapes() -> void:
 			"distance_m": 1.4, "error": ""})
 	assert_eq(line.get_slice(",", 1), "1")
 	assert_true(line.contains('"phòng 205, ""đi"" đường nào"'))
-	assert_eq(DialogueLogger.COLUMNS.size(), 14)
+	assert_eq(DialogueLogger.COLUMNS.size(), 21, "14 cột G16 + 7 cột G22")
+	assert_eq(DialogueLogger.COLUMNS[13], "error", "cột cũ giữ nguyên vị trí")
 
 
 func test_overlay_stt_text() -> void:

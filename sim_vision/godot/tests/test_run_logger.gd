@@ -68,7 +68,8 @@ func test_flush_after_one_second() -> void:
 func test_unwritable_path_reports_once_and_keeps_running() -> void:
 	var logger := RunLogger.new()
 	add_child_autofree(logger)
-	assert_false(logger.open("/"))  # thư mục có sẵn nhưng chỉ đọc
+	var unwritable: String = "C:/" if OS.get_name() == "Windows" else "/"
+	assert_false(logger.open(unwritable))  # thư mục có sẵn nhưng chỉ đọc
 	assert_push_error("RunLogger")
 	logger.log_row({"frame_id": 0})
 	logger.flush()

@@ -15,9 +15,14 @@ Kế hoạch đầy đủ và hợp đồng chung (message WebSocket, hằng s�
 **Yêu cầu:** macOS / Linux / Windows có GPU hỗ trợ Vulkan hoặc Metal; Godot **4.3 trở lên** (đã thử với 4.7.2); Python **3.10 trở lên** (đã thử với 3.12).
 
 ```bash
-cd sim_vision/python
-python3.12 -m venv .venv
-.venv/bin/pip install -r requirements.txt
+# Thư mục gốc repo:
+python -m venv .venv
+# Kích hoạt trên Windows:
+.\.venv\Scripts\Activate.ps1
+# Hoặc macOS / Linux:
+source .venv/bin/activate
+
+pip install -r requirements.txt
 ```
 
 **Model YOLO:** đặt `yolov8n.pt` (do người dùng cung cấp) vào `sim_vision/python/`. Trong repo này, đó là symlink tới `models/yolov8n/yolov8n.pt`:
@@ -56,7 +61,7 @@ cd sim_vision/godot && godot --path . res://tools/detect_gate.tscn   # ➔ logs/
 
 ```bash
 cd sim_vision/python
-.venv/bin/python yolo_server.py --model yolov8n.pt     # tùy chọn: --port 8765
+python sim_vision/python/yolo_server.py --model models/yolov8n/yolov8n.pt     # tùy chọn: --port 8765
 ```
 
 **Cửa sổ 2: scene chính**
@@ -72,13 +77,13 @@ godot --path .                 # chạy scenes/main.tscn
 - Mỗi lần chạy ghi một file `sim_vision/logs/run_<YYYYMMDD_HHMMSS>.csv` (13 cột, gồm ground truth `true_distance_m`, `true_angle_deg`).
 - Tắt server giữa chừng thì robot dừng; bật lại thì tự nối lại (thử mỗi 2 s).
 
-Gửi thử một ảnh tới server: `.venv/bin/python send_image.py <ảnh.jpg>`.
+Gửi thử một ảnh tới server: `python sim_vision/python/send_image.py <ảnh.jpg>`.
 
 ## 4. Test
 
 ```bash
 # Python (không gọi YOLO thật, dùng FakeDetector)
-cd sim_vision/python && .venv/bin/python -m pytest tests
+pytest
 
 # Godot (GUT, chạy headless được)
 cd sim_vision/godot && godot --headless -s addons/gut/gut_cmdln.gd -gconfig=res://.gutconfig.json
@@ -92,8 +97,7 @@ cd sim_vision/godot
 godot --path . res://tools/batch_run.tscn                     # 10 lượt, seed 0..9
 godot --path . res://tools/batch_run.tscn -- --runs=20 --max-time=30
 
-cd ../python
-.venv/bin/python analyze_logs.py     # tỉ lệ thành công, thời gian TB, logs/h_vs_distance.png
+python sim_vision/python/analyze_logs.py     # tỉ lệ thành công, thời gian TB, logs/h_vs_distance.png
 ```
 
 - `logs/batch_summary.csv`: `seed, success, time_to_arrive_s, final_distance_m, collisions, frames, mean_infer_ms`.

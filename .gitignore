@@ -8,6 +8,7 @@ build/
 .eggs/
 .kilo
 
+
 # Data — raw/processed/external data stays local
 /data/raw/
 /data/processed/
@@ -16,6 +17,15 @@ build/
 /data/*.zip
 /data/*.pt
 /data/*.json
+!/data/annotations.json
+!/data/annotations.csv
+
+# Large model binaries stay local (keep configs, tokenizers, and docs tracked)
+/models/**/*.safetensors
+/models/**/*.bin
+/models/**/*.pt
+/models/**/*.onnx
+/models/**/*.pth
 
 # Experiment outputs (track plots, results & scripts; ignore heavy weights & DBs)
 /experiments/checkpoints/*.pt

@@ -57,3 +57,4 @@ logs/
 .env
 .env.*
 *.tar.gz
+*.pt

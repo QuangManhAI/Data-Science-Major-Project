@@ -143,7 +143,7 @@ Trên màn hình:
 - Ô góc phải là camera robot, có trạng thái robot (`SEARCH`, `APPROACH`, `ARRIVED`, `LISTEN`, `THINK`, `RESPOND`) và 3 dòng `YOLO / STT / TTS: đã kết nối`.
 - Phụ đề dưới màn hình: "Nghe được: …" và "Robot: …".
 - Câu cấp cứu ➔ chữ đỏ "GỌI NHÂN VIÊN Y TẾ". Câu hỏi đường ➔ "Đang dẫn đến: khoa …" (chưa dẫn đường thật; phần đó làm ở giai đoạn RL).
-- Phím **R** đặt lại vị trí, **Esc** thoát.
+- Phím **R** đặt lại vị trí ngẫu nhiên, **C** đổi giữa 3 góc nhìn camera (FOLLOW sau lưng robot, TOP_DOWN toàn cảnh từ trên cao, LOBBY sảnh tiếp đón), **Esc** thoát.
 - Tắt server nào thì robot vẫn chạy: mất STT ➔ robot xin lỗi; mất TTS ➔ chỉ hiện phụ đề 4 giây. Bật lại server thì tự nối lại.
 
 ## 8. Chạy batch và xem báo cáo
@@ -164,7 +164,7 @@ cd ../python
 
 ```bash
 cd sim_vision/python && .venv/bin/python -m pytest          # 279 test, không gọi model thật
-cd sim_vision/godot && godot --headless -s addons/gut/gut_cmdln.gd -gconfig=res://.gutconfig.json   # 135 test
+cd sim_vision/godot && godot --headless -s addons/gut/gut_cmdln.gd -gconfig=res://.gutconfig.json   # 142 test pass
 ```
 
 ## 10. Những gì đã làm

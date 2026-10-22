@@ -1,0 +1,68 @@
+# Tuan Decision Log — AI-Assisted Architecture Records
+
+- **Motivation/Background**: Captures architectural, toolchain, and model selection choices made during AI-assisted development to ensure long-term auditability and prevent unrecorded drift.
+- **Purpose**: Maintain an immutable, attributable provenance log of decisions for the hospital navigation robot project.
+- **Overview Pipeline**: Follows the decision log convention defined in `agents/templates/DECISION_LOG_TEMPLATE.md` and metadata header rules in `agents/rules/MD_CONVENTION.md`.
+- **Detailed Plan**: §1 Decision Index Table; §2 Decision Log Entries (D-016 to D-019).
+- **References**: [agents/templates/DECISION_LOG_TEMPLATE.md](../../agents/templates/DECISION_LOG_TEMPLATE.md), [agents/rules/MD_CONVENTION.md](../../agents/rules/MD_CONVENTION.md), [docs/AI-Human-logs/Vuong.md](Vuong.md).
+- **Created**: 2026-10-22T11:45:00+07:00
+- **Last Updated**: 2026-10-22T12:00:00+07:00
+
+---
+
+## 1. Decision Index
+
+| ID | Title | Decided by | Status |
+| :--- | :--- | :--- | :---: |
+| [D-016](#d-016--create-dedicated-fixcamera-views-branch-for-simulation-viewport-defects) | Create dedicated fix/camera-views branch for simulation viewport defects | human | accepted |
+| [D-017](#d-017--dynamically-toggle-ceiling-mesh-visibility-on-top-down-camera) | Dynamically toggle ceiling mesh visibility on TOP_DOWN camera view | agent-proposed, human-approved | accepted |
+| [D-018](#d-018--recalibrate-lobby-camera-viewpoint-for-expanded-floor-1-hospital) | Recalibrate LOBBY camera viewpoint for expanded Floor-1 hospital layout | agent-proposed, human-approved | accepted |
+| [D-019](#d-019--add-automated-camera-mode-and-ceiling-visibility-gut-unit-test) | Add automated camera mode and ceiling visibility GUT unit test | agent-proposed, human-approved | accepted |
+
+---
+
+## 2. Decision Log Entries
+
+### D-016 — Create dedicated fix/camera-views branch for simulation viewport defects
+- **Status:** accepted
+- **When:** 2026-10-22T11:49:19+07:00
+- **Decided by:** human
+- **Trigger:** "tạo 1 bracnh mới và fix lỗi này đi"
+- **Decision:** Branch off from `feat/hospital-env` into `fix/camera-views` to isolate viewport defect fixes rather than committing directly to `feat/hospital-env` or `main`.
+- **Why:** Maintains clean branch hygiene and isolates viewport fixes for regression testing before merging back into `feat/hospital-env`.
+- **Rejected:** Committing directly onto `feat/hospital-env` without branch isolation.
+- **Touches:** `git branches`
+- **Evidence:** `git checkout -b fix/camera-views` created and verified clean.
+
+### D-017 — Dynamically toggle ceiling mesh visibility on TOP_DOWN camera
+- **Status:** accepted
+- **When:** 2026-10-22T11:51:32+07:00
+- **Decided by:** agent-proposed, human-approved
+- **Trigger:** "vậy fix đi"
+- **Decision:** Dynamically toggle `ceiling_mesh.visible = (camera_mode != CameraMode.TOP_DOWN)` on camera mode update in `main.gd`, while keeping `CeilingCollision` active for physics.
+- **Why:** At `TOP_DOWN` (Y=19.5m), the solid opaque ceiling at Y=3.3m obscured the entire 24m x 18m interior into a giant white polygon. Toggling visibility on the MeshInstance3D preserves all physics collision and lighting.
+- **Rejected:** Moving top-down camera below ceiling (Y < 3.2m) — severely restricts top-down FOV and cannot view the full hospital layout simultaneously.
+- **Touches:** `sim_vision/godot/scripts/main.gd`
+- **Evidence:** Godot viewer verified; ceiling hides in TOP_DOWN and restores in FOLLOW/LOBBY.
+
+### D-018 — Recalibrate LOBBY camera viewpoint for expanded Floor-1 hospital
+- **Status:** accepted
+- **When:** 2026-10-22T11:51:32+07:00
+- **Decided by:** agent-proposed, human-approved
+- **Trigger:** "vậy fix đi"
+- **Decision:** Recalibrate `LOBBY` camera viewpoint from legacy `(-4.8, 2.85, 8.2)` looking at `(0.0, 1.0, 2.0)` to `Vector3(-4.0, 2.7, 7.8)` looking at `Vector3(0.0, 1.2, 5.0)`.
+- **Why:** The legacy coordinate was clipped behind the new partition walls and wheelchair props in the expanded hospital environment. The new coordinates frame the reception counter, waiting benches, and central hallway clearly.
+- **Rejected:** Leaving legacy single-room camera coordinates in the multi-room hospital environment.
+- **Touches:** `sim_vision/godot/scripts/main.gd`
+- **Evidence:** GUT unit test asserts viewer camera position and look target in LOBBY mode.
+
+### D-019 — Add automated camera mode and ceiling visibility GUT unit test
+- **Status:** accepted
+- **When:** 2026-10-22T11:57:05+07:00
+- **Decided by:** agent-proposed, human-approved
+- **Trigger:** "kiểm tra và xem đã fix hoàn chỉnh chưa + check toàn bộ project để bổ sung .md cho tôi ở Tuan.md hoặc .md trong folder docs"
+- **Decision:** Implement `test_camera_mode_cycles_and_toggles_ceiling` inside `sim_vision/godot/tests/test_main.gd` verifying all 3 camera modes and state transitions.
+- **Why:** Eliminates regression risk by systematically testing ceiling visibility flags and camera position coordinates across all camera cycles.
+- **Rejected:** Manual inspection only without automated CI assertion.
+- **Touches:** `sim_vision/godot/tests/test_main.gd`
+- **Evidence:** `godot --headless --path sim_vision/godot -s addons/gut/gut_cmdln.gd -gdir=res://tests` passes 142/142 tests (10,921 asserts).

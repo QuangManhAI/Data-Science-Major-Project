@@ -8,7 +8,7 @@ from pathlib import Path
 from voice import config as voice_config
 from voice.intent import INTENTS as RULE_INTENTS
 
-PROJECT_ROOT: Path = Path(os.environ.get("PROJECT_ROOT", "/Users/quangmanh/Project/Data-Science-Major-Project"))
+PROJECT_ROOT: Path = Path(os.environ.get("PROJECT_ROOT", str(Path(__file__).resolve().parents[3])))
 PHOBERT_DIR: Path = PROJECT_ROOT / "models" / "PhoBert-base-v2"
 PHOBERT_FT_DIR: Path = PROJECT_ROOT / "models_finetuned" / "phobert-intent"
 # RDRSegmenter (VnCoreNLP-1.2.jar + models/wordsegmenter), tải 2026-10-22 theo lựa chọn của người dùng.

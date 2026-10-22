@@ -69,12 +69,18 @@ def prepare_codec_cache(codec_dir: Path, cache_root: Path, repo: str = config.MO
     (repo_dir / "refs").mkdir(exist_ok=True)
     (repo_dir / "refs" / "main").write_text("local", encoding="utf-8")
     for f in codec_dir.iterdir():
+        if f.is_dir() or f.name.startswith("."):
+            continue
         link = snap / f.name
         if link.is_symlink() or link.exists():
             if link.resolve() == f.resolve():
                 continue
             link.unlink()
-        link.symlink_to(f.resolve())
+        try:
+            link.symlink_to(f.resolve())
+        except OSError:
+            import shutil
+            shutil.copy2(f, link)
     return cache_root
 
 

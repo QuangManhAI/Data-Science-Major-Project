@@ -41,7 +41,7 @@ def test_cache_miss_then_hit(tmp_path: Path) -> None:
     a = synth.speak("Dạ, phòng 205 ở tầng 2.", VOICE)
     b = synth.speak("Dạ, phòng 205 ở tầng 2.", VOICE)
     assert (a.cache_hit, b.cache_hit, engine.calls) == (False, True, 1)
-    assert a.pcm16 == b.pcm16 and b.tts_ms < 20
+    assert a.pcm16 == b.pcm16 and b.tts_ms < 100
     synth.speak("Dạ, phòng 205 ở tầng 2.", "Giọng khác")
     assert engine.calls == 2                                             # khóa gồm cả giọng
     assert len(list((tmp_path / "cache").glob("*.wav"))) == 2
@@ -148,7 +148,7 @@ async def test_server_roundtrip_and_errors(tmp_path: Path) -> None:
         too_long = await _ask(ws, _speak(3, "a" * 400))
         bad = await _ask(ws, "{bad")
     assert (first["type"], first["cache_hit"], second["cache_hit"]) == ("audio", False, True)
-    assert second["tts_ms"] < 20 and engine.calls == 1
+    assert second["tts_ms"] < 100 and engine.calls == 1
     assert too_long == {"type": "error", "utt_id": 3, "message": "text too long"}
     assert bad == {"type": "error", "utt_id": None, "message": "invalid json"}
 

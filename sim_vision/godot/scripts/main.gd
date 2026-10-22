@@ -37,6 +37,10 @@ var _start_ms: int = 0
 @onready var logger: RunLogger = get_node_or_null(^"RunLogger")  # G9; không có thì không ghi log
 @onready var dialogue: DialogueManager = get_node_or_null(^"DialogueManager")  # G16; không có thì không hội thoại
 
+var _interior_walls: Array[MeshInstance3D] = []
+var _occluding_walls: Array[MeshInstance3D] = []
+var _transparent_wall_mat: StandardMaterial3D
+
 
 func _ready() -> void:
 	_controller = get_node(controller_path)
@@ -82,17 +86,24 @@ func _update_viewer_camera() -> void:
 	if viewer_camera == null or robot == null:
 		return
 	if ceiling_mesh != null:
-		ceiling_mesh.visible = false
+		ceiling_mesh.visible = (camera_mode != CameraMode.TOP_DOWN)
 	match camera_mode:
 		CameraMode.FOLLOW:
+			var cam_target := robot.global_position + Vector3(0.0, 0.8, 0.0)
+			var cam_pos := robot.global_position + Vector3(0.0, 2.0, 2.4)
+			cam_pos.x = clampf(cam_pos.x, -11.5, 11.5)
+			cam_pos.y = clampf(cam_pos.y, 0.8, 2.8)
+			cam_pos.z = clampf(cam_pos.z, -8.5, 8.5)
+			if absf(cam_pos.z - cam_target.z) < 0.2 and absf(cam_pos.x - cam_target.x) < 0.2:
+				cam_pos.z = cam_target.z + 0.5
 			viewer_camera.look_at_from_position(
-				robot.global_position + Vector3(0.0, 4.2, 4.2),
-				robot.global_position + Vector3(0.0, 0.8, 0.0),
+				cam_pos,
+				cam_target,
 				Vector3.UP
 			)
 		CameraMode.TOP_DOWN:
 			viewer_camera.look_at_from_position(
-				Vector3(0.0, 19.5, 2.5),
+				Vector3(0.0, 13.0, 1.2),
 				Vector3(0.0, 0.0, 0.0),
 				Vector3.UP
 			)
@@ -102,10 +113,84 @@ func _update_viewer_camera() -> void:
 				Vector3(0.0, 1.2, 5.0),
 				Vector3.UP
 			)
+	_update_wall_transparency()
+
+
+func _get_transparent_wall_mat() -> StandardMaterial3D:
+	if _transparent_wall_mat != null:
+		return _transparent_wall_mat
+	var base_mat: StandardMaterial3D = null
+	if not _interior_walls.is_empty() and _interior_walls[0].mesh != null:
+		base_mat = _interior_walls[0].mesh.material as StandardMaterial3D
+	if base_mat != null:
+		_transparent_wall_mat = base_mat.duplicate() as StandardMaterial3D
+	else:
+		_transparent_wall_mat = StandardMaterial3D.new()
+	_transparent_wall_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	_transparent_wall_mat.albedo_color = Color(0.96, 0.97, 0.95, 0.22)
+	return _transparent_wall_mat
+
+
+func _cache_interior_walls() -> void:
+	_interior_walls.clear()
+	var iw: Node = get_node_or_null(^"Room/InteriorWalls")
+	if iw != null:
+		for child: Node in iw.get_children():
+			var mesh_inst := child as MeshInstance3D
+			if mesh_inst != null and mesh_inst.mesh is BoxMesh:
+				_interior_walls.append(mesh_inst)
+
+
+func _update_wall_transparency() -> void:
+	if viewer_camera == null or robot == null:
+		return
+	if camera_mode == CameraMode.TOP_DOWN:
+		_clear_wall_transparency()
+		return
+	if _interior_walls.is_empty():
+		_cache_interior_walls()
+
+	var cam_pos: Vector3 = viewer_camera.global_position
+	var r_pos: Vector3 = robot.global_position
+	var targets: Array[Vector3] = [
+		r_pos + Vector3(0.0, 0.8, 0.0),
+		r_pos + Vector3(0.0, 1.1, 0.0),
+		r_pos + Vector3(0.0, 0.3, 0.0),
+	]
+
+	var new_occluding: Array[MeshInstance3D] = []
+	for wall: MeshInstance3D in _interior_walls:
+		var box: BoxMesh = wall.mesh as BoxMesh
+		if box == null:
+			continue
+		var aabb := AABB(wall.global_position - box.size / 2.0, box.size)
+		for t: Vector3 in targets:
+			if aabb.intersects_segment(cam_pos, t) != null:
+				new_occluding.append(wall)
+				break
+
+	for wall: MeshInstance3D in _occluding_walls:
+		if not new_occluding.has(wall) and is_instance_valid(wall):
+			wall.material_override = null
+
+	var trans_mat: StandardMaterial3D = _get_transparent_wall_mat()
+	for wall: MeshInstance3D in new_occluding:
+		if not _occluding_walls.has(wall):
+			wall.material_override = trans_mat
+
+	_occluding_walls = new_occluding
+
+
+func _clear_wall_transparency() -> void:
+	for wall: MeshInstance3D in _occluding_walls:
+		if is_instance_valid(wall):
+			wall.material_override = null
+	_occluding_walls.clear()
 
 
 ## Đặt robot và người ở vị trí ngẫu nhiên mới, robot hướng ngẫu nhiên, về SEARCH.
 func reset_positions() -> void:
+	_clear_wall_transparency()
 	var p: Dictionary = Main.pick_start_positions(room, _rng)
 	robot.global_position = p["robot"]
 	robot.rotation.y = p["robot_yaw"]

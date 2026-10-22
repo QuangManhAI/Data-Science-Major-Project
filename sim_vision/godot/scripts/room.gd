@@ -1,40 +1,182 @@
 class_name Room
 extends Node3D
-## Phòng 8 m × 6 m, trần 3 m, gốc tọa độ ở tâm sàn (G3).
-## Đồ vật là các StaticBody3D con của node `Furniture`, collision dạng BoxShape3D.
+## Bệnh viện tầng 1 kích thước 24 m × 18 m, trần 3.2 m, gốc tọa độ ở tâm sàn (0, 0, 0).
+## Gồm 6 khu vực nối với Hành lang chính qua cửa trượt tự động (SlidingDoor):
+##   - 101 / cap_cuu : Khoa Cấp Cứu (Tây Bắc)
+##   - 110           : Phòng Xét Nghiệm Máu (Bắc)
+##   - 112           : Phòng Khám Nội (Đông Bắc)
+##   - nha_thuoc     : Nhà Thuốc (Tây Nam)
+##   - tiep_don      : Sảnh Chính - Quầy Tiếp Đón & Khu Ghế Chờ (Nam)
+##   - thang_may     : Khu Thang Máy & Nhà Vệ Sinh (Đông Nam)
+##   - hanh_lang     : Hành Lang Chính Đông - Tây (Giữa)
 
-const SIZE_X: float = 8.0
-const SIZE_Z: float = 6.0
-const HEIGHT: float = 3.0
+const SIZE_X: float = 24.0
+const SIZE_Z: float = 18.0
+const HEIGHT: float = 3.2
 const MAX_TRIES: int = 100
 
+## Vùng mặc định cho get_free_position() (Hành lang trung tâm + Sảnh chính thông nhau).
+const DEFAULT_SPAWN_RECT := Rect2(Vector2(-5.6, -1.8), Vector2(11.2, 10.2))
+
+const ROOMS: Dictionary = {
+	"101": {
+		"name": "Khoa cấp cứu",
+		"rect": Rect2(Vector2(-12.0, -9.0), Vector2(8.0, 7.0)),
+		"door": Vector3(-8.0, 0.0, -2.0),
+		"waypoint": Vector3(-8.0, 0.0, -5.2),
+	},
+	"cap_cuu": {
+		"name": "Khoa cấp cứu",
+		"rect": Rect2(Vector2(-12.0, -9.0), Vector2(8.0, 7.0)),
+		"door": Vector3(-8.0, 0.0, -2.0),
+		"waypoint": Vector3(-8.0, 0.0, -5.2),
+	},
+	"110": {
+		"name": "Phòng xét nghiệm máu",
+		"rect": Rect2(Vector2(-4.0, -9.0), Vector2(8.0, 7.0)),
+		"door": Vector3(0.0, 0.0, -2.0),
+		"waypoint": Vector3(0.0, 0.0, -5.2),
+	},
+	"112": {
+		"name": "Phòng khám nội",
+		"rect": Rect2(Vector2(4.0, -9.0), Vector2(8.0, 7.0)),
+		"door": Vector3(8.0, 0.0, -2.0),
+		"waypoint": Vector3(8.0, 0.0, -5.2),
+	},
+	"nha_thuoc": {
+		"name": "Nhà thuốc",
+		"rect": Rect2(Vector2(-12.0, 2.0), Vector2(6.0, 7.0)),
+		"door": Vector3(-9.0, 0.0, 2.0),
+		"waypoint": Vector3(-9.0, 0.0, 5.2),
+	},
+	"tiep_don": {
+		"name": "Sảnh chính - Quầy tiếp đón",
+		"rect": Rect2(Vector2(-6.0, 2.0), Vector2(12.0, 7.0)),
+		"door": Vector3(0.0, 0.0, 2.0),
+		"waypoint": Vector3(0.0, 0.0, 5.2),
+	},
+	"ghe_cho": {
+		"name": "Khu ghế chờ",
+		"rect": Rect2(Vector2(-6.0, 2.0), Vector2(12.0, 7.0)),
+		"door": Vector3(0.0, 0.0, 2.0),
+		"waypoint": Vector3(-2.5, 0.0, 4.5),
+	},
+	"thu_ngan": {
+		"name": "Quầy thu ngân",
+		"rect": Rect2(Vector2(-6.0, 2.0), Vector2(12.0, 7.0)),
+		"door": Vector3(0.0, 0.0, 2.0),
+		"waypoint": Vector3(1.5, 0.0, 6.2),
+	},
+	"bhyt": {
+		"name": "Quầy bảo hiểm y tế",
+		"rect": Rect2(Vector2(-6.0, 2.0), Vector2(12.0, 7.0)),
+		"door": Vector3(0.0, 0.0, 2.0),
+		"waypoint": Vector3(-1.5, 0.0, 6.2),
+	},
+	"thang_may": {
+		"name": "Thang máy & Nhà vệ sinh",
+		"rect": Rect2(Vector2(6.0, 2.0), Vector2(6.0, 7.0)),
+		"door": Vector3(9.0, 0.0, 2.0),
+		"waypoint": Vector3(9.0, 0.0, 5.2),
+	},
+	"nha_ve_sinh": {
+		"name": "Nhà vệ sinh",
+		"rect": Rect2(Vector2(6.0, 2.0), Vector2(6.0, 7.0)),
+		"door": Vector3(9.0, 0.0, 2.0),
+		"waypoint": Vector3(9.5, 0.0, 6.5),
+	},
+	"hanh_lang": {
+		"name": "Hành lang chính",
+		"rect": Rect2(Vector2(-12.0, -2.0), Vector2(24.0, 4.0)),
+		"door": Vector3(0.0, 0.0, 0.0),
+		"waypoint": Vector3(0.0, 0.0, 0.0),
+	},
+}
+
+const CANONICAL_ROOM_KEYS: Array[String] = [
+	"101", "110", "112", "nha_thuoc", "tiep_don", "thang_may", "hanh_lang"
+]
+
 @onready var _furniture: Node3D = $Furniture
+@onready var _interior_walls: Node3D = get_node_or_null(^"InteriorWalls")
 
 
-## Điểm ngẫu nhiên trên sàn (y = 0), cách tường và mọi đồ vật ≥ `min_clearance`.
-## Truyền `rng` để lặp lại được (G8 dùng seed); bỏ trống ➔ ngẫu nhiên.
-## Thử tối đa MAX_TRIES lần; không tìm được ➔ push_error và trả Vector3.ZERO.
+## Điểm ngẫu nhiên trên sàn (y = 0) trong Sảnh chính + Hành lang trung tâm,
+## cách tường và mọi đồ vật ≥ `min_clearance`.
 func get_free_position(min_clearance: float, rng: RandomNumberGenerator = null) -> Vector3:
+	return _sample_in_rect(DEFAULT_SPAWN_RECT, min_clearance, rng)
+
+
+## Điểm ngẫu nhiên trên sàn (y = 0) nằm trong phòng `room_key`, cách tường phòng và đồ vật ≥ `min_clearance`.
+func get_free_position_in_room(room_key: String, min_clearance: float, rng: RandomNumberGenerator = null) -> Vector3:
+	if not ROOMS.has(room_key):
+		push_error("Room.get_free_position_in_room: unknown room_key '%s'" % room_key)
+		return Vector3.ZERO
+	var r: Rect2 = ROOMS[room_key]["rect"]
+	return _sample_in_rect(r, min_clearance, rng)
+
+
+func _sample_in_rect(bounds: Rect2, min_clearance: float, rng: RandomNumberGenerator = null) -> Vector3:
 	if rng == null:
 		rng = RandomNumberGenerator.new()
 		rng.randomize()
-	var hx: float = SIZE_X / 2.0 - min_clearance
-	var hz: float = SIZE_Z / 2.0 - min_clearance
-	if hx >= 0.0 and hz >= 0.0:
-		var footprints: Array[Rect2] = get_furniture_footprints()
+	var x_min: float = bounds.position.x + min_clearance
+	var x_max: float = bounds.end.x - min_clearance
+	var z_min: float = bounds.position.y + min_clearance
+	var z_max: float = bounds.end.y - min_clearance
+	if x_min <= x_max and z_min <= z_max:
+		var footprints: Array[Rect2] = get_obstacle_footprints()
 		for i: int in MAX_TRIES:
-			var p := Vector3(rng.randf_range(-hx, hx), 0.0, rng.randf_range(-hz, hz))
+			var p := Vector3(rng.randf_range(x_min, x_max), 0.0, rng.randf_range(z_min, z_max))
 			if is_clear(p, footprints, min_clearance):
 				return p
 	push_error("Room.get_free_position: no free position for clearance %.2f" % min_clearance)
 	return Vector3.ZERO
 
 
-## Hình chiếu XZ (Rect2: x ➔ x, y ➔ z) của collision từng đồ vật, theo tọa độ thế giới.
+## Trả tọa độ đích (waypoint) cho RL / dẫn đường ứng với mã phòng hoặc cơ sở.
+func get_room_waypoint(room_key: String) -> Vector3:
+	if ROOMS.has(room_key):
+		return ROOMS[room_key]["waypoint"]
+	return Vector3.ZERO
+
+
+## Trả mã phòng chứa điểm `pos` (chiếu xuống mặt phẳng XZ). Không thuộc phòng nào ➔ "".
+func get_room_at(pos: Vector3) -> String:
+	var p := Vector2(pos.x, pos.z)
+	for key: String in CANONICAL_ROOM_KEYS:
+		var r: Rect2 = ROOMS[key]["rect"]
+		if r.has_point(p):
+			return key
+	return ""
+
+
+## Hình chiếu XZ (Rect2) của collision từng đồ vật trong node `Furniture`.
 func get_furniture_footprints() -> Array[Rect2]:
+	return _collect_footprints(_furniture)
+
+
+## Hình chiếu XZ (Rect2) của các tường ngăn nội thất trong node `InteriorWalls`.
+func get_wall_footprints() -> Array[Rect2]:
+	return _collect_footprints(_interior_walls)
+
+
+## Hình chiếu XZ (Rect2) của cả đồ vật (`Furniture`) và tường ngăn nội thất (`InteriorWalls`).
+func get_obstacle_footprints() -> Array[Rect2]:
+	var rects: Array[Rect2] = _collect_footprints(_furniture)
+	if _interior_walls != null:
+		rects.append_array(_collect_footprints(_interior_walls))
+	return rects
+
+
+static func _collect_footprints(root: Node3D) -> Array[Rect2]:
 	var rects: Array[Rect2] = []
-	for node: Node in _furniture.find_children("*", "CollisionShape3D", true, false):
+	if root == null:
+		return rects
+	for node: Node in root.find_children("*", "CollisionShape3D", true, false):
 		var cs := node as CollisionShape3D
+		if cs == null or cs.disabled:
+			continue
 		var box := cs.shape as BoxShape3D
 		if box == null:
 			continue

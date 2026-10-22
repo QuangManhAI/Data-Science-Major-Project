@@ -12,6 +12,14 @@ Chỉ dùng asset có giấy phép CC0, MIT hoặc tương đương.
 | Modern Arm Chair 01 | https://polyhaven.com/a/modern_arm_chair_01 | Vibrant Nordic | CC0 1.0 | `models/modern_arm_chair_01/` |
 | Potted Plant 02 | https://polyhaven.com/a/potted_plant_02 | Rico Cilliers | CC0 1.0 | `models/potted_plant_02/` |
 | Wheelchair 01 | https://polyhaven.com/a/wheelchair_01 | Garreth Dean | CC0 1.0 | `models/wheelchair_01/` |
+| Plastic Monobloc Chair 01 | https://polyhaven.com/a/plastic_monobloc_chair_01 | Kuutti Siitonen | CC0 1.0 | `models/plastic_monobloc_chair_01/` |
+| Metal Stool 01 | https://polyhaven.com/a/metal_stool_01 | Ulan Cabanilla | CC0 1.0 | `models/metal_stool_01/` |
+| Medical Box | https://polyhaven.com/a/medical_box | Ulan Cabanilla | CC0 1.0 | `models/medical_box/` |
+| Metal Trash Can | https://polyhaven.com/a/metal_trash_can | GurJas Studios | CC0 1.0 | `models/metal_trash_can/` |
+| Wet Floor Sign 01 | https://polyhaven.com/a/WetFloorSign_01 | Fran Calvente | CC0 1.0 | `models/WetFloorSign_01/` |
+| Shelf 01 | https://polyhaven.com/a/Shelf_01 | Gabriel Radić | CC0 1.0 | `models/Shelf_01/` |
+| Drawer Cabinet | https://polyhaven.com/a/drawer_cabinet | Ulan Cabanilla | CC0 1.0 | `models/drawer_cabinet/` |
+| Wall Clock | https://polyhaven.com/a/wall_clock | PierreB3D | CC0 1.0 | `models/wall_clock/` |
 | Rocketbox Male_Adult_06 (người, đã rig 81 xương, texture 2K) | https://github.com/microsoft/Microsoft-Rocketbox/tree/master/Assets/Avatars/Adults/Male_Adult_06 | Microsoft (Rocketbox) | MIT | `models/human_m06/` |
 | Animation `m_idle_neutral_01` (thư mục `all_animations_max_motextr_static`) | https://github.com/microsoft/Microsoft-Rocketbox/tree/master/Assets/Animations | Microsoft (Rocketbox) | MIT | `models/human_m06/anims/` ➔ `idle.res` |
 | Animation `m_walk_neutral` (thư mục `all_animations_max_motextr_xy`) | https://github.com/microsoft/Microsoft-Rocketbox/tree/master/Assets/Animations | Microsoft (Rocketbox) | MIT | `models/human_m06/anims/` ➔ `walk.res` |

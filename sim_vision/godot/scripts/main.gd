@@ -2,10 +2,12 @@ class_name Main
 extends Node3D
 ## Scene chính (G8): vision_client ➔ controller.step ➔ apply_safety ➔ robot.set_command.
 ## Hội thoại (G16): ở LISTEN / THINK / RESPOND robot đứng yên (v = 0, omega = 0), không gọi controller.
-## Phím R đặt lại vị trí ngẫu nhiên, Esc thoát.
+## Phím R đặt lại vị trí ngẫu nhiên, C đổi góc nhìn camera, Esc thoát.
 
 ## Phát sau mỗi chu kỳ nhận diện (sau apply_safety); G9 ghi log từ đây.
 signal cycle_completed(info: Dictionary)
+
+enum CameraMode { FOLLOW, TOP_DOWN, LOBBY }
 
 const START_CLEARANCE: float = 0.6      # G8.1: get_free_position(0.6)
 const MIN_START_SEPARATION: float = 3.0 # G8.1: robot cách người ≥ 3 m
@@ -16,6 +18,7 @@ const MAX_PLACEMENT_TRIES: int = 100
 @export var controller_path: NodePath = ^"Controller"
 
 var state: int = Config.RobotState.SEARCH
+var camera_mode: int = CameraMode.FOLLOW
 
 var _rng := RandomNumberGenerator.new()
 var _controller: Node
@@ -29,6 +32,7 @@ var _start_ms: int = 0
 @onready var robot: Robot = $Robot
 @onready var vision: VisionClient = $VisionClient
 @onready var overlay: ViewOverlay = $UI/ViewOverlay
+@onready var viewer_camera: Camera3D = get_node_or_null(^"ViewerCamera")
 @onready var logger: RunLogger = get_node_or_null(^"RunLogger")  # G9; không có thì không ghi log
 @onready var dialogue: DialogueManager = get_node_or_null(^"DialogueManager")  # G16; không có thì không hội thoại
 
@@ -47,6 +51,7 @@ func _ready() -> void:
 	if logger != null:
 		logger.open()
 	reset_positions()
+	_update_viewer_camera()
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -55,17 +60,45 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if key.keycode == KEY_R:
 		reset_positions()
+	elif key.keycode == KEY_C:
+		camera_mode = (camera_mode + 1) % 3
+		_update_viewer_camera()
 	elif key.keycode == KEY_ESCAPE:
 		get_tree().quit()
 
 
 func _process(_delta: float) -> void:
+	_update_viewer_camera()
 	# Quá LOST_TIMEOUT_S không có kết quả mới (nhưng vẫn kết nối) ➔ coi như không thấy ai.
 	var now: int = Time.get_ticks_msec()
 	if Main.is_dialogue_state(state):
 		return
 	if _connected and _last_result_ms >= 0 and now - _last_result_ms > int(Config.LOST_TIMEOUT_S * 1000.0):
 		_apply(_controller.step(state, [], _time_since_seen_s(now)))
+
+
+func _update_viewer_camera() -> void:
+	if viewer_camera == null or robot == null:
+		return
+	match camera_mode:
+		CameraMode.FOLLOW:
+			viewer_camera.look_at_from_position(
+				robot.global_position + Vector3(0.0, 4.2, 4.2),
+				robot.global_position + Vector3(0.0, 0.8, 0.0),
+				Vector3.UP
+			)
+		CameraMode.TOP_DOWN:
+			viewer_camera.look_at_from_position(
+				Vector3(0.0, 19.5, 2.5),
+				Vector3(0.0, 0.0, 0.0),
+				Vector3.UP
+			)
+		CameraMode.LOBBY:
+			viewer_camera.look_at_from_position(
+				Vector3(-4.8, 2.85, 8.2),
+				Vector3(0.0, 1.0, 2.0),
+				Vector3.UP
+			)
 
 
 ## Đặt robot và người ở vị trí ngẫu nhiên mới, robot hướng ngẫu nhiên, về SEARCH.
@@ -85,6 +118,7 @@ func reset_positions() -> void:
 	_last_seen_ms = -1
 	_last_result_ms = Time.get_ticks_msec()
 	overlay.show_detections([], Config.state_name(state), _connected)
+	_update_viewer_camera()
 
 
 func human_distance() -> float:

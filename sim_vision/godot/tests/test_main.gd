@@ -45,7 +45,7 @@ func _room() -> Room:
 
 func test_start_positions_separated_and_free() -> void:
 	var r: Room = _room()
-	var rects: Array[Rect2] = r.get_furniture_footprints()
+	var rects: Array[Rect2] = r.get_obstacle_footprints()
 	for s: int in 50:
 		var rng := RandomNumberGenerator.new()
 		rng.seed = s
@@ -53,7 +53,7 @@ func test_start_positions_separated_and_free() -> void:
 		assert_true(Human.flat_distance(p["robot"], p["human"]) >= 3.0, "seed %d separation" % s)
 		for key: String in ["robot", "human"]:
 			var pos: Vector3 = p[key]
-			assert_true(absf(pos.x) <= 3.4 and absf(pos.z) <= 2.4, "seed %d %s inside" % [s, key])
+			assert_true(absf(pos.x) <= 11.4 and absf(pos.z) <= 8.4, "seed %d %s inside" % [s, key])
 			assert_true(Room.is_clear(pos, rects, 0.6), "seed %d %s clear" % [s, key])
 		assert_between(p["robot_yaw"], -PI, PI)
 

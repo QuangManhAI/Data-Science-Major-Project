@@ -99,6 +99,17 @@ const CANONICAL_ROOM_KEYS: Array[String] = [
 
 @onready var _furniture: Node3D = $Furniture
 @onready var _interior_walls: Node3D = get_node_or_null(^"InteriorWalls")
+@onready var _ceiling: MeshInstance3D = get_node_or_null(^"Shell/Ceiling")
+
+
+## Ẩn hoặc hiện trần nhà (hữu ích cho camera nhìn từ trên xuống TOP_DOWN kiểu RimWorld).
+func set_ceiling_visible(v: bool) -> void:
+	if _ceiling != null:
+		_ceiling.visible = v
+
+
+func is_ceiling_visible() -> bool:
+	return _ceiling != null and _ceiling.visible
 
 
 ## Điểm ngẫu nhiên trên sàn (y = 0) trong Sảnh chính + Hành lang trung tâm,

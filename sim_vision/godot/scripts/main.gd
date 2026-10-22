@@ -32,6 +32,7 @@ var _start_ms: int = 0
 @onready var robot: Robot = $Robot
 @onready var vision: VisionClient = $VisionClient
 @onready var overlay: ViewOverlay = $UI/ViewOverlay
+@onready var help_label: Label = get_node_or_null(^"UI/Help")
 @onready var viewer_camera: Camera3D = get_node_or_null(^"ViewerCamera")
 @onready var ceiling_mesh: Node3D = get_node_or_null(^"Room/Shell/Ceiling")
 @onready var logger: RunLogger = get_node_or_null(^"RunLogger")  # G9; không có thì không ghi log
@@ -102,12 +103,14 @@ func _update_viewer_camera() -> void:
 				Vector3.UP
 			)
 		CameraMode.TOP_DOWN:
+			# Nhìn từ trên cao xuống toàn bộ bệnh viện (tự động ẩn trần như RimWorld)
 			viewer_camera.look_at_from_position(
 				Vector3(0.0, 13.0, 1.2),
 				Vector3(0.0, 0.0, 0.0),
 				Vector3.UP
 			)
 		CameraMode.LOBBY:
+			# Góc nhìn bao quát sảnh chính đón tiếp ở độ cao 2.3 m bên trong phòng
 			viewer_camera.look_at_from_position(
 				Vector3(-4.0, 2.7, 7.8),
 				Vector3(0.0, 1.2, 5.0),

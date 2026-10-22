@@ -3,10 +3,10 @@
 - **Motivation/Background**: Captures architectural, toolchain, and model selection choices made during AI-assisted development to ensure long-term auditability and prevent unrecorded drift.
 - **Purpose**: Maintain an immutable, attributable provenance log of decisions for the hospital navigation robot project.
 - **Overview Pipeline**: Follows the decision log convention defined in `agents/templates/DECISION_LOG_TEMPLATE.md` and metadata header rules in `agents/rules/MD_CONVENTION.md`.
-- **Detailed Plan**: §1 Decision Index Table; §2 Decision Log Entries (D-001 to D-015).
+- **Detailed Plan**: §1 Decision Index Table; §2 Decision Log Entries (D-001 to D-016).
 - **References**: [agents/templates/DECISION_LOG_TEMPLATE.md](../../agents/templates/DECISION_LOG_TEMPLATE.md), [agents/rules/MD_CONVENTION.md](../../agents/rules/MD_CONVENTION.md).
 - **Created**: 2026-10-21T21:25:00+07:00
-- **Last Updated**: 2026-10-22T09:30:00+07:00
+- **Last Updated**: 2026-10-22T09:42:00+07:00
 
 ---
 
@@ -29,6 +29,7 @@
 | [D-013](#d-013--offline-tts-architecture-and-graceful-subtitle-fallback) | Offline TTS architecture and graceful subtitle fallback | human | accepted |
 | [D-014](#d-014--expansion-to-floor-1-vietnamese-hospital-environment) | Expansion to Floor-1 Vietnamese hospital environment (24m x 18m) | human | accepted |
 | [D-015](#d-015--hospital-room-enrichment-medical-pedal-waste-bins-and-refined-collisions) | Hospital room enrichment, medical pedal waste bins, and refined collisions | human | accepted |
+| [D-016](#d-016--camera-viewpoint-height-correction-and-automatic-ceiling-culling) | Camera viewpoint height correction and automatic ceiling culling | agent-proposed, human-approved | accepted |
 
 ---
 
@@ -198,3 +199,14 @@
 - **Rejected:** Generic street containers or cluttered non-medical props.
 - **Touches:** `sim_vision/godot/scenes/room.tscn`, `sim_vision/godot/scenes/props/medical_waste_bin.tscn`, `sim_vision/godot/scenes/props/medical_trolley.tscn`, `sim_vision/godot/scenes/props/medical_screen.tscn`, `sim_vision/godot/scenes/props/elevator_doors.tscn`, `sim_vision/godot/scenes/props/wc_station.tscn`, `sim_vision/godot/scenes/props/medical_wall_board.tscn`, `scripts/download_hospital_assets.py`, `sim_vision/godot/assets/CREDITS.md`
 - **Evidence:** 141/141 tests pass with 10,912 assertions in Godot GUT test suite; committed as `e94381b`.
+
+### D-016 — Camera viewpoint height correction and automatic ceiling culling
+- **Status:** accepted
+- **When:** 2026-10-22T09:42:00+07:00
+- **Decided by:** agent-proposed, human-approved
+- **Trigger:** "fix, when tries to run the project, out of 3 view port, only the 1 works, 2 other looks like are too far or such, only see the roof of the hospital"
+- **Decision:** Correct camera height and clipping across all 3 view modes: 1) in `FOLLOW` mode, position the camera inside the hospital at height `y = 1.85 m` (under the `3.2 m` ceiling) trailing `2.3 m` behind the robot; 2) in `TOP_DOWN` mode, automatically hide the opaque ceiling mesh (`room.set_ceiling_visible(false)`) so the camera at `y = 18.0 m` has an unobstructed RimWorld-style bird's-eye view into all rooms; 3) in `LOBBY` mode, position the camera at `(-5.0, 2.3, 3.2)` inside the lobby looking across the reception counter, restoring ceiling visibility (`room.set_ceiling_visible(true)`). Update UI help label to reflect active view name dynamically.
+- **Why:** Previously, `FOLLOW` was at `y = 4.2 m` and `TOP_DOWN` was at `y = 19.5 m`, both above the opaque ceiling (`y = 3.3 m`), which caused both cameras to view only the external roof.
+- **Rejected:** Removing ceiling mesh entirely — ceiling is necessary for first-person robot camera and realistic interior lighting when inside rooms.
+- **Touches:** `sim_vision/godot/scripts/main.gd`, `sim_vision/godot/scripts/room.gd`, `sim_vision/godot/tests/test_room.gd`
+- **Evidence:** All 142/142 GUT tests pass; all 3 camera modes render interior hospital environments without roof clipping.

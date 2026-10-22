@@ -28,6 +28,14 @@ func test_has_five_sliding_doors() -> void:
 		assert_true(child is SlidingDoor, "%s should be SlidingDoor" % child.name)
 
 
+func test_ceiling_visibility_toggle() -> void:
+	assert_true(room.is_ceiling_visible())
+	room.set_ceiling_visible(false)
+	assert_false(room.is_ceiling_visible())
+	room.set_ceiling_visible(true)
+	assert_true(room.is_ceiling_visible())
+
+
 func test_room_waypoints_and_room_at() -> void:
 	var expected_Map := {
 		"101": "101",

@@ -1,5 +1,6 @@
 extends GutTest
 
+const MainScene: PackedScene = preload("res://scenes/main.tscn")
 const RoomScene: PackedScene = preload("res://scenes/room.tscn")
 const CMD := {"state": Config.RobotState.APPROACH, "v": 0.5, "omega": 0.2, "target": {}}
 
@@ -68,3 +69,37 @@ func test_start_positions_same_seed_same_result() -> void:
 	var c := RandomNumberGenerator.new()
 	c.seed = 124
 	assert_ne(Main.pick_start_positions(r, a), Main.pick_start_positions(r, c), "seed khác ➔ kết quả khác")
+
+
+func test_camera_mode_cycles_and_toggles_ceiling() -> void:
+	var main := MainScene.instantiate() as Main
+	main.seed = 1
+	for n: String in ["RunLogger", "DialogueLogger"]:
+		var node: Node = main.get_node_or_null(NodePath(n))
+		if node != null:
+			node.free()
+	add_child_autofree(main)
+	main.vision.set_process(false)
+
+	# 1. Ban đầu là FOLLOW, trần nhà phải hiện
+	assert_eq(main.camera_mode, Main.CameraMode.FOLLOW)
+	assert_not_null(main.ceiling_mesh)
+	assert_true(main.ceiling_mesh.visible, "Trần nhà phải hiện ở FOLLOW")
+
+	# 2. Đổi sang TOP_DOWN ➔ trần nhà tự ẩn để không che tầm nhìn
+	main.camera_mode = Main.CameraMode.TOP_DOWN
+	main._update_viewer_camera()
+	assert_false(main.ceiling_mesh.visible, "Trần nhà phải ẩn ở TOP_DOWN")
+	assert_almost_eq(main.viewer_camera.global_position.y, 19.5, 0.1)
+
+	# 3. Đổi sang LOBBY ➔ trần nhà hiện lại, camera ở sảnh
+	main.camera_mode = Main.CameraMode.LOBBY
+	main._update_viewer_camera()
+	assert_true(main.ceiling_mesh.visible, "Trần nhà phải hiện ở LOBBY")
+	assert_almost_eq(main.viewer_camera.global_position.x, -4.0, 0.1)
+	assert_almost_eq(main.viewer_camera.global_position.z, 7.8, 0.1)
+
+	# 4. Quay lại FOLLOW ➔ trần nhà vẫn hiện
+	main.camera_mode = Main.CameraMode.FOLLOW
+	main._update_viewer_camera()
+	assert_true(main.ceiling_mesh.visible, "Trần nhà phải hiện khi về FOLLOW")

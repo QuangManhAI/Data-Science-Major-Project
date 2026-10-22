@@ -3,10 +3,10 @@
 - **Motivation/Background**: Captures architectural, toolchain, and model selection choices made during AI-assisted development to ensure long-term auditability and prevent unrecorded drift.
 - **Purpose**: Maintain an immutable, attributable provenance log of decisions for the hospital navigation robot project.
 - **Overview Pipeline**: Follows the decision log convention defined in `agents/templates/DECISION_LOG_TEMPLATE.md` and metadata header rules in `agents/rules/MD_CONVENTION.md`.
-- **Detailed Plan**: §1 Decision Index Table; §2 Decision Log Entries (D-001 to D-011).
+- **Detailed Plan**: §1 Decision Index Table; §2 Decision Log Entries (D-001 to D-015).
 - **References**: [agents/templates/DECISION_LOG_TEMPLATE.md](../../agents/templates/DECISION_LOG_TEMPLATE.md), [agents/rules/MD_CONVENTION.md](../../agents/rules/MD_CONVENTION.md).
 - **Created**: 2026-10-21T21:25:00+07:00
-- **Last Updated**: 2026-10-21T21:38:00+07:00
+- **Last Updated**: 2026-10-22T09:30:00+07:00
 
 ---
 
@@ -27,6 +27,8 @@
 | [D-011](#d-011--document-godot-and-yolo-execution-manual-in-root-readmemd) | Document Godot and YOLO execution manual in root README.md | human | accepted |
 | [D-012](#d-012--unified-simulation-launcher-and-websocket-send-resilience) | Unified simulation launcher and WebSocket send resilience | human | accepted |
 | [D-013](#d-013--offline-tts-architecture-and-graceful-subtitle-fallback) | Offline TTS architecture and graceful subtitle fallback | human | accepted |
+| [D-014](#d-014--expansion-to-floor-1-vietnamese-hospital-environment) | Expansion to Floor-1 Vietnamese hospital environment (24m x 18m) | human | accepted |
+| [D-015](#d-015--hospital-room-enrichment-medical-pedal-waste-bins-and-refined-collisions) | Hospital room enrichment, medical pedal waste bins, and refined collisions | human | accepted |
 
 ---
 
@@ -174,3 +176,25 @@
 - **Rejected:** Hard-failing the simulation when TTS server is unreachable — degrades usability for vision and navigation testing.
 - **Touches:** `sim_vision/godot/scripts/tts_client.gd`, `sim_vision/godot/scripts/robot_voice.gd`, `sim_vision/python/tts/tts_engine.py`, `scripts/download_tts.py`, `run_simulation.py`, `docs/guide.md`
 - **Evidence:** `scripts/download_tts.py` downloaded VieNeu-TTS v3 Turbo ONNX weights & MOSS codec into `models/`; `vieneu` initialized with 25 preset Vietnamese voices; all 3 servers (YOLO 8765, STT 8766, TTS 8767) launched and connected successfully in unified launcher.
+
+### D-014 — Expansion to Floor-1 Vietnamese hospital environment (24m x 18m)
+- **Status:** accepted
+- **When:** 2026-10-22T08:50:00+07:00
+- **Decided by:** human
+- **Trigger:** "/plan we are planing to expand on the virtural env for our RL sim_vision\\godot, i want you to first understand the current godot, like assets, can you find more hospital related assets that match our Vietnameses style hospital? -make more room, that statisfiles standard hospital -use slide door, that embed between walls, auto open, so that its not complicate our env, thinks of it like the door in rim worlds /grill-me/grill-me"
+- **Decision:** Expand simulator from a single `8 m × 6 m` room to a `24 m × 18 m` (ceiling `3.2 m`) Floor-1 Vietnamese hospital with 6 rooms matching `hospital_map.json` (Emergency 101, Blood Lab 110, Internal Medicine 112, Pharmacy, Main Reception Lobby, Elevator & WC) linked by a central East-West corridor. Implement RimWorld-style pocket sliding doors embedded in 0.2m walls with immediate collision disabling upon trigger area entry to ensure collision-free RL raycasts and movement. Replace foreign fire equipment with authentic Vietnamese PCCC (114) station. Add camera mode switcher (`C` key: `FOLLOW`, `TOP_DOWN`, `LOBBY`).
+- **Why:** Provides a realistic multi-room navigation environment with authentic Vietnamese hospital visual cues and structured waypoints for upcoming RL navigation and voice guidance benchmark tasks.
+- **Rejected:** Physics-swinging hinged doors — prone to trapping the differential drive robot or causing physics jitter in navigation rays.
+- **Touches:** `sim_vision/godot/scenes/room.tscn`, `sim_vision/godot/scripts/room.gd`, `sim_vision/godot/scenes/props/sliding_door.tscn`, `sim_vision/godot/scripts/sliding_door.gd`, `sim_vision/godot/scenes/props/pccc_station.tscn`, `sim_vision/godot/scenes/props/hospital_bed.tscn`, `sim_vision/godot/scenes/props/waiting_bench.tscn`, `sim_vision/godot/scenes/props/reception_counter.tscn`, `sim_vision/godot/scenes/props/hospital_sign.tscn`, `sim_vision/godot/scripts/main.gd`, `sim_vision/godot/scenes/main.tscn`, `sim_vision/godot/tests/test_room.gd`, `sim_vision/godot/tests/test_sliding_door.gd`, `sim_vision/godot/tests/test_main.gd`
+- **Evidence:** Dedicated branch `feat/hospital-env` verified with 141/141 passing GUT unit tests.
+
+### D-015 — Hospital room enrichment, medical pedal waste bins, and refined collisions
+- **Status:** accepted
+- **When:** 2026-10-22T09:25:00+07:00
+- **Decided by:** human
+- **Trigger:** "commits then update 1. some of the rooms lack so much things, add more stuff to it 2. the trash bin looks ugly, that is the kind of bin that been deprecated long ago (i delelte it)and not suitable for hospital env, find the better model 3. i ajust some collision box for better match and moving object"
+- **Decision:** Delete deprecated corrugated metal street trash bin (`metal_trash_can`) and replace it with Vietnamese Ministry of Health standard pedal waste bins (`medical_waste_bin.tscn` paired Green domestic + Yellow biohazard bins). Enrich every room with authentic clinical and facility assets (Emergency 101: 3-panel privacy screen, 2 vital signs monitor trolleys with ECG & O2 tanks, supply rack, wheelchair, X-Ray viewer board; Lab 110: optical microscope, chemistry set, phlebotomy desk; Clinic 112: consultation chairs, exam bed privacy screen, vitals trolley; Elevator/WC: double bed-elevator doors with LED indicator, ceramic washbasin vanity with 6-step handwash board & WC stall partition). Preserve human collision box adjustments and assign exact vertex-matched `BoxShape3D` bounds to all models.
+- **Why:** Upgrades environment realism to match Vietnamese hospital standards while keeping waypoints clear for robotic navigation and preserving tight collision boundaries.
+- **Rejected:** Generic street containers or cluttered non-medical props.
+- **Touches:** `sim_vision/godot/scenes/room.tscn`, `sim_vision/godot/scenes/props/medical_waste_bin.tscn`, `sim_vision/godot/scenes/props/medical_trolley.tscn`, `sim_vision/godot/scenes/props/medical_screen.tscn`, `sim_vision/godot/scenes/props/elevator_doors.tscn`, `sim_vision/godot/scenes/props/wc_station.tscn`, `sim_vision/godot/scenes/props/medical_wall_board.tscn`, `scripts/download_hospital_assets.py`, `sim_vision/godot/assets/CREDITS.md`
+- **Evidence:** 141/141 tests pass with 10,912 assertions in Godot GUT test suite; committed as `e94381b`.

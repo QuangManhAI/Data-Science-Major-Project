@@ -3,10 +3,10 @@
 - **Motivation/Background**: Captures architectural, toolchain, and model selection choices made during AI-assisted development to ensure long-term auditability and prevent unrecorded drift.
 - **Purpose**: Maintain an immutable, attributable provenance log of decisions for the hospital navigation robot project.
 - **Overview Pipeline**: Follows the decision log convention defined in `agents/templates/DECISION_LOG_TEMPLATE.md` and metadata header rules in `agents/rules/MD_CONVENTION.md`.
-- **Detailed Plan**: §1 Decision Index Table; §2 Decision Log Entries (D-016 to D-019).
+- **Detailed Plan**: §1 Decision Index Table; §2 Decision Log Entries (D-016 to D-020).
 - **References**: [agents/templates/DECISION_LOG_TEMPLATE.md](../../agents/templates/DECISION_LOG_TEMPLATE.md), [agents/rules/MD_CONVENTION.md](../../agents/rules/MD_CONVENTION.md), [docs/AI-Human-logs/Vuong.md](Vuong.md).
 - **Created**: 2026-10-22T11:45:00+07:00
-- **Last Updated**: 2026-10-22T12:00:00+07:00
+- **Last Updated**: 2026-10-22T12:20:00+07:00
 
 ---
 
@@ -15,9 +15,10 @@
 | ID | Title | Decided by | Status |
 | :--- | :--- | :--- | :---: |
 | [D-016](#d-016--create-dedicated-fixcamera-views-branch-for-simulation-viewport-defects) | Create dedicated fix/camera-views branch for simulation viewport defects | human | accepted |
-| [D-017](#d-017--dynamically-toggle-ceiling-mesh-visibility-on-top-down-camera) | Dynamically toggle ceiling mesh visibility on TOP_DOWN camera view | agent-proposed, human-approved | accepted |
+| [D-017](#d-017--dynamically-toggle-ceiling-mesh-visibility-on-top-down-camera) | Dynamically toggle ceiling mesh visibility on TOP_DOWN camera view | agent-proposed, human-approved | superseded by D-020 |
 | [D-018](#d-018--recalibrate-lobby-camera-viewpoint-for-expanded-floor-1-hospital) | Recalibrate LOBBY camera viewpoint for expanded Floor-1 hospital layout | agent-proposed, human-approved | accepted |
 | [D-019](#d-019--add-automated-camera-mode-and-ceiling-visibility-gut-unit-test) | Add automated camera mode and ceiling visibility GUT unit test | agent-proposed, human-approved | accepted |
+| [D-020](#d-020--hide-ceiling-mesh-for-all-spectator-views-to-prevent-follow-mode-white-screen) | Hide ceiling mesh for all spectator views to prevent FOLLOW mode white screen | agent-proposed, human-approved | accepted |
 
 ---
 
@@ -35,7 +36,7 @@
 - **Evidence:** `git checkout -b fix/camera-views` created and verified clean.
 
 ### D-017 — Dynamically toggle ceiling mesh visibility on TOP_DOWN camera
-- **Status:** accepted
+- **Status:** superseded by D-020
 - **When:** 2026-10-22T11:51:32+07:00
 - **Decided by:** agent-proposed, human-approved
 - **Trigger:** "vậy fix đi"
@@ -65,4 +66,15 @@
 - **Why:** Eliminates regression risk by systematically testing ceiling visibility flags and camera position coordinates across all camera cycles.
 - **Rejected:** Manual inspection only without automated CI assertion.
 - **Touches:** `sim_vision/godot/tests/test_main.gd`
-- **Evidence:** `godot --headless --path sim_vision/godot -s addons/gut/gut_cmdln.gd -gdir=res://tests` passes 142/142 tests (10,921 asserts).
+- **Evidence:** `godot --headless --path sim_vision/godot -s addons/gut/gut_cmdln.gd -gdir=res://tests` passes 142/142 tests (10,920 asserts).
+
+### D-020 — Hide ceiling mesh for all spectator views to prevent FOLLOW mode white screen
+- **Status:** accepted
+- **When:** 2026-10-22T12:15:00+07:00
+- **Decided by:** agent-proposed, human-approved
+- **Trigger:** "góc này vẫn màu trắng là sao nhỉ"
+- **Decision:** Unconditionally hide `ceiling_mesh.visible = false` in `_update_viewer_camera()` for all 3 spectator viewer modes (`FOLLOW`, `TOP_DOWN`, `LOBBY`), keeping collision and robot viewport intact.
+- **Why:** The spectator `FOLLOW` camera is at height `Y = 4.2m`, while the hospital ceiling is at `Y = 3.3m`. Restoring the ceiling in `FOLLOW` caused the camera to sit outside above the roof looking down, creating an 83.2% solid white screen. Spectator cameras never need an opaque ceiling blocking the view into hospital rooms.
+- **Rejected:** Lowering `FOLLOW` camera below 3.0m without ceiling hiding — still prone to clipping through 3.2m partition walls when robot maneuvers through doorways.
+- **Touches:** `sim_vision/godot/scripts/main.gd`, `sim_vision/godot/tests/test_main.gd`
+- **Evidence:** Frame captures verified across 5 random seeds (0 to 4) with white pixel percentage dropping from 83.2% down to 2.8%–15.0%; 142/142 GUT tests pass.

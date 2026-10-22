@@ -81,25 +81,24 @@ func test_camera_mode_cycles_and_toggles_ceiling() -> void:
 	add_child_autofree(main)
 	main.vision.set_process(false)
 
-	# 1. Ban đầu là FOLLOW, trần nhà phải hiện
+	# 1. Ban đầu là FOLLOW (ở độ cao 4.2m > 3.3m trần nhà), trần nhà ẩn để camera không bị che
 	assert_eq(main.camera_mode, Main.CameraMode.FOLLOW)
 	assert_not_null(main.ceiling_mesh)
-	assert_true(main.ceiling_mesh.visible, "Trần nhà phải hiện ở FOLLOW")
+	assert_false(main.ceiling_mesh.visible, "Trần nhà phải ẩn ở FOLLOW để không che tầm nhìn từ trên cao")
 
-	# 2. Đổi sang TOP_DOWN ➔ trần nhà tự ẩn để không che tầm nhìn
+	# 2. Đổi sang TOP_DOWN ➔ trần nhà tự ẩn để quan sát toàn bộ mặt bằng
 	main.camera_mode = Main.CameraMode.TOP_DOWN
 	main._update_viewer_camera()
 	assert_false(main.ceiling_mesh.visible, "Trần nhà phải ẩn ở TOP_DOWN")
 	assert_almost_eq(main.viewer_camera.global_position.y, 19.5, 0.1)
 
-	# 3. Đổi sang LOBBY ➔ trần nhà hiện lại, camera ở sảnh
+	# 3. Đổi sang LOBBY ➔ camera ở sảnh lễ tân
 	main.camera_mode = Main.CameraMode.LOBBY
 	main._update_viewer_camera()
-	assert_true(main.ceiling_mesh.visible, "Trần nhà phải hiện ở LOBBY")
 	assert_almost_eq(main.viewer_camera.global_position.x, -4.0, 0.1)
 	assert_almost_eq(main.viewer_camera.global_position.z, 7.8, 0.1)
 
-	# 4. Quay lại FOLLOW ➔ trần nhà vẫn hiện
+	# 4. Quay lại FOLLOW ➔ vị trí và tầm nhìn chuẩn
 	main.camera_mode = Main.CameraMode.FOLLOW
 	main._update_viewer_camera()
-	assert_true(main.ceiling_mesh.visible, "Trần nhà phải hiện khi về FOLLOW")
+	assert_false(main.ceiling_mesh.visible, "Trần nhà giữ ẩn khi về FOLLOW")

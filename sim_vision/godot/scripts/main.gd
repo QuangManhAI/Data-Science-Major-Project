@@ -82,7 +82,7 @@ func _update_viewer_camera() -> void:
 	if viewer_camera == null or robot == null:
 		return
 	if ceiling_mesh != null:
-		ceiling_mesh.visible = (camera_mode != CameraMode.TOP_DOWN)
+		ceiling_mesh.visible = false
 	match camera_mode:
 		CameraMode.FOLLOW:
 			viewer_camera.look_at_from_position(

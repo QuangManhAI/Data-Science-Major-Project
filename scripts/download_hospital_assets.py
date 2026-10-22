@@ -1,4 +1,4 @@
-"""Download CC0 1K glTF hospital & interior 3D models from Poly Haven.
+"""Download CC0 1K glTF hospital, laboratory, clinic & interior 3D models from Poly Haven.
 
 Downloads each model's 1k .gltf, .bin, and textures/ into
 sim_vision/godot/assets/models/<asset_id>/ matching existing CREDITS.md conventions.
@@ -7,6 +7,7 @@ sim_vision/godot/assets/models/<asset_id>/ matching existing CREDITS.md conventi
 from __future__ import annotations
 
 import json
+import shutil
 import urllib.request
 from pathlib import Path
 
@@ -14,15 +15,29 @@ ROOT = Path(__file__).resolve().parents[1]
 MODELS_DIR = ROOT / "sim_vision" / "godot" / "assets" / "models"
 HEADERS = {"User-Agent": "RoboHelperHospital/1.0"}
 
+DEPRECATED_ASSETS = [
+    "metal_trash_can",
+]
+
 ASSET_IDS = [
     "plastic_monobloc_chair_01",
     "metal_stool_01",
     "medical_box",
-    "metal_trash_can",
+    "medical_tape",
     "WetFloorSign_01",
     "Shelf_01",
+    "steel_frame_shelves_01",
+    "steel_frame_shelves_02",
     "drawer_cabinet",
     "wall_clock",
+    "chemistry_set",
+    "industrial_microscope",
+    "clipboard",
+    "office_notepads",
+    "stationery_supplies",
+    "fire_alarm",
+    "security_camera_01",
+    "ceiling_fan",
 ]
 
 
@@ -66,6 +81,12 @@ def download_asset(asset_id: str) -> dict:
 
 
 def main() -> None:
+    for dep in DEPRECATED_ASSETS:
+        dep_dir = MODELS_DIR / dep
+        if dep_dir.exists():
+            shutil.rmtree(dep_dir)
+            print(f"[REMOVED] Deprecated model directory: {dep_dir}")
+
     print(f"Downloading {len(ASSET_IDS)} CC0 1K glTF models to {MODELS_DIR}...")
     results = []
     for aid in ASSET_IDS:

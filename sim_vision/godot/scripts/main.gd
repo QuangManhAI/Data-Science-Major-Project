@@ -33,6 +33,7 @@ var _start_ms: int = 0
 @onready var vision: VisionClient = $VisionClient
 @onready var overlay: ViewOverlay = $UI/ViewOverlay
 @onready var viewer_camera: Camera3D = get_node_or_null(^"ViewerCamera")
+@onready var ceiling_mesh: Node3D = get_node_or_null(^"Room/Shell/Ceiling")
 @onready var logger: RunLogger = get_node_or_null(^"RunLogger")  # G9; không có thì không ghi log
 @onready var dialogue: DialogueManager = get_node_or_null(^"DialogueManager")  # G16; không có thì không hội thoại
 
@@ -80,6 +81,8 @@ func _process(_delta: float) -> void:
 func _update_viewer_camera() -> void:
 	if viewer_camera == null or robot == null:
 		return
+	if ceiling_mesh != null:
+		ceiling_mesh.visible = (camera_mode != CameraMode.TOP_DOWN)
 	match camera_mode:
 		CameraMode.FOLLOW:
 			viewer_camera.look_at_from_position(
@@ -95,8 +98,8 @@ func _update_viewer_camera() -> void:
 			)
 		CameraMode.LOBBY:
 			viewer_camera.look_at_from_position(
-				Vector3(-4.8, 2.85, 8.2),
-				Vector3(0.0, 1.0, 2.0),
+				Vector3(-4.0, 2.7, 7.8),
+				Vector3(0.0, 1.2, 5.0),
 				Vector3.UP
 			)
 

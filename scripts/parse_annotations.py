@@ -14,7 +14,8 @@ import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-DOC_PATH = ROOT / "docs" / "kich_ban_thu_am.md"
+_plan_doc = ROOT / "docs" / "plans" / "kich_ban_thu_am.md"
+DOC_PATH = _plan_doc if _plan_doc.exists() else (ROOT / "docs" / "kich_ban_thu_am.md")
 OUT_JSON = ROOT / "data" / "annotations.json"
 OUT_CSV = ROOT / "data" / "annotations.csv"
 

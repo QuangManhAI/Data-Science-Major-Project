@@ -408,28 +408,28 @@ class HospitalShiftEnv:
         """Provide doorway/corridor sub-goal when robot and destination are in different rooms."""
         # If robot is inside a North room (z < -2.1) and target is outside that room
         if self.robot_z < -2.1 and (target_z > -1.8 or abs(target_x - self.robot_x) > 3.5):
-            if self.robot_x < -3.0:
-                return -8.5, -1.2
-            if self.robot_x < 5.0:
-                return 0.0, -1.2
-            return 8.5, -1.2
+            door_x = -8.5 if self.robot_x < -3.0 else (0.0 if self.robot_x < 5.0 else 8.5)
+            if abs(self.robot_x - door_x) > 0.6 or self.robot_z < -1.8:
+                return door_x, -1.2
         # If robot is inside a South room (z > 2.1) and target is outside that room
         if self.robot_z > 2.1 and (target_z < 1.8 or abs(target_x - self.robot_x) > 3.5):
-            if self.robot_x < -4.0:
-                return -7.5, 1.2
-            if self.robot_x <= 4.0:
-                return 0.0, 1.2
-            return 7.5, 1.2
+            door_x = -7.5 if self.robot_x < -4.0 else (0.0 if self.robot_x <= 4.0 else 7.5)
+            if abs(self.robot_x - door_x) > 0.6 or self.robot_z > 1.8:
+                return door_x, 1.2
         # If robot is in corridor (-2.1 <= z <= 2.1) and target is in a North room (z < -2.2)
         if -2.1 <= self.robot_z <= 2.1 and target_z < -2.2:
             door_x = -8.5 if target_x < -3.0 else (0.0 if target_x < 5.0 else 8.5)
-            if abs(self.robot_x - door_x) > 0.9:
+            if abs(self.robot_x - door_x) > 0.8:
                 return door_x, -1.0
+            if self.robot_z > -2.1:
+                return door_x, -2.6
         # If robot is in corridor (-2.1 <= z <= 2.1) and target is in a South room (z > 2.2)
         if -2.1 <= self.robot_z <= 2.1 and target_z > 2.2:
             door_x = -7.5 if target_x < -4.0 else (0.0 if target_x <= 4.0 else 7.5)
-            if abs(self.robot_x - door_x) > 0.9:
+            if abs(self.robot_x - door_x) > 0.8:
                 return door_x, 1.0
+            if self.robot_z < 2.1:
+                return door_x, 2.6
         return target_x, target_z
 
     def step(self, action: np.ndarray | list[float] | tuple[float, float]) -> tuple[np.ndarray, float, bool, dict[str, Any]]:
@@ -607,11 +607,14 @@ class HospitalShiftEnv:
         right_clear = float(np.sum(lidar[mid + 1 :]))
         center_min = float(min(lidar[mid - 1], lidar[mid], lidar[mid + 1]))
         repel = 0.0
-        if center_min < 0.35:
-            repel = 0.9 if left_clear >= right_clear else -0.9
+        speed_factor = 1.0
+        if center_min < 0.65:
+            turn_strength = float(np.clip((0.65 - center_min) / 0.5, 0.4, 1.2))
+            repel = turn_strength if left_clear >= right_clear else -turn_strength
+            speed_factor = float(np.clip(center_min / 0.65, 0.35, 1.0))
 
-        omega = float(np.clip(1.6 * angle + repel, -OMEGA_MAX, OMEGA_MAX))
-        max_v = ESCORT_WALK_SPEED if self.task_phase == TaskPhase.GUIDE_ESCORT else V_MAX
+        omega = float(np.clip(1.8 * angle + repel, -OMEGA_MAX, OMEGA_MAX))
+        max_v = (ESCORT_WALK_SPEED if self.task_phase == TaskPhase.GUIDE_ESCORT else V_MAX) * speed_factor
         v = float(np.clip(0.55 * dist, 0.0, max_v))
         if abs(angle) > 0.65:
             v *= 0.25

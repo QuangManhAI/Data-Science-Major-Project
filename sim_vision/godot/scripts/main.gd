@@ -311,7 +311,7 @@ func _setup_hospital_npcs() -> void:
 		for child: Node in furn.get_children():
 			if child is HospitalNpc:
 				var h_npc := child as HospitalNpc
-				h_npc.setup_robot(robot)
+				h_npc.setup_robot(robot, func() -> int: return state)
 				if dialogue != null and h_npc.has_npc():
 					dialogue.register_npc(h_npc.get_npc())
 
@@ -321,7 +321,7 @@ func _nearest_person_distance() -> float:
 	var furn: Node = room.get_node_or_null(^"Furniture") if room != null else null
 	if furn != null:
 		for child: Node in furn.get_children():
-			if child is HospitalNpc and (child as HospitalNpc).is_seated:
+			if child is HospitalNpc:
 				d = minf(d, Human.flat_distance(robot.global_position, (child as Node3D).global_position))
 	return d
 
@@ -391,8 +391,16 @@ func set_dialogue_state(s: int) -> void:
 
 ## Áp an toàn rồi gửi lệnh cho robot; trả lệnh cuối cùng.
 func _apply(cmd: Dictionary) -> Dictionary:
-	var safe: Dictionary = Main.apply_safety(cmd, _nearest_person_distance(), robot.front_obstacle_distance())
+	var dist_human: float = _nearest_person_distance()
+	var dist_obstacle: float = robot.front_obstacle_distance()
+	var safe: Dictionary = Main.apply_safety(cmd, dist_human, dist_obstacle)
 	state = safe["state"]
+	if state == Config.RobotState.APPROACH:
+		var target: Dictionary = cmd.get("target", {})
+		var h_box: float = (float(target["y2"]) - float(target["y1"])) if (not target.is_empty() and target.has("y2")) else 0.0
+		if dist_human <= Config.SAFE_DIST_HUMAN + 0.35 or (safe["v"] == 0.0 and (dist_human <= Config.TALK_TRIGGER_DIST or h_box >= 0.45)):
+			state = Config.RobotState.ARRIVED
+			safe["state"] = Config.RobotState.ARRIVED
 	robot.set_command(safe["v"], safe["omega"])
 	return safe
 

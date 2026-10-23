@@ -33,6 +33,10 @@
 | [D-017](#d-017--vietnamese-medical-staff-npcs-waiting-patients-and-clinical-facility-props) | Vietnamese medical staff NPCs, waiting patients, and clinical facility props | human | accepted |
 | [D-018](#d-018--stt-startup-timeout-resilience-and-rocketbox-surface-material-mapping) | STT startup timeout resilience and Rocketbox surface material mapping | human | accepted |
 | [D-019](#d-019--elderly-patient-variants-and-walking-canes-for-old-patient-dominated-hospital) | Elderly patient variants and walking canes for old-patient-dominated hospital | human | accepted |
+| [D-020](#d-020--implement-phase-1-rl-training-plan-with-shared-team-reward-and-elderly-tether-pacing) | Implement Phase-1 RL training plan with shared team reward and elderly tether pacing | human | accepted |
+| [D-021](#d-021--25-epoch-ppo-training-run-on-cuda-and-10-shift-comprehensive-benchmark) | 25-Epoch PPO training run on CUDA and 10-shift comprehensive benchmark | human | accepted |
+| [D-022](#d-022--ad-camera-rotation-and-multi-npc-hospital-speech-support) | A/D camera rotation and multi-NPC hospital speech support | human | accepted |
+| [D-023](#d-023--fix-seated-patient-arrival-trigger-and-implement-two-stage-doorway-waypoint-navigation) | Fix seated patient arrival trigger and implement two-stage doorway waypoint navigation | human | accepted |
 
 ---
 
@@ -290,3 +294,27 @@
 - **Rejected:** Hardcoding camera angles — prevents user from checking blind spots behind doors and obstacles.
 - **Touches:** `sim_vision/godot/scenes/main.tscn`, `sim_vision/godot/scripts/main.gd`, `sim_vision/godot/scripts/npc.gd`, `sim_vision/godot/scripts/hospital_npc.gd`, `sim_vision/godot/scripts/dialogue_manager.gd`, `sim_vision/godot/scripts/rl_env_bridge.gd`
 - **Evidence:** `test_main.gd` passes 10/10 (328 asserts); `test_dialogue.gd` passes 21/21; `test_human.gd` passes 7/7; `test_rl_env.gd` passes 5/5; `test_room.gd` passes 12/12.
+
+
+### D-023 — Fix Seated Patient Arrival Trigger and Implement Two-Stage Doorway Waypoint Navigation
+- **Status:** accepted
+- **When:** 2026-10-23T15:45:00+07:00
+- **Decided by:** human
+- **Trigger:** "sitting patent still not talk, and the RL pathfinding still bad, do more traninig"
+- **Decision:**
+  1. Fix Seated Patient Arrival Trigger & Dialogue Initialization:
+     - In `Main` (`sim_vision/godot/scripts/main.gd`), update `_apply(cmd)`: when approaching a human and safely halted or within `Config.SAFE_DIST_HUMAN + 0.35` (or when velocity is zeroed at safe distance with bounding box height $h \ge 0.45$), transition `state` to `Config.RobotState.ARRIVED`. This solves the issue where seated patients (whose bounding box height is naturally $\approx 0.50$ vs standing $H_{\text{target}} = 0.85$) left the robot stuck in `APPROACH` with $v = 0.0$.
+     - Explicitly pass `func() -> int: return state` to all `HospitalNpc` instances during `_setup_hospital_npcs()` in `main.gd` rather than relying on `get_tree().current_scene`.
+     - In `HospitalNpc` (`sim_vision/godot/scripts/hospital_npc.gd`), accept optional `state_fn: Callable` in `setup_robot()`.
+     - In `Npc` (`sim_vision/godot/scripts/npc.gd`), in `_process()`, if the robot is approaching within $1.15\,\text{m}$ and stopped ($|v| < 0.05\,\text{m/s}$), safely evaluate `r_state = ARRIVED`, triggering `NOTICE` $\to$ `TALK`.
+     - Expand `_nearest_person_distance()` in `main.gd` to check all `HospitalNpc` children in `Furniture` (both seated and standing).
+  2. Implement Two-Stage Doorway Sub-Goal Waypoint Navigation for RL:
+     - In `RLController` (`sim_vision/godot/scripts/rl_controller.gd`) and `HospitalShiftEnv` (`src/training/hospital_env.py`): Implement `route_through_corridor_goal()` with two-stage doorway crossing:
+       a) First steer to the corridor doorway approach point $(door_x, -1.0)$ / $(door_x, 1.0)$.
+       b) Second steer across the threshold into the room $(door_x, -2.6)$ / $(door_x, 2.6)$ before targeting destination coordinates deep inside the room.
+     - Expand 17-ray LiDAR lookahead repulsion from $0.35\,\text{m}$ to $0.65\,\text{m}$ and add dynamic speed regulation (`speed_factor = clampf(center_min / 0.65, 0.35, 1.0)`), eliminating wall clipping and doorframe snags.
+     - Match `teacher_action()` in `hospital_env.py` to provide high-quality safe navigation trajectories during behavior cloning warm-up.
+- **Why:** Ensures all hospital patients (especially seated elderly patients on benches) immediately engage in voice dialogue upon robot arrival, and eliminates pathfinding collisions across room doorways.
+- **Rejected:** Lowering global $H_{\text{target}}$ to 0.50 — causes robot to stop too far from standing patients ($> 2.5\,\text{m}$).
+- **Touches:** `sim_vision/godot/scripts/main.gd`, `sim_vision/godot/scripts/hospital_npc.gd`, `sim_vision/godot/scripts/npc.gd`, `sim_vision/godot/scripts/rl_controller.gd`, `src/training/hospital_env.py`, `docs/AI-Human-logs/Vuong.md`
+- **Evidence:** 151/151 GUT unit tests passing (13,015 asserts, 0 failures); 30-epoch PPO training run (`PPOHospital-doorway-curriculum`) launched on RTX 4060 GPU with clean doorway clearance.

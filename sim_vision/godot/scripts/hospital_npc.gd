@@ -95,13 +95,15 @@ func _ready() -> void:
 			_anim_player.advance(anim_offset)
 
 
-func setup_robot(robot_node: Node3D) -> void:
+func setup_robot(robot_node: Node3D, state_fn: Callable = Callable()) -> void:
 	robot_ref = robot_node
 	if _npc != null and _npc.has_method("setup"):
-		_npc.setup(robot_node, func() -> int:
-			var m = get_tree().current_scene
-			return m.state if m != null and "state" in m else Config.RobotState.SEARCH
-		)
+		var fn: Callable = state_fn
+		if not fn.is_valid():
+			fn = func() -> int:
+				var m = get_tree().current_scene if get_tree() != null else null
+				return m.state if m != null and "state" in m else Config.RobotState.SEARCH
+		_npc.setup(robot_node, fn)
 
 
 func is_pardoning() -> bool:

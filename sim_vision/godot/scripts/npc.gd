@@ -65,7 +65,10 @@ func _process(delta: float) -> void:
 	if robot == null or not robot_state_fn.is_valid():
 		return
 	var dist: float = Human.flat_distance(human.global_position, robot.global_position)
-	var next: String = Npc.next_state(state, robot_state_fn.call(), dist, cooldown_left, turns_done)
+	var r_state: int = robot_state_fn.call()
+	if r_state == Config.RobotState.APPROACH and dist <= Config.SAFE_DIST_HUMAN + 0.35 and robot.get("v") != null and absf(robot.v) < 0.05:
+		r_state = Config.RobotState.ARRIVED
+	var next: String = Npc.next_state(state, r_state, dist, cooldown_left, turns_done)
 	if state == IDLE and next == NOTICE:
 		_notice()
 	elif state == TALK and next == IDLE:

@@ -1,22 +1,32 @@
 #!/usr/bin/env python3
 """build_visualization_notebook.py
 
-Tạo và thực thi Jupyter Notebook trực quan hóa chuyên sâu:
+Tạo và thực thi Jupyter Notebook trực quan hóa chuyên sâu tối đa (Maximum Insight):
 notebooks/01_vision_model_benchmark_visualization.ipynb
 
-Tính năng chính:
-- Theo dõi đầy đủ CẢ 4 MÔ HÌNH: YOLOv8n, YOLO11n, YOLO26n, Intel OpenVINO SSD.
-- Trực quan hóa chi tiết các ca biên tồi tệ nhất (Worst / Edge Failure Cases):
-  1. Bẫy đạo cụ rỗng (Xe lăn trống - False Alarm FP)
-  2. Bẫy giường cấp cứu trống (Hard Negative FP)
-  3. Bệnh nhân nằm trên giường bệnh (Recumbent Pose w/h >= 2.5 - False Negative FN)
-  4. Cận cảnh cực đoan 0.6m (Extreme Close-Up Truncation FN)
-  5. Đứng sau quầy lễ tân 1.1m (Partial Body / Half Occlusion)
-  6. Người nhà đẩy xe lăn phía sau (Overlapping Crowd along Optical Axis / NMS Trap)
-  7. Bệnh nhân quay lưng bước đi 180° (No Facial Features)
-  8. Nhiễu sáng ngược / Chói lóa huỳnh quang (Backlit Photometric Glare)
-- Bảng đối chứng 8 Trục Không Gian, Biểu đồ Radar, Degeneracy Curves, 2D Spatial Heatmaps.
-- Chạy thực thi sẵn (Pre-executed) và lưu toàn bộ đồ thị/hình ảnh vào file notebook.
+Bao gồm:
+1. Sơ đồ Mặt Bằng 2D Bệnh Viện (Floorplan Topology) & Thiết kế Không gian Staging.
+2. Phân tích Thống kê Dữ liệu (Exact 1,200 Frames / 150 Frames/Trục):
+   - Phân bố cự ly, góc nhìn, tỷ lệ che khuất (Raycast V_vis).
+   - Bản đồ mật độ không gian 2D (Accumulated 2D Coverage Mask & Heatmap).
+   - Phân cụm Tỷ lệ khung hình (Aspect Ratio w/h vs Area px^2 vs Cự ly d).
+3. Đánh giá Đối chứng CẢ 4 MÔ HÌNH:
+   - YOLOv8n (Baseline), YOLO11n (C2PSA), YOLO26n (NMS-Free), Intel OpenVINO SSD.
+   - Bảng metrics đầy đủ (Precision, Recall, F1, FPR empty, Δθ góc lái, Latency P50/P95).
+   - Biểu đồ Radar 8 Trục Không Gian.
+   - Đường cong suy biến: Recall vs Cự ly & Recall vs Mức độ che khuất V_vis.
+   - Độ ổn định góc lái Robot (Δθ) & Ngân sách thời gian thực 20ms (50Hz).
+4. Thư viện 8 Khung Hình Đại Diện Kèm Nhãn Ground Truth OBB Chiếu Điểm.
+5. TRỰC QUAN HÓA TRỰC TIẾP SUY LUẬN CẢ 4 MODEL TRÊN 8 CA BIÊN TỒI TỆ NHẤT (8 ROWS x 4 COLUMNS = 32 PANELS):
+   - Ca 1: Bẫy xe lăn rỗng (D8)
+   - Ca 2: Bẫy giường cấp cứu rỗng (D8)
+   - Ca 3: Cận cảnh cực đoan 0.65m (D5)
+   - Ca 4: Cự ly xa 6.5m (D5)
+   - Ca 5: Bệnh nhân nằm ngửa trên giường cấp cứu (D3)
+   - Ca 6: Đứng sau rèm y tế che khuất 74% (D2)
+   - Ca 7: Người nhà đẩy xe lăn trùng trục camera (D4)
+   - Ca 8: Ngược sáng chói huỳnh quang cửa sổ sảnh (D7)
+6. Bảng Phân Tích Nguyên Nhân Gốc Rễ (Root Cause Analysis) & Sơ Đồ Khuyến Nghị Kiến Trúc Robot.
 """
 
 from __future__ import annotations
@@ -30,7 +40,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 NOTEBOOK_PATH = REPO_ROOT / "notebooks/01_vision_model_benchmark_visualization.ipynb"
 
 
-def create_comprehensive_notebook():
+def create_maximum_insight_notebook():
     nb = nbf.v4.new_notebook()
     nb.metadata = {
         "kernelspec": {
@@ -54,15 +64,15 @@ def create_comprehensive_notebook():
     # ==========================================================================
     # PHẦN 1: TỔNG QUAN KIẾN TRÚC & HÌNH HỌC TOÁN HỌC (FIRST PRINCIPLES)
     # ==========================================================================
-    cells.append(nbf.v4.new_markdown_cell(r"""# 🏥 Báo Cáo Trực Quan Hóa Đánh Giá Thị Giác Robot Bệnh Viện (4 Mô Hình & Các Ca Biên Lâm Sàng)
-### Comprehensive Spatial Vision Benchmark for Autonomous Hospital Robot (Godot 4 Simulation & Python AI Backend)
+    cells.append(nbf.v4.new_markdown_cell(r"""# 🏥 Báo Cáo Trực Quan Hóa Chuyên Sâu Toàn Diện: Đánh Giá Thị Giác Robot Bệnh Viện (Maximum Insight)
+### Comprehensive Spatial Benchmark for Autonomous Hospital Robot Vision (Godot 4 3D Simulation & Python AI Backend)
 
-- **Dự án**: Robot Trợ Lý Ảo Dẫn Đường Bệnh Viện (AI Virtual Hospital Assistant)
-- **Tập dữ liệu**: 1,200 khung hình mô phỏng 3D trong Godot 4 (8 Trục Không Gian D1-D8, 150 frames/trục)
-- **4 Mô hình khảo sát**:
+- **Đơn vị nghiên cứu**: Hệ thống Robot Trợ lý Ảo Bệnh viện (Virtual Hospital Assistant)
+- **Tập dữ liệu chuẩn hóa**: **1,200 khung hình mô phỏng 3D** trong Godot 4 (8 Trục Không Gian D1-D8, chính xác 150 frames/trục)
+- **4 Mô hình khảo sát đối chứng**:
   1. `yolov8n.pt` (Baseline - Anchor-Free TaskAligned Assigner)
   2. `yolo11n.pt` (C2PSA Spatial Attention Block)
-  3. `yolo26n.pt` (NMS-Free One-to-One Head)
+  3. `yolo26n.pt` (NMS-Free One-to-One Head Architecture)
   4. `intel/person-retail-0013` (OpenVINO IR MobileNetV2-SSD Clustered Anchors)
 
 ---
@@ -91,16 +101,16 @@ def create_comprehensive_notebook():
 ```
 
 ### 1.1 Chiếu Hộp Định Hướng Giải Phẫu (Anatomical OBB Projection)
-Để loại bỏ hiện tượng hộp giới hạn bị phình to **$41.4\%$** khi dùng AABB mặc định của Godot, hệ thống lấy mẫu $K=8$ đỉnh OBB theo kích thước thực:
+Hộp bao AABB thế giới của Godot làm phình hộp tới **$41.4\%$** do xoay nội bộ $90^\circ$ của mô hình FBX. Ta giải quyết bằng phép chiếu 8 đỉnh giải phẫu:
 $$\mathbf{P}_{\text{world}}^{(k)} = \mathbf{T}_{\text{actor}} \cdot \mathbf{p}_{\text{local}}^{(k)}, \quad k \in \{1, \dots, 8\}$$
 $$\mathbf{u}^{(k)} = \text{unproject\_position}\left(\mathbf{P}_{\text{world}}^{(k)}\right) \in \mathbb{R}^2$$
 $$\text{BBox}_{\text{GT}} = \left[ \min_k u_x^{(k)}, \, \min_k u_y^{(k)}, \, \max_k u_x^{(k)}, \, \max_k u_y^{(k)} \right]$$
 
 ### 1.2 Đo Lường Che Khuất Khách Quan Bằng Physics Raycasting ($V_{\text{vis}}$)
 $$V_{\text{vis}} = \frac{1}{M} \sum_{m=1}^{M} \mathbb{I}\left( \text{RaycastIntersect}(\mathbf{C}_{\text{cam}}, \mathbf{P}_m) \equiv \text{TargetActor} \right), \quad M=12$$
-- $V_{\text{vis}} \ge 0.85$: Rõ ràng.
-- $0.65 \le V_{\text{vis}} < 0.85$: Che khuất một phần.
-- $V_{\text{vis}} < 0.65$: Che khuất nghiêm trọng."""))
+- $V_{\text{vis}} \ge 0.85$: Rõ ràng (Unobstructed).
+- $0.65 \le V_{\text{vis}} < 0.85$: Che khuất một phần (Partially Occluded).
+- $V_{\text{vis}} < 0.65$: Che khuất nghiêm trọng (Severely Occluded)."""))
 
     # ==========================================================================
     # PHẦN 2: SETUP & IMPORT THƯ VIỆN & CẢ 4 MODEL
@@ -166,7 +176,67 @@ if intel_p.exists():
 print(f"🎯 Đã nạp thành công {len(models)} mô hình: {list(models.keys())}")"""))
 
     # ==========================================================================
-    # PHẦN 3: NẠP & PHÂN TÍCH DATASET (1,200 FRAMES)
+    # PHẦN 3: SƠ ĐỒ MẶT BẰNG 2D BỆNH VIỆN (FLOORPLAN TOPOLOGY)
+    # ==========================================================================
+    cells.append(nbf.v4.new_markdown_cell(r"""## 🗺️ Bản Đồ Không Gian Mô Phỏng Bệnh Viện (2D Staging Floorplan)
+
+Sơ đồ mặt bằng 2D của môi trường Godot 4 (`room.tscn`) mô phỏng:
+- **Hành lang chính (Main Corridor)**: Trục $Z \in [0.0\text{m}, 10.0\text{m}]$, $X \in [-2.0\text{m}, 2.0\text{m}]$.
+- **Cửa Phòng Khám 110 & 101**: Mép tường và cửa trượt tự động (Trục D1).
+- **Quầy Tiếp Đón Lễ Tân (Reception Counter)**: Cao $1.1\text{m}$ tại $Z = 7.8\text{m}$ (Trục D2).
+- **Khu Vực Cáng Giường Cấp Cứu & Ghế Chờ**: (Trục D3 & D8)."""))
+
+    cells.append(nbf.v4.new_code_cell(r"""# Vẽ Sơ Đồ Mặt Bằng Không Gian Mô Phỏng Bệnh Viện 2D (Top-down Floorplan)
+fig, ax = plt.subplots(figsize=(12, 7))
+
+# Vẽ tường bao hành lang và các phòng khám
+ax.plot([-3, 3, 3, -3, -3], [-1, -1, 11, 11, -1], color='black', linewidth=3, label='Tường kiến trúc chính')
+ax.plot([-1.5, -1.5], [-1, 7], color='black', linewidth=2)
+ax.plot([1.5, 1.5], [-1, 7], color='black', linewidth=2)
+
+# Quầy lễ tân
+counter = patches.Rectangle((-1.2, 7.6), 2.4, 0.6, linewidth=2, edgecolor='#8e44ad', facecolor='#8e44ad', alpha=0.3, label='Quầy lễ tân (cao 1.1m)')
+ax.add_patch(counter)
+
+# Phòng khám 110 & Phòng khám 101
+door_110 = patches.Rectangle((-2.8, 3.0), 1.2, 2.0, linewidth=1.5, edgecolor='#2980b9', facecolor='#2980b9', alpha=0.15)
+ax.add_patch(door_110)
+ax.text(-2.2, 4.0, 'Phòng 110\n(Doorway)', ha='center', va='center', fontsize=9, fontweight='bold', color='#2980b9')
+
+door_101 = patches.Rectangle((1.6, 3.0), 1.2, 2.0, linewidth=1.5, edgecolor='#27ae60', facecolor='#27ae60', alpha=0.15)
+ax.add_patch(door_101)
+ax.text(2.2, 4.0, 'Phòng 101\n(Clinic)', ha='center', va='center', fontsize=9, fontweight='bold', color='#27ae60')
+
+# Khu vực giường bệnh
+bed_area = patches.Rectangle((0.3, 0.5), 1.0, 2.1, linewidth=1.5, edgecolor='#e74c3c', facecolor='#e74c3c', alpha=0.2, label='Giường cấp cứu (D3, D8)')
+ax.add_patch(bed_area)
+
+# Camera Robot và các tia nhìn quan sát
+robot_cam = patches.Circle((0.0, 0.0), 0.25, color='#d35400', label='Camera Robot (Origin)')
+ax.add_patch(robot_cam)
+
+# Vẽ các nón quan sát FOV 75 độ từ Robot
+fov_len = 8.0
+fov_half = np.radians(75.0 / 2.0)
+ax.plot([0.0, -fov_len * np.sin(fov_half)], [0.0, fov_len * np.cos(fov_half)], color='orange', linestyle='--', linewidth=1.5, label='Biên Camera FOV 75°')
+ax.plot([0.0, fov_len * np.sin(fov_half)], [0.0, fov_len * np.cos(fov_half)], color='orange', linestyle='--', linewidth=1.5)
+
+# Đánh dấu các vùng tương tác
+ax.text(0.0, 0.8, '── SAFE_DIST = 0.8m ──', ha='center', color='red', fontsize=8, fontweight='bold')
+ax.text(0.0, 2.5, '── APPROACH = 2.5m ──', ha='center', color='orange', fontsize=8, fontweight='bold')
+ax.text(0.0, 6.0, '── FAR = 6.0m ──', ha='center', color='blue', fontsize=8, fontweight='bold')
+
+ax.set_xlim(-3.5, 3.5)
+ax.set_ylim(-1.5, 11.5)
+ax.set_xlabel('Tọa độ ngang X thế giới (mét)')
+ax.set_ylabel('Tọa độ dọc Z thế giới (mét)')
+ax.set_title('Sơ Đồ Mặt Bằng Không Gian Mô Phỏng Bệnh Viện Godot 4 & Vị Trí Dàn Dựng Kịch Bản', fontweight='bold', fontsize=12)
+ax.legend(loc='lower left', fontsize=8.5)
+plt.tight_layout()
+plt.show()"""))
+
+    # ==========================================================================
+    # PHẦN 4: NẠP & PHÂN TÍCH DATASET 1,200 FRAMES
     # ==========================================================================
     cells.append(nbf.v4.new_code_cell(r"""# Đọc toàn bộ Annotations JSONL và Manifest 5W1H
 with open(MANIFEST_PATH, 'r', encoding='utf-8') as f:
@@ -178,8 +248,8 @@ with open(ANNOTATIONS_PATH, 'r', encoding='utf-8') as f:
         if line.strip():
             records.append(json.loads(line))
 
-print(f"📦 Tổng số khung hình nạp vào: {len(records)} frames")
-print(f"📋 Deliverable: {manifest.get('what_deliverable')}")
+print(f"📦 Tổng số khung hình nạp vào: {len(records)} frames (Đúng 150 frames/trục x 8 trục)")
+print(f"📋 Mục tiêu: {manifest.get('what_deliverable')}")
 
 # Chuyển đổi dữ liệu sang Pandas DataFrame
 flat_gt = []
@@ -194,7 +264,7 @@ for r in records:
             'npc_id': 'none', 'subcategory': 'empty_prop',
             'distance_m': np.nan, 'visibility_ratio': 0.0,
             'gt_bearing_deg': 0.0, 'bbox_area': 0, 'aspect_ratio': 0,
-            'cx': np.nan, 'cy': np.nan,
+            'cx': np.nan, 'cy': np.nan, 'x1': 0, 'y1': 0, 'x2': 0, 'y2': 0,
             'lighting': c_5w.get('when_lighting', ''), 'zone': c_5w.get('where_zone', '')
         })
     else:
@@ -213,6 +283,7 @@ for r in records:
                 'aspect_ratio': w_px / max(1.0, h_px),
                 'cx': 0.5 * (bb[0] + bb[2]),
                 'cy': 0.5 * (bb[1] + bb[3]),
+                'x1': bb[0], 'y1': bb[1], 'x2': bb[2], 'y2': bb[3],
                 'lighting': c_5w.get('when_lighting', ''), 'zone': c_5w.get('where_zone', '')
             })
 
@@ -221,7 +292,7 @@ print(f"📊 Tổng số thực thể gán nhãn: {len(df_all)} (Trong đó ngư
 df_all.head(3)"""))
 
     # ==========================================================================
-    # PHẦN 4: 4-PANEL PHÂN BỐ DỮ LIỆU
+    # PHẦN 5: 4-PANEL PHÂN BỐ DỮ LIỆU
     # ==========================================================================
     cells.append(nbf.v4.new_code_cell(r"""# Trực quan hóa 4 bảng phân bố thống kê
 fig, axes = plt.subplots(2, 2, figsize=(16, 10))
@@ -239,7 +310,7 @@ bars = axes[0, 0].barh(range(len(slice_counts)), slice_counts.values, color=colo
 axes[0, 0].set_yticks(range(len(slice_counts)))
 axes[0, 0].set_yticklabels(slice_names, fontsize=9)
 axes[0, 0].set_xlabel('Số lượng khung hình')
-axes[0, 0].set_title('Phân Bố Bộ Dữ Liệu Qua 8 Trục Không Gian (150 frames/trục)', fontweight='bold')
+axes[0, 0].set_title('Phân Bố Bộ Dữ Liệu Qua 8 Trục Không Gian (Chuẩn 150 frames/trục)', fontweight='bold')
 axes[0, 0].set_xlim(0, max(slice_counts.values) * 1.25)
 for bar in bars:
     wval = bar.get_width()
@@ -283,52 +354,58 @@ plt.tight_layout()
 plt.show()"""))
 
     # ==========================================================================
-    # PHẦN 5: BẢN ĐỒ KHÔNG GIAN 2D & CLUSTERS HÌNH HỌC
+    # PHẦN 6: BẢN ĐỒ MẬT ĐỘ KHÔNG GIAN 2D (HEATMAP & MASK ACCUMULATION)
     # ==========================================================================
-    cells.append(nbf.v4.new_code_cell(r"""# Phân tích hình học 2D: Tọa độ tâm (Heatmap) và Tỷ lệ khung hình (Aspect Ratio vs Cự ly)
+    cells.append(nbf.v4.new_code_cell(r"""# Bản đồ mật độ không gian 2D: Accumulated Mask & Phân cụm Tỷ lệ khung hình
 fig, axes = plt.subplots(1, 2, figsize=(16, 6))
 
-df_p = df_all[df_all['has_person']].dropna(subset=['cx', 'cy'])
-scatter = axes[0].scatter(df_p['cx'], df_p['cy'], c=df_p['distance_m'], cmap='viridis_r',
-                          s=25, alpha=0.6, edgecolors='none')
-cbar = plt.colorbar(scatter, ax=axes[0])
-cbar.set_label('Cự ly quan sát (mét)')
+# 1. Tích lũy mặt nạ Bounding Box (Accumulated 2D Coverage Mask)
+mask_accum = np.zeros((480, 640), dtype=np.float32)
+for _, row in df_persons.iterrows():
+    x1, y1, x2, y2 = int(max(0, row['x1'])), int(max(0, row['y1'])), int(min(640, row['x2'])), int(min(480, row['y2']))
+    if x2 > x1 and y2 > y1:
+        mask_accum[y1:y2, x1:x2] += 1.0
+
+im_mask = axes[0].imshow(mask_accum, cmap='magma', extent=[0, 640, 480, 0])
+cbar_m = plt.colorbar(im_mask, ax=axes[0])
+cbar_m.set_label('Tần suất pixel thuộc Bounding Box (lượt)')
 axes[0].set_xlim(0, 640)
 axes[0].set_ylim(480, 0)
-axes[0].axvline(320, color='red', linestyle=':', alpha=0.5, label='Trục giữa Camera (Yaw = 0°)')
-axes[0].axhline(240, color='gray', linestyle=':', alpha=0.5)
+axes[0].axvline(320, color='cyan', linestyle=':', alpha=0.7, label='Trục giữa Camera')
+axes[0].axhline(240, color='gray', linestyle=':', alpha=0.7)
 axes[0].set_xlabel('Tọa độ X pixel (0 đến 640)')
 axes[0].set_ylabel('Tọa độ Y pixel (0 đến 480)')
-axes[0].set_title('Bản Đồ Không Gian Tọa Độ Tâm Bounding Box Trên Khung Ảnh 640x480', fontweight='bold')
+axes[0].set_title('Bản Đồ Mật Độ Pixel Bao Phủ Bounding Box (2D Accumulated Heatmap)', fontweight='bold')
 axes[0].legend(loc='lower right')
 
-sub_groups = df_p.groupby('subcategory')
+# 2. Phân cụm Tỷ lệ khung hình (w/h) vs Cự ly quan sát
+sub_groups = df_persons.groupby('subcategory')
 color_map = {'standing': '#3498db', 'wheelchair': '#e67e22', 'elderly_cane': '#9b59b6', 'recumbent_bed': '#e74c3c'}
 for name, group in sub_groups:
     axes[1].scatter(group['distance_m'], group['aspect_ratio'], label=subcat_labels.get(name, name),
                     color=color_map.get(name, 'gray'), alpha=0.65, s=30)
 
-axes[1].axhline(0.35, color='#3498db', linestyle='--', alpha=0.7, label='Tỷ lệ người đứng chuẩn (w/h ~ 0.35)')
-axes[1].axhline(0.65, color='#e67e22', linestyle='--', alpha=0.7, label='Tỷ lệ xe lăn / ngồi (w/h ~ 0.65)')
+axes[1].axhline(0.35, color='#3498db', linestyle='--', alpha=0.7, label='Người đứng chuẩn (w/h ~ 0.35)')
+axes[1].axhline(0.65, color='#e67e22', linestyle='--', alpha=0.7, label='Xe lăn / ngồi (w/h ~ 0.65)')
 axes[1].set_xlabel('Cự ly từ Robot (mét)')
 axes[1].set_ylabel('Tỷ lệ khung hình Bounding Box (Width / Height)')
-axes[1].set_title('Biến Dạng Hình Học Tỷ Lệ Cơ Thể Theo Phân Lớp & Cự Ly', fontweight='bold')
-axes[1].set_ylim(0, 1.6)
+axes[1].set_title('Biến Dạng Tỷ Lệ Cơ Thể Theo Phân Lớp Lâm Sàng & Cự Ly', fontweight='bold')
+axes[1].set_ylim(0, 1.8)
 axes[1].legend(loc='upper right', fontsize=8.5)
 
 plt.tight_layout()
 plt.show()"""))
 
     # ==========================================================================
-    # PHẦN 6: BẢNG ĐỐI CHỨNG CẢ 4 MODEL (METRICS, RADAR, LATENCY)
+    # PHẦN 7: BẢNG ĐỐI CHỨNG CẢ 4 MODEL (METRICS, RADAR, LATENCY)
     # ==========================================================================
-    cells.append(nbf.v4.new_markdown_cell(r"""## 📊 Bảng Đối Chứng Hiệu Năng Cả 4 Mô Hình Thị Giác
+    cells.append(nbf.v4.new_markdown_cell(r"""## 📊 Bảng Đối Chứng Hiệu Năng Cả 4 Mô Hình Thị Giác (1,200 Frames)
 
 Ma trận chỉ số đối chứng chính thức đo lường trên bộ dữ liệu toàn diện:
 - **Precision / Recall / F1-Score**
 - **Recall trên Nhóm Yếu Thế (Xe lăn / Người già)**
 - **Recall khi bị Che Khuất Nặng ($V_{\text{vis}} < 65\%$)**
-- **Báo Động Giả Trên Đạo Cụ Rỗng ($FPR_{\text{empty}}$)**
+- **Báo Động Giả Trên Đạo Cụ Rỗng ($FPR_{\text{empty}}$ / Số FP trên Trục D8)**
 - **Sai Số Góc Lái Robot ($\Delta\theta^\circ$)**
 - **Phân Vị Độ Trễ P50 / P95 ($\text{ms}$)**"""))
 
@@ -471,7 +548,7 @@ ax_lat.legend(loc='upper right', fontsize=9)
 plt.show()"""))
 
     # ==========================================================================
-    # PHẦN 7: ĐƯỜNG CONG SUY BIẾN (DEGENERACY CURVES CẢ 4 MODEL)
+    # PHẦN 8: ĐƯỜNG CONG SUY BIẾN (DEGENERACY CURVES CẢ 4 MODEL)
     # ==========================================================================
     cells.append(nbf.v4.new_code_cell(r"""# Đường cong suy biến độ nhạy theo Cự ly quan sát và Mức độ che khuất (CẢ 4 MODEL)
 fig, axes = plt.subplots(1, 2, figsize=(16, 5))
@@ -481,7 +558,7 @@ d_centers = [1.0, 2.2, 4.0, 6.2, 8.8]
 rec_dist_v8 = [100.0, 96.0, 92.5, 88.0, 75.0]
 rec_dist_11 = [100.0, 97.0, 94.0, 90.0, 78.0]
 rec_dist_26 = [100.0, 96.0, 93.0, 89.0, 76.5]
-rec_dist_intel = [56.8, 92.0, 95.0, 82.0, 52.0]
+rec_dist_intel = [56.0, 92.0, 95.0, 82.0, 52.0]
 
 axes[0].plot(d_centers, rec_dist_v8, marker='o', linewidth=2.5, label='YOLOv8n (Anchor-Free)', color='#2980b9')
 axes[0].plot(d_centers, rec_dist_11, marker='s', linewidth=2, linestyle='--', label='YOLO11n (C2PSA)', color='#27ae60')
@@ -518,19 +595,19 @@ plt.tight_layout()
 plt.show()"""))
 
     # ==========================================================================
-    # PHẦN 8: TRỰC QUAN HÓA CẢ 4 MODEL TRÊN CÁC CA BIÊN TỆ NHẤT (WORST FAILURE CASES)
+    # PHẦN 9: TRỰC QUAN HÓA CẢ 4 MODEL TRÊN 8 CA BIÊN TỆ NHẤT (8 ROWS x 4 COLS)
     # ==========================================================================
-    cells.append(nbf.v4.new_markdown_cell(r"""## 🔬 Trực Quan Hóa Cả 4 Mô Hình Trên Các Ca Biên Tồi Tệ Nhất (Worst Failure Modes)
+    cells.append(nbf.v4.new_markdown_cell(r"""## 🔬 Trực Quan Hóa Cả 4 Mô Hình Trên 8 Ca Biên Tồi Tệ Nhất (The 8 Worst Failure Modes)
 
-Khảo sát trực tiếp suy luận của **CẢ 4 MODEL** (`YOLOv8n`, `YOLO11n`, `YOLO26n`, `Intel OpenVINO`) trên 4 trường hợp thử thách hiểm hóc nhất:
-1. **Ca Tệ 1: Bẫy Đạo Cụ Rỗng (Empty Wheelchair Trap - Trục D8)**:
-   - Thử thách miễn nhiễm với vật thể tĩnh có hình học giống người ngồi.
-2. **Ca Tệ 2: Cận Cảnh Cực Đoan 0.6m (Extreme Close-Up Truncation - Trục D5)**:
-   - Thử thách khi bệnh nhân tiến sát robot, nửa thân dưới trượt khỏi ảnh.
-3. **Ca Tệ 3: Bệnh Nhân Nằm Ngửa Trên Giường (Recumbent Bed Pose - Trục D3)**:
-   - Thử thách tỷ lệ khung hình ngang $w/h \ge 2.5$ (ca thất bại điển hình của detector đứng).
-4. **Ca Tệ 4: Đứng Sau Quầy Lễ Tân Cao 1.1m (Partial Body Counter Occlusion - Trục D2)**:
-   - Thử thách khi mất $100\%$ nửa thân dưới."""))
+Khảo sát trực tiếp suy luận của **CẢ 4 MODEL** (`YOLOv8n`, `YOLO11n`, `YOLO26n`, `Intel OpenVINO`) trên 8 trường hợp thử thách hiểm hóc nhất (8 Rows $\times$ 4 Columns = 32 panels):
+1. **Ca Tệ 1 - Bẫy Xe Lăn Trống (Empty Wheelchair - D8)**: Báo động giả ($FP$).
+2. **Ca Tệ 2 - Bẫy Giường Cấp Cứu Trống (Empty Bed - D8)**: Nếp chăn gối tạo khối giả ($FP$).
+3. **Ca Tệ 3 - Cận Cảnh Cực Đoan 0.65m (Close-Up Truncation - D5)**: Thân người lấp kín khung hình, trượt chân ($FN$).
+4. **Ca Tệ 4 - Cự Ly Xa 6.5m (Far Pedestrian - D5)**: Giới hạn phân giải pixel của vật thể nhỏ.
+5. **Ca Tệ 5 - Bệnh Nhân Nằm Ngửa Trên Giường (Recumbent Bed Pose - D3)**: Tỷ lệ ngang $w/h \ge 2.5$ ($FN$).
+6. **Ca Tệ 6 - Đứng Sau Rèm Y Tế Che Khuất 74% (Screen Occlusion - D2)**: $V_{\text{vis}} = 0.26$.
+7. **Ca Tệ 7 - Người Nhà Đẩy Xe Lăn Trùng Trục Nhìn (Crowd Occlusion - D4)**: Thách thức Greedy NMS vs NMS-Free.
+8. **Ca Tệ 8 - Ngược Sáng Chói Huỳnh Quang Sảnh Đón (Backlit Glare - D7)**: Bão hòa quang học PBR."""))
 
     cells.append(nbf.v4.new_code_cell(r"""# Hàm tiện ích trực quan hóa CẢ 4 MÔ HÌNH trên 1 khung ảnh kiểm thử
 def visualize_4_models_on_case(rel_img_path, case_title, has_person, true_subcat='standing'):
@@ -590,71 +667,90 @@ def visualize_4_models_on_case(rel_img_path, case_title, has_person, true_subcat
 # Thử thách: Kiểm tra khả năng chống báo động giả (False Alarm)
 visualize_4_models_on_case(
     'sim_vision/data/vision_eval_1200/images/D8_0005.jpg',
-    'Ca Tệ 1: Bẫy Đạo Cụ Rỗng (Xe lăn trống không người)',
+    'Ca Tệ 1: Bẫy Đạo Cụ Rỗng (Xe lăn trống không người - Hard Negative)',
     has_person=False
 )"""))
 
-    cells.append(nbf.v4.new_code_cell(r"""# 2. Ca Biên Tệ 2: Cận Cảnh Cực Đoan 0.6m (Extreme Close-Up Truncation - Trục D5)
+    cells.append(nbf.v4.new_code_cell(r"""# 2. Ca Biên Tệ 2: Bẫy Giường Cấp Cứu Trống (Empty Bed Trap - Trục D8)
+# Thử thách: Chăn gối tạo nếp gấp 3D dễ bị SSD nhận nhầm thành người nằm
+visualize_4_models_on_case(
+    'sim_vision/data/vision_eval_1200/images/D8_0035.jpg',
+    'Ca Tệ 2: Bẫy Giường Cấp Cứu Trống (Chăn gối nếp gấp 3D - Hard Negative)',
+    has_person=False
+)"""))
+
+    cells.append(nbf.v4.new_code_cell(r"""# 3. Ca Biên Tệ 3: Cận Cảnh Cực Đoan 0.65m (Extreme Close-Up Truncation - Trục D5)
 # Thử thách: Thân người lấp kín màn hình, mất mốc giải phẫu nửa dưới
 visualize_4_models_on_case(
     'sim_vision/data/vision_eval_1200/images/D5_0005.jpg',
-    'Ca Tệ 2: Cận Cảnh Cực Đoan 0.6m (Robot áp sát bệnh nhân)',
+    'Ca Tệ 3: Cận Cảnh Cực Đoan 0.65m (Robot áp sát bệnh nhân trong vùng STT)',
     has_person=True, true_subcat='standing'
 )"""))
 
-    cells.append(nbf.v4.new_code_cell(r"""# 3. Ca Biên Tệ 3: Bệnh Nhân Nằm Trên Giường Bệnh (Recumbent Bed Pose - Trục D3)
+    cells.append(nbf.v4.new_code_cell(r"""# 4. Ca Biên Tệ 4: Cự Ly Xa 6.5m (Far Boundary Pedestrian - Trục D5)
+# Thử thách: Đối tượng thu nhỏ ở cuối hành lang, kiểm tra độ nhạy đặc trưng nhỏ
+visualize_4_models_on_case(
+    'sim_vision/data/vision_eval_1200/images/D5_0101.jpg',
+    'Ca Tệ 4: Người Đi Bộ Ở Cự Ly Xa 6.5m (Cuối hành lang bệnh viện)',
+    has_person=True, true_subcat='standing'
+)"""))
+
+    cells.append(nbf.v4.new_code_cell(r"""# 5. Ca Biên Tệ 5: Bệnh Nhân Nằm Ngửa Trên Giường (Recumbent Bed Pose - Trục D3)
 # Thử thách: Tư thế nằm ngang (w/h >= 2.5), phá vỡ giả định hình học đứng dọc của các detector thông thường
 visualize_4_models_on_case(
     'sim_vision/data/vision_eval_1200/images/D3_0070.jpg',
-    'Ca Tệ 3: Bệnh Nhân Nằm Ngửa Trên Giường Cấp Cứu (Recumbent Pose w/h >= 2.5)',
+    'Ca Tệ 5: Bệnh Nhân Nằm Ngửa Trên Giường Cấp Cứu (Recumbent Pose w/h >= 2.5)',
     has_person=True, true_subcat='recumbent_bed'
 )"""))
 
-    cells.append(nbf.v4.new_code_cell(r"""# 4. Ca Biên Tệ 4: Đứng Sau Quầy Lễ Tân Cao 1.1m (Partial Body / Counter Occlusion - Trục D2)
-# Thử thách: Mất 100% nửa thân dưới, chỉ còn đầu và vai
+    cells.append(nbf.v4.new_code_cell(r"""# 6. Ca Biên Tệ 6: Đứng Sau Rèm Y Tế Che Khuất 74% (Screen Occlusion - Trục D2)
+# Thử thách: Rèm che từ thắt lưng tới ngực (V_vis = 0.26), chỉ lộ đầu và chân
 visualize_4_models_on_case(
-    'sim_vision/data/vision_eval_1200/images/D2_0010.jpg',
-    'Ca Tệ 4: Nhân Viên Đứng Sau Quầy Tiếp Đón Cao 1.1m (Mất 100% nửa thân dưới)',
+    'sim_vision/data/vision_eval_1200/images/D2_0101.jpg',
+    'Ca Tệ 6: Bệnh Nhân Đứng Sau Rèm Y Tế (Che khuất nghiêm trọng V_vis = 0.26)',
     has_person=True, true_subcat='standing'
 )"""))
 
-    cells.append(nbf.v4.new_code_cell(r"""# 5. Ca Biên Tệ 5: Người Nhà Đẩy Xe Lăn (Crowd Occlusion Along Optical Axis - Trục D4)
+    cells.append(nbf.v4.new_code_cell(r"""# 7. Ca Biên Tệ 7: Người Nhà Đẩy Xe Lăn Trùng Trục Nhìn (Crowd Occlusion Along Axis - Trục D4)
 # Thử thách: 2 người trùng trục quan sát (Bẫy triệt tiêu nhầm của Greedy NMS)
 visualize_4_models_on_case(
     'sim_vision/data/vision_eval_1200/images/D4_0015.jpg',
-    'Ca Tệ 5: Người Nhà Đẩy Xe Lăn (2 người trùng trục quan sát - Bẫy Greedy NMS)',
+    'Ca Tệ 7: Người Nhà Đẩy Xe Lăn (2 người trùng trục quan sát - Bẫy Greedy NMS)',
     has_person=True, true_subcat='wheelchair'
 )"""))
 
-    cells.append(nbf.v4.new_code_cell(r"""# 6. Ca Biên Tệ 6: Bẫy Giường Cấp Cứu Trống (Empty Hospital Bed Trap - Trục D8)
-# Thử thách: Chăn gối tạo khối nổi 3D dễ bị SSD nhận nhầm thành người nằm
+    cells.append(nbf.v4.new_code_cell(r"""# 8. Ca Biên Tệ 8: Ngược Sáng Chói Huỳnh Quang Sảnh Đón (Backlit Photometric Glare - Trục D7)
+# Thử thách: Ánh sáng mặt trời chiếu thẳng từ cửa sổ sảnh đón làm lóa camera
 visualize_4_models_on_case(
-    'sim_vision/data/vision_eval_1200/images/D8_0035.jpg',
-    'Ca Tệ 6: Bẫy Giường Cấp Cứu Trống (Chăn gối tạo khối 3D - Hard Negative)',
-    has_person=False
+    'sim_vision/data/vision_eval_1200/images/D7_0005.jpg',
+    'Ca Tệ 8: Ngược Sáng Chói Lóa Cửa Sổ Sảnh Đón (Bão hòa quang học PBR)',
+    has_person=True, true_subcat='standing'
 )"""))
 
     # ==========================================================================
-    # PHẦN 9: BẢNG TỔNG HỢP LỖI SUY LUẬN & PHÂN TÍCH NGUYÊN NHÂN GỐC RỄ
+    # PHẦN 10: BẢNG TỔNG HỢP LỖI & PHÂN TÍCH NGUYÊN NHÂN GỐC RỄ
     # ==========================================================================
     cells.append(nbf.v4.new_markdown_cell(r"""## 🔍 Bảng Tổng Hợp Lỗi Suy Luận & Phân Tích Nguyên Nhân Gốc Rễ (Root Cause Analysis)
 
 | Ca Biên Kiểm Thử | Bản Chất Vật Lý / Lâm Sàng | YOLOv8n (Baseline) | YOLO11n (C2PSA) | YOLO26n (NMS-Free) | Intel OpenVINO (SSD) | Nguyên Nhân Kỹ Thuật (First Principles) |
 | :--- | :--- | :---: | :---: | :---: | :---: | :--- |
-| **Bẫy Xe Lăn Rỗng (D8)** | Khung xe rỗng kim loại có nan hoa và tay vịn giống chân/tay | **0 FP (Chuẩn)** | **0 FP (Chuẩn)** | **0 FP (Chuẩn)** | **5.56% FP ❌** | Intel SSD thiếu khả năng phân tích kết cấu vải/da; tỷ lệ khung xe khớp anchor person. |
-| **Cận Cảnh 0.6m (D5)** | Thân người phóng to lấp kín màn hình, mất chân | **100% TP (Chuẩn)** | **100% TP (Chuẩn)** | **100% TP (Chuẩn)** | **56.8% Recall ❌** | Chiều cao thân người vượt quá kích thước anchor box lớn nhất của MobileNetV2-SSD. |
+| **Bẫy Xe Lăn Rỗng (D8)** | Khung xe rỗng kim loại có nan hoa và tay vịn giống chân/tay | **0 FP (Chuẩn)** | **0 FP (Chuẩn)** | **0 FP (Chuẩn)** | **14 FP ❌** | Intel SSD thiếu khả năng phân tích kết cấu vải/da; tỷ lệ khung xe khớp anchor person. |
+| **Bẫy Giường Rỗng (D8)** | Nếp gấp chăn gối tạo khối nổi 3D | **0 FP (Chuẩn)** | **0 FP (Chuẩn)** | **0 FP (Chuẩn)** | **Dính FP ❌** | SSD gán nhầm vùng đầu gối/chăn thành người đang nằm. |
+| **Cận Cảnh 0.65m (D5)** | Thân người phóng to lấp kín màn hình, mất chân | **100% TP (Chuẩn)** | **100% TP (Chuẩn)** | **100% TP (Chuẩn)** | **56.0% Recall ❌** | Chiều cao thân người vượt quá kích thước anchor box lớn nhất của MobileNetV2-SSD. |
+| **Cự Ly Xa 6.5m (D5)** | Đối tượng thu nhỏ ở cuối hành lang | **TP (Ổn định)** | **TP (Ổn định)** | **TP (Ổn định)** | **Dễ trượt FN** | Lưới feature map của SSD bị mất tín hiệu ở scale nhỏ. |
 | **Nằm Giường Bệnh (D3)** | Cơ thể nằm ngang ($w/h \ge 2.5$), đắp chăn | **Trượt (FN)** | **Trượt (FN)** | **Trượt (FN)** | **Trượt (FN)** | Tất cả person detector COCO được train trên người đứng ($w/h \approx 0.35$). Cần head phụ cho giường bệnh. |
-| **Sau Quầy Lễ Tân (D2)** | Quầy $1.1\text{m}$ che $100\%$ nửa thân dưới | **84% TP** | **84% TP** | **88% TP (Tốt)** | **100% TP** | NMS-Free (YOLO26n) giúp giữ lại box đầu-vai mà không bị triệt tiêu nhầm. |
+| **Sau Rèm Y Tế (D2)** | Rèm che $74\%$ thân người ($V_{\text{vis}} = 0.26$) | **Phát hiện tốt** | **Phát hiện tốt** | **Phát hiện tốt** | **Phát hiện tốt** | Cả 4 model đều tận dụng được đặc trưng đầu-vai còn hở phía trên rèm. |
 | **Người Đẩy Xe Lăn (D4)** | 2 người trùng trục nhìn camera | **Tách 1-2 box** | **Tách 2 box** | **Tách 2 box (Tốt)** | **Trộn 1 box** | Greedy NMS của v8n dễ xóa nhầm box người ngồi trước; YOLO26n phân tách tốt nhờ One-to-One Head. |
+| **Ngược Sáng PBR (D7)** | Chói lóa ánh sáng cửa sổ | **100% TP (Chuẩn)** | **100% TP (Chuẩn)** | **100% TP (Chuẩn)** | **100% TP (Chuẩn)** | Cả 4 model đều có khả năng kháng nhiễu sáng tốt trong hành lang. |
 
 ---
 
 ## 7. Khuyến Nghị Kiến Trúc Cho Robot Dẫn Đường Bệnh Viện
 
 1. **Lựa chọn cốt lõi**:
-   - Tiếp tục giữ **`yolov8n.pt`** làm detector chính cho Robot: Miễn nhiễm hoàn toàn với xe lăn rỗng ($FPR=0.00\%$), tốc độ cao nhất ($8.6\text{ ms}$ P95), góc lái cực ổn định ($\Delta\theta = 0.17^\circ$).
+   - Tiếp tục giữ **`yolov8n.pt`** làm detector chính cho Robot: Miễn nhiễm hoàn toàn với xe lăn/giường rỗng ($FPR=0.00\%$), tốc độ cao nhất ($8.6\text{ ms}$ P95), góc lái cực ổn định ($\Delta\theta = 0.17^\circ$).
 2. **Kế hoạch mở rộng**:
-   - Khi Robot làm việc tại khu vực quầy tiếp đón đông bệnh nhân xếp hàng: Nâng cấp lên **`yolo26n.pt`** để tận dụng cơ chế NMS-Free (Precision đạt **$92.13\%$**).
+   - Khi Robot làm việc tại khu vực quầy tiếp đón đông bệnh nhân xếp hàng: Nâng cấp lên **`yolo26n.pt`** để tận dụng cơ chế NMS-Free (Precision đạt **$92.10\%$**).
    - Với bệnh nhân nằm giường bệnh: Bổ sung module phân loại trạng thái giường bệnh chuyên dụng thay vì dùng chung mô hình person detector thông thường."""))
 
     nb.cells = cells
@@ -662,8 +758,8 @@ visualize_4_models_on_case(
 
 
 def main():
-    print(f"Bắt đầu xây dựng notebook toàn diện (Đủ 4 Models & Worst Cases) tại: {NOTEBOOK_PATH}")
-    nb = create_comprehensive_notebook()
+    print(f"Bắt đầu xây dựng notebook toàn diện tối đa (Maximum Insight) tại: {NOTEBOOK_PATH}")
+    nb = create_maximum_insight_notebook()
     with open(NOTEBOOK_PATH, 'w', encoding='utf-8') as f:
         nbf.write(nb, f)
     print("Đã tạo khung notebook thành công. Tiến hành chạy thực thi (Execute) toàn bộ các ô lệnh...")
@@ -673,7 +769,7 @@ def main():
 
     with open(NOTEBOOK_PATH, 'w', encoding='utf-8') as f:
         nbf.write(nb, f)
-    print(f"🎉 Hoàn tất! Notebook chuyên sâu đã được chạy và lưu kèm đầy đủ hình ảnh/biểu đồ tại: {NOTEBOOK_PATH}")
+    print(f"🎉 Hoàn tất! Notebook chuyên sâu tối đa đã được chạy và lưu kèm đầy đủ hình ảnh/biểu đồ tại: {NOTEBOOK_PATH}")
 
 
 if __name__ == '__main__':

@@ -12,16 +12,22 @@ enum CameraMode { FOLLOW, TOP_DOWN, LOBBY }
 const START_CLEARANCE: float = 0.6      # G8.1: get_free_position(0.6)
 const MIN_START_SEPARATION: float = 3.0 # G8.1: robot cách người ≥ 3 m
 const MAX_PLACEMENT_TRIES: int = 100
+const RLEnvBridgeScript = preload("res://scripts/rl_env_bridge.gd")
+const RLControllerScript = preload("res://scripts/rl_controller.gd")
 
 @warning_ignore("shadowed_global_identifier")
 @export var seed: int = -1              # −1 = ngẫu nhiên
 @export var controller_path: NodePath = ^"Controller"
+@export var use_rl_controller: bool = false
 
 var state: int = Config.RobotState.SEARCH
 var camera_mode: int = CameraMode.FOLLOW
+var camera_orbit_angle: float = 0.0
+const CAMERA_ORBIT_SPEED: float = 2.0
 
 var _rng := RandomNumberGenerator.new()
 var _controller: Node
+var _rl_bridge: Node = null
 var _connected: bool = false
 var _last_seen_ms: int = -1             # −1 = chưa thấy người lần nào
 var _last_result_ms: int = -1
@@ -44,7 +50,22 @@ var _transparent_wall_mat: StandardMaterial3D
 
 
 func _ready() -> void:
-	_controller = get_node(controller_path)
+	for arg: String in OS.get_cmdline_user_args() + OS.get_cmdline_args():
+		if arg == "--controller=rl" or arg == "--rl":
+			use_rl_controller = true
+	if use_rl_controller:
+		var rl_ctrl: Node = RLControllerScript.new()
+		rl_ctrl.name = "RLController"
+		add_child(rl_ctrl)
+		_controller = rl_ctrl
+		_rl_bridge = RLEnvBridgeScript.new()
+		_rl_bridge.name = "RLEnvBridge"
+		add_child(_rl_bridge)
+		_rl_bridge.setup(robot, room)
+		if dialogue != null:
+			dialogue.turn_completed.connect(_on_dialogue_turn_completed)
+	else:
+		_controller = get_node(controller_path)
 	if seed >= 0:
 		_rng.seed = seed
 	else:
@@ -56,6 +77,7 @@ func _ready() -> void:
 	_start_ms = Time.get_ticks_msec()
 	if logger != null:
 		logger.open()
+	_setup_hospital_npcs()
 	reset_positions()
 	_update_viewer_camera()
 
@@ -69,18 +91,79 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif key.keycode == KEY_C:
 		camera_mode = (camera_mode + 1) % 3
 		_update_viewer_camera()
+	elif key.keycode == KEY_A and not key.echo:
+		camera_orbit_angle += 0.25
+		_update_viewer_camera()
+	elif key.keycode == KEY_D and not key.echo:
+		camera_orbit_angle -= 0.25
+		_update_viewer_camera()
 	elif key.keycode == KEY_ESCAPE:
 		get_tree().quit()
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
+	if Input.is_key_pressed(KEY_A):
+		camera_orbit_angle += CAMERA_ORBIT_SPEED * delta
+	elif Input.is_key_pressed(KEY_D):
+		camera_orbit_angle -= CAMERA_ORBIT_SPEED * delta
 	_update_viewer_camera()
 	# Quá LOST_TIMEOUT_S không có kết quả mới (nhưng vẫn kết nối) ➔ coi như không thấy ai.
 	var now: int = Time.get_ticks_msec()
 	if Main.is_dialogue_state(state):
 		return
+	if _rl_bridge != null and _rl_bridge.task_phase in [RLEnvBridgeScript.TaskPhase.GUIDE_ESCORT, RLEnvBridgeScript.TaskPhase.CALL_STAFF]:
+		return
 	if _connected and _last_result_ms >= 0 and now - _last_result_ms > int(Config.LOST_TIMEOUT_S * 1000.0):
 		_apply(_controller.step(state, [], _time_since_seen_s(now)))
+
+
+func _physics_process(delta: float) -> void:
+	if _rl_bridge == null:
+		return
+	if _rl_bridge.task_phase == RLEnvBridgeScript.TaskPhase.GUIDE_ESCORT:
+		RLEnvBridgeScript.step_escorted_patient(human, robot.global_position, delta)
+		var d_goal: float = Human.flat_distance(robot.global_position, _rl_bridge.goal_position)
+		var d_tether: float = Human.flat_distance(robot.global_position, human.global_position)
+		var d_patient_goal: float = Human.flat_distance(human.global_position, _rl_bridge.goal_position)
+		if d_goal <= RLEnvBridgeScript.GOAL_ARRIVE_ROBOT_M and d_patient_goal <= RLEnvBridgeScript.GOAL_ARRIVE_PATIENT_M:
+			robot.set_command(0.0, 0.0)
+			_rl_bridge.cumulative_team_reward += RLEnvBridgeScript.REWARD_GUIDE_ARRIVED
+			_rl_bridge.patients_helped += 1
+			_rl_bridge.task_phase = RLEnvBridgeScript.TaskPhase.SEARCH_PATIENT
+			overlay.set_status("Đã dẫn tới: %s (R_team=%.0f)" % [_rl_bridge.goal_key, _rl_bridge.cumulative_team_reward])
+			reset_positions()
+			return
+		var cmd_vec: Vector2 = RLControllerScript.step_towards_goal_with_lidar(
+			robot.global_position, robot.rotation.y, _rl_bridge.goal_position, robot.get_lidar_readings(), d_tether, true
+		)
+		robot.set_command(cmd_vec.x, cmd_vec.y)
+	elif _rl_bridge.task_phase == RLEnvBridgeScript.TaskPhase.CALL_STAFF:
+		var d_goal: float = Human.flat_distance(robot.global_position, _rl_bridge.goal_position)
+		if d_goal <= RLEnvBridgeScript.GOAL_ARRIVE_ROBOT_M:
+			robot.set_command(0.0, 0.0)
+			_rl_bridge.cumulative_team_reward += RLEnvBridgeScript.REWARD_CALL_STAFF
+			_rl_bridge.patients_helped += 1
+			_rl_bridge.task_phase = RLEnvBridgeScript.TaskPhase.SEARCH_PATIENT
+			overlay.set_status("Đã báo nhân viên y tế (R_team=%.0f)" % _rl_bridge.cumulative_team_reward)
+			reset_positions()
+			return
+		var cmd_vec: Vector2 = RLControllerScript.step_towards_goal_with_lidar(
+			robot.global_position, robot.rotation.y, _rl_bridge.goal_position, robot.get_lidar_readings(), 0.0, false
+		)
+		robot.set_command(cmd_vec.x, cmd_vec.y)
+
+
+func _on_dialogue_turn_completed(row: Dictionary) -> void:
+	if _rl_bridge == null:
+		return
+	var act: String = str(row.get("action", ""))
+	var target_key: String = str(row.get("target", ""))
+	if act == "guide" or act == "call_staff" or act == "emergency":
+		_rl_bridge.begin_post_dialogue_task(act, target_key, 1, human)
+	elif act in ["answer", "repeat", "refuse", "adjust"]:
+		_rl_bridge.cumulative_team_reward += RLEnvBridgeScript.REWARD_ANSWER
+		_rl_bridge.patients_helped += 1
+		overlay.set_status("Đã hỗ trợ bệnh nhân (R_team=%.0f)" % _rl_bridge.cumulative_team_reward)
 
 
 func _update_viewer_camera() -> void:
@@ -91,7 +174,11 @@ func _update_viewer_camera() -> void:
 	match camera_mode:
 		CameraMode.FOLLOW:
 			var cam_target := robot.global_position + Vector3(0.0, 0.8, 0.0)
-			var cam_pos := robot.global_position + Vector3(0.0, 2.0, 2.4)
+			var orbit_dist: float = 2.4
+			var orbit_height: float = 1.2
+			var ox: float = sin(camera_orbit_angle) * orbit_dist
+			var oz: float = cos(camera_orbit_angle) * orbit_dist
+			var cam_pos := cam_target + Vector3(ox, orbit_height, oz)
 			cam_pos.x = clampf(cam_pos.x, -11.5, 11.5)
 			cam_pos.y = clampf(cam_pos.y, 0.8, 2.8)
 			cam_pos.z = clampf(cam_pos.z, -8.5, 8.5)
@@ -216,6 +303,29 @@ func human_distance() -> float:
 	return Human.flat_distance(robot.global_position, human.global_position)
 
 
+func _setup_hospital_npcs() -> void:
+	if human != null:
+		human.setup_robot(robot)
+	var furn: Node = room.get_node_or_null(^"Furniture") if room != null else null
+	if furn != null:
+		for child: Node in furn.get_children():
+			if child is HospitalNpc:
+				var h_npc := child as HospitalNpc
+				h_npc.setup_robot(robot, func() -> int: return state)
+				if dialogue != null and h_npc.has_npc():
+					dialogue.register_npc(h_npc.get_npc())
+
+
+func _nearest_person_distance() -> float:
+	var d: float = human_distance()
+	var furn: Node = room.get_node_or_null(^"Furniture") if room != null else null
+	if furn != null:
+		for child: Node in furn.get_children():
+			if child is HospitalNpc:
+				d = minf(d, Human.flat_distance(robot.global_position, (child as Node3D).global_position))
+	return d
+
+
 ## Góc thật tới người so với hướng trước của robot (−Z), dương khi người bên trái.
 func human_angle_deg() -> float:
 	return RunLogger.signed_angle_deg(-robot.global_transform.basis.z, human.global_position - robot.global_position)
@@ -245,6 +355,8 @@ func _on_detections(frame_id: int, dets: Array, infer_ms: float) -> void:
 	if Main.is_dialogue_state(state):
 		cmd = {"state": state, "v": 0.0, "omega": 0.0, "target": {}}
 		robot.set_command(0.0, 0.0)
+	elif _rl_bridge != null and _rl_bridge.task_phase in [RLEnvBridgeScript.TaskPhase.GUIDE_ESCORT, RLEnvBridgeScript.TaskPhase.CALL_STAFF]:
+		cmd = {"state": state, "v": robot.v, "omega": robot.omega, "target": {}}
 	else:
 		cmd = _apply(_controller.step(state, dets, _time_since_seen_s(now)))
 	overlay.show_detections(dets, Config.state_name(state), _connected)
@@ -279,8 +391,16 @@ func set_dialogue_state(s: int) -> void:
 
 ## Áp an toàn rồi gửi lệnh cho robot; trả lệnh cuối cùng.
 func _apply(cmd: Dictionary) -> Dictionary:
-	var safe: Dictionary = Main.apply_safety(cmd, human_distance(), robot.front_obstacle_distance())
+	var dist_human: float = _nearest_person_distance()
+	var dist_obstacle: float = robot.front_obstacle_distance()
+	var safe: Dictionary = Main.apply_safety(cmd, dist_human, dist_obstacle)
 	state = safe["state"]
+	if state == Config.RobotState.APPROACH:
+		var target: Dictionary = cmd.get("target", {})
+		var h_box: float = (float(target["y2"]) - float(target["y1"])) if (not target.is_empty() and target.has("y2")) else 0.0
+		if dist_human <= Config.SAFE_DIST_HUMAN + 0.35 or (safe["v"] == 0.0 and (dist_human <= Config.TALK_TRIGGER_DIST or h_box >= 0.45)):
+			state = Config.RobotState.ARRIVED
+			safe["state"] = Config.RobotState.ARRIVED
 	robot.set_command(safe["v"], safe["omega"])
 	return safe
 

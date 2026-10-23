@@ -55,7 +55,7 @@ offset_left = 16.0
 offset_top = 16.0
 offset_right = 460.0
 offset_bottom = 40.0
-text = "R: đặt lại vị trí   C: đổi góc nhìn   Esc: thoát"
+text = "R: đặt lại   C: đổi góc nhìn   A/D: xoay camera   Esc: thoát"
 
 [node name="Subtitle" parent="UI" unique_id=2117764636 instance=ExtResource("12")]
 grow_horizontal = 2

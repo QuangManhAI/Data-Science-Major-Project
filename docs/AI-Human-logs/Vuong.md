@@ -3,10 +3,10 @@
 - **Motivation/Background**: Captures architectural, toolchain, and model selection choices made during AI-assisted development to ensure long-term auditability and prevent unrecorded drift.
 - **Purpose**: Maintain an immutable, attributable provenance log of decisions for the hospital navigation robot project.
 - **Overview Pipeline**: Follows the decision log convention defined in `agents/templates/DECISION_LOG_TEMPLATE.md` and metadata header rules in `agents/rules/MD_CONVENTION.md`.
-- **Detailed Plan**: §1 Decision Index Table; §2 Decision Log Entries (D-001 to D-016).
+- **Detailed Plan**: §1 Decision Index Table; §2 Decision Log Entries (D-001 to D-019).
 - **References**: [agents/templates/DECISION_LOG_TEMPLATE.md](../../agents/templates/DECISION_LOG_TEMPLATE.md), [agents/rules/MD_CONVENTION.md](../../agents/rules/MD_CONVENTION.md).
 - **Created**: 2026-10-21T21:25:00+07:00
-- **Last Updated**: 2026-10-22T09:42:00+07:00
+- **Last Updated**: 2026-10-23T11:23:00+07:00
 
 ---
 
@@ -30,6 +30,13 @@
 | [D-014](#d-014--expansion-to-floor-1-vietnamese-hospital-environment) | Expansion to Floor-1 Vietnamese hospital environment (24m x 18m) | human | accepted |
 | [D-015](#d-015--hospital-room-enrichment-medical-pedal-waste-bins-and-refined-collisions) | Hospital room enrichment, medical pedal waste bins, and refined collisions | human | accepted |
 | [D-016](#d-016--camera-viewpoint-height-correction-and-automatic-ceiling-culling) | Camera viewpoint height correction and automatic ceiling culling | agent-proposed, human-approved | accepted |
+| [D-017](#d-017--vietnamese-medical-staff-npcs-waiting-patients-and-clinical-facility-props) | Vietnamese medical staff NPCs, waiting patients, and clinical facility props | human | accepted |
+| [D-018](#d-018--stt-startup-timeout-resilience-and-rocketbox-surface-material-mapping) | STT startup timeout resilience and Rocketbox surface material mapping | human | accepted |
+| [D-019](#d-019--elderly-patient-variants-and-walking-canes-for-old-patient-dominated-hospital) | Elderly patient variants and walking canes for old-patient-dominated hospital | human | accepted |
+| [D-020](#d-020--implement-phase-1-rl-training-plan-with-shared-team-reward-and-elderly-tether-pacing) | Implement Phase-1 RL training plan with shared team reward and elderly tether pacing | human | accepted |
+| [D-021](#d-021--25-epoch-ppo-training-run-on-cuda-and-10-shift-comprehensive-benchmark) | 25-Epoch PPO training run on CUDA and 10-shift comprehensive benchmark | human | accepted |
+| [D-022](#d-022--ad-camera-rotation-and-multi-npc-hospital-speech-support) | A/D camera rotation and multi-NPC hospital speech support | human | accepted |
+| [D-023](#d-023--fix-seated-patient-arrival-trigger-and-implement-two-stage-doorway-waypoint-navigation) | Fix seated patient arrival trigger and implement two-stage doorway waypoint navigation | human | accepted |
 
 ---
 
@@ -210,3 +217,104 @@
 - **Rejected:** Removing ceiling mesh entirely — ceiling is necessary for first-person robot camera and realistic interior lighting when inside rooms.
 - **Touches:** `sim_vision/godot/scripts/main.gd`, `sim_vision/godot/scripts/room.gd`, `sim_vision/godot/tests/test_room.gd`
 - **Evidence:** All 142/142 GUT tests pass; all 3 camera modes render interior hospital environments without roof clipping.
+
+### D-017 — Vietnamese medical staff NPCs, waiting patients, and clinical facility props
+- **Status:** accepted
+- **When:** 2026-10-23T08:40:00+07:00
+- **Decided by:** human
+- **Trigger:** "hey, add more NPC to our env, 2 medical staff (vietnam style, it can be the variant between doctor or nurse) 4 more patient, most of them waiting in the wainting rooms. Overall, we need more assests"
+- **Decision:** Add `HospitalNpc` (`sim_vision/godot/scripts/hospital_npc.gd`) and populate `room.tscn` with 2 Vietnamese-style medical staff (`MedicalStaffNurse` with white nurse cap and blue collar trim at reception, `MedicalStaffDoctor` in white lab coat in the corridor), seated waiting patients on lobby/corridor benches, and 8 hospital prop scenes (`queue_kiosk.tscn`, `queue_display.tscn`, `water_dispenser.tscn`, `sanitizer_stand.tscn`, `vital_monitor.tscn`, `iv_stand.tscn`, `stretcher_cart.tscn`, `info_standee.tscn`).
+- **Why:** Increases visual realism and obstacle density in the waiting lobby, corridor, Emergency 101, and Clinic 112 while automatically registering `StaticBody3D` footprints with `Room.get_furniture_footprints()`.
+- **Rejected:** Unrigged static mannequins without idle animations — lacks lifelike hospital atmosphere.
+- **Touches:** `sim_vision/godot/scripts/hospital_npc.gd`, `sim_vision/godot/scenes/room.tscn`, `sim_vision/godot/scenes/props/npc_medical_nurse.tscn`, `sim_vision/godot/scenes/props/npc_medical_doctor.tscn`, `sim_vision/godot/scenes/props/queue_kiosk.tscn`, `sim_vision/godot/scenes/props/queue_display.tscn`, `sim_vision/godot/scenes/props/water_dispenser.tscn`, `sim_vision/godot/scenes/props/sanitizer_stand.tscn`, `sim_vision/godot/scenes/props/vital_monitor.tscn`, `sim_vision/godot/scenes/props/iv_stand.tscn`, `sim_vision/godot/scenes/props/stretcher_cart.tscn`, `sim_vision/godot/scenes/props/info_standee.tscn`
+- **Evidence:** `test_has_medical_staff_and_waiting_patients_and_new_props` in `test_room.gd` passes.
+
+### D-018 — STT startup timeout resilience and Rocketbox surface material mapping
+- **Status:** accepted
+- **When:** 2026-10-23T10:15:00+07:00
+- **Decided by:** human
+- **Trigger:** "[Launcher] -> STT Server timed out after 60.0s!" / "the human model is broken"
+- **Decision:** Increase `wait_for_port` timeout in `run_simulation.py` from `60.0s` to `180.0s` with early `proc.poll()` crash detection, replace slow `AutoModelForSpeechSeq2Seq` lazy discovery in `transcriber.py` with direct `WhisperForConditionalGeneration` and `WhisperProcessor` imports, and map `HospitalNpc` mesh surfaces dynamically by FBX material name (`body`, `head`, `opacity`) using `TRANSPARENCY_ALPHA_HASH` and `CULL_DISABLED` on the hair/eyelash opacity layer.
+- **Why:** Concurrent cold-start loading of YOLOv8, VieNeu-TTS ONNX, and PhoASR-whisper-small exceeded 60s on Windows disk/CUDA initialization. Additionally, Rocketbox FBX meshes order surfaces as `[0: body, 1: head, 2: opacity]`, so hardcoding surface 0 as `head` mapped face textures onto the torso and body textures onto the hair/eyelash transparency layer.
+- **Rejected:** Hardcoding surface indices — balding avatars have 2 surfaces while standard avatars have 3 surfaces.
+- **Touches:** `run_simulation.py`, `sim_vision/python/voice/transcriber.py`, `sim_vision/python/voice/stt_server.py`, `sim_vision/godot/scripts/hospital_npc.gd`
+- **Evidence:** Forward+ viewport renders verified clean facial, clothing, and hair rendering across all NPCs; all 3 servers start and pass health checks.
+
+### D-019 — Elderly patient variants and walking canes for old-patient-dominated hospital
+- **Status:** accepted
+- **When:** 2026-10-23T10:49:00+07:00
+- **Decided by:** human
+- **Trigger:** "ok, now add more 2 patent but with model of old people, make a few varient of old patient, our hospital will be old patient dominated"
+- **Decision:** Expand seated waiting patients from 4 to 6 (`WaitingPatient1` to `WaitingPatient6`), with 5 distinct elderly patient variants (`npc_patient_f02.tscn` silver-haired woman in white sweater, `npc_patient_elder_m03.tscn` silver-haired man in tweed blazer, `npc_patient_elder_f09.tscn` silver-haired grandmother in brown cardigan, `npc_patient_m05.tscn` white-haired bearded man coughing in corridor, and `npc_patient_elder_m14.tscn` balding senior man) plus 3D wooden walking canes (`has_cane = true` in `HospitalNpc`).
+- **Why:** Reflects demographic reality where hospital outpatient waiting rooms are predominantly elderly patients with varied attire, hair, and mobility aids.
+- **Rejected:** Duplicating a single elderly model across multiple seats — looks repetitive and artificial.
+- **Touches:** `sim_vision/godot/scripts/hospital_npc.gd`, `sim_vision/godot/scenes/room.tscn`, `sim_vision/godot/scenes/props/npc_patient_elder_m03.tscn`, `sim_vision/godot/scenes/props/npc_patient_elder_f09.tscn`, `sim_vision/godot/scenes/props/npc_patient_elder_m14.tscn`, `sim_vision/godot/scenes/props/npc_patient_f02.tscn`, `sim_vision/godot/scenes/props/npc_patient_m05.tscn`, `sim_vision/godot/scenes/props/npc_patient_f08.tscn`, `sim_vision/godot/assets/CREDITS.md`, `sim_vision/godot/tests/test_room.gd`
+- **Evidence:** `Godot_v4.7.2-stable_win64_console.exe --headless --path sim_vision/godot -s addons/gut/gut_cmdln.gd -gtest=res://tests/test_room.gd -gexit` passes 145/145 tests (12,928 asserts) across all 14 test suites.
+
+
+### D-020 — Implement Phase-1 RL Training Plan with Shared Team Reward and Elderly Tether Pacing
+- **Status:** accepted
+- **When:** 2026-10-23T12:54:00+07:00
+- **Decided by:** human-approved via `/grill-me` alignment (`rl_training_plan.md`)
+- **Trigger:** "ok, draft up a plan for RL traning, we have 1 agents at first, a share reward of how many times it successful help the patient who in trouble, like asking for a place, a information, etc, ... robot should be able to walk patent to the destination they needed given that the location is appropritate, and answer appropritte question successfull or call for staff."
+- **Decision:** Implement Phase-1 RL system:
+  1. Add 17-ray horizontal 2D LiDAR fan (`200°` FOV, `6.0 m` range) on `Robot` (`robot.gd`).
+  2. Implement `RLEnvBridge` (`rl_env_bridge.gd`) and `RLController` (`rl_controller.gd`) with Smart Floor-1 destination routing (`101`, `110`, `112`, `nha_thuoc`, `tiep_don`, `nha_ve_sinh`, elevator `thang_may` for Floor 2–4 requests, and `staff` for emergency/staff calls), coupled elderly patient tether pacing (`0.48 m/s`, `2.5 m` limit), and shared team reward `R_team` (`+10` verbal answer, `+20` staff call, `+30` escort completed).
+  3. Implement Python RL training stack under `src/` following `LOGGING_CHECKPOINT_RULES.md`: `RunLogger` (`src/utils/run_logger.py`), full-state checkpointing with `weights_only=True` (`src/utils/checkpoint_utils.py`), Actor-Critic PPO (`src/models/ppo_agent.py`), fast 24m × 18m simulated shift environment (`src/training/hospital_env.py`), and CLI training entry point (`src/training/rl_hospital_train.py` supporting `--epochs`, `--seed`, `--stage`, `--resume`, `--force-resume`, `--tb`, `--smoke`).
+  4. Update `run_simulation.py` with `--controller {fsm,rl}` and `--rl-checkpoint` flags.
+- **Why:** Delivers robust, resumable, and safe continuous reinforcement learning for multi-patient hospital shifts while keeping the `R_team` reward function ready for multi-agent expansion without redesign.
+- **Rejected:** Monolithic end-to-end policy predicting words/intents from raw camera pixels — fragile, slow to train, and discards existing high-accuracy PhoWhisper/PhoBERT pipeline.
+- **Touches:** `sim_vision/godot/scripts/robot.gd`, `sim_vision/godot/scripts/main.gd`, `sim_vision/godot/scripts/rl_env_bridge.gd`, `sim_vision/godot/scripts/rl_controller.gd`, `sim_vision/godot/tests/test_rl_env.gd`, `src/utils/run_logger.py`, `src/utils/checkpoint_utils.py`, `src/models/ppo_agent.py`, `src/training/hospital_env.py`, `src/training/rl_hospital_train.py`, `sim_vision/python/test_rl_hospital.py`, `run_simulation.py`, `docs/RL_TRAINING_PLAN.md`
+- **Evidence:** All 5 Godot RL tests in `test_rl_env.gd` passed (81 asserts); all 11 `test_robot.gd` tests passed; all 10 `test_main.gd` tests passed; all 7 Python RL tests in `test_rl_hospital.py` passed (100%); CLI smoke training (`--smoke`), `--resume`, and `--force-resume` verified.
+
+
+### D-021 — 25-Epoch PPO Training Run on CUDA and 10-Shift Comprehensive Benchmark
+- **Status:** accepted
+- **When:** 2026-10-23T13:12:00+07:00
+- **Decided by:** human-approved via `/grill-me` alignment (`rl_full_training_plan.md`)
+- **Trigger:** "Full PPO Training Run & Evaluation (Train Phase-1 agent for 20-30 epochs, generate curves, evaluate metrics)"
+- **Decision:** Execute 25-epoch PPO training run on CUDA (`NVIDIA GeForce RTX 4060 Laptop GPU`) with 1,200 steps per epoch across the 2-stage curriculum (Stage 1: epochs 1–10 Lobby/Corridor; Stage 2: epochs 11–25 Full 6-room hospital). Run 10 evaluation shifts per stage, plot training curves to `experiments/plots/rl_training_curves.png`, and publish `experiments/results/rl_hospital/evaluation_report.md`.
+- **Why:** Confirms empirical convergence of the PPO policy under realistic multi-shift hospital dynamics, validates elderly patient tether regulation (> 86% compliance in Stage 1, > 71% in Stage 2), and provides publication-grade evaluation curves and checkpoint artifacts.
+- **Rejected:** Running on CPU without GPU acceleration — would increase wall-clock training time substantially.
+- **Touches:** `src/training/rl_hospital_train.py`, `src/training/benchmark_and_plot.py`, `experiments/results/rl_hospital/evaluation_report.md`, `experiments/results/README.md`, `experiments/plots/rl_training_curves.png`
+- **Evidence:** 25-epoch training completed in 250s with best validation $R_{\text{team}} = 27.50$ at Epoch 24; 10-shift benchmark completed with mean $R_{\text{team}} = 41.60 \pm 27.08$ and 11 patient escorts in Stage 2.
+
+
+### D-022 — A/D Camera Rotation and Multi-NPC Hospital Speech Support
+- **Status:** accepted
+- **When:** 2026-10-23T13:42:00+07:00
+- **Decided by:** human
+- **Trigger:** "1. when spectating the robot, add A-D key for camera rotations / 2. it seem that, except from the first ever NPC that we create, no other NPC/patient have the ability to speek"
+- **Decision:**
+  1. Add 360° camera orbit controls via `A` (orbit left/clockwise) and `D` (orbit right/counter-clockwise) keys in `CameraMode.FOLLOW` spectating mode on `Main` (`main.gd`) with smooth delta integration and keypress stepping, updating HUD help text in `main.tscn`.
+  2. Extend `HospitalNpc` (`hospital_npc.gd`) to automatically instantiate `Head/Voice` (`AudioStreamPlayer3D`) and an `Npc` dialogue component, mapping female textures to speaker `B` and male textures to speaker `A`.
+  3. Generalize `Npc` (`npc.gd`) to accept generic `Node3D` parents, allowing seated patients to initiate conversation without getting off benches while preserving full walk/rotation logic for walking NPCs.
+  4. Upgrade `DialogueManager` (`dialogue_manager.gd`) with multi-NPC registration (`register_npc`, `active_npc`), dynamically tracking whichever patient or medical staff member is currently speaking to the robot.
+- **Why:** Enables full rotational inspection of robot locomotion and LiDAR navigation from any spectating angle, and activates voice interactions for all hospital patients and staff rather than just the initial test avatar.
+- **Rejected:** Hardcoding camera angles — prevents user from checking blind spots behind doors and obstacles.
+- **Touches:** `sim_vision/godot/scenes/main.tscn`, `sim_vision/godot/scripts/main.gd`, `sim_vision/godot/scripts/npc.gd`, `sim_vision/godot/scripts/hospital_npc.gd`, `sim_vision/godot/scripts/dialogue_manager.gd`, `sim_vision/godot/scripts/rl_env_bridge.gd`
+- **Evidence:** `test_main.gd` passes 10/10 (328 asserts); `test_dialogue.gd` passes 21/21; `test_human.gd` passes 7/7; `test_rl_env.gd` passes 5/5; `test_room.gd` passes 12/12.
+
+
+### D-023 — Fix Seated Patient Arrival Trigger and Implement Two-Stage Doorway Waypoint Navigation
+- **Status:** accepted
+- **When:** 2026-10-23T15:45:00+07:00
+- **Decided by:** human
+- **Trigger:** "sitting patent still not talk, and the RL pathfinding still bad, do more traninig"
+- **Decision:**
+  1. Fix Seated Patient Arrival Trigger & Dialogue Initialization:
+     - In `Main` (`sim_vision/godot/scripts/main.gd`), update `_apply(cmd)`: when approaching a human and safely halted or within `Config.SAFE_DIST_HUMAN + 0.35` (or when velocity is zeroed at safe distance with bounding box height $h \ge 0.45$), transition `state` to `Config.RobotState.ARRIVED`. This solves the issue where seated patients (whose bounding box height is naturally $\approx 0.50$ vs standing $H_{\text{target}} = 0.85$) left the robot stuck in `APPROACH` with $v = 0.0$.
+     - Explicitly pass `func() -> int: return state` to all `HospitalNpc` instances during `_setup_hospital_npcs()` in `main.gd` rather than relying on `get_tree().current_scene`.
+     - In `HospitalNpc` (`sim_vision/godot/scripts/hospital_npc.gd`), accept optional `state_fn: Callable` in `setup_robot()`.
+     - In `Npc` (`sim_vision/godot/scripts/npc.gd`), in `_process()`, if the robot is approaching within $1.15\,\text{m}$ and stopped ($|v| < 0.05\,\text{m/s}$), safely evaluate `r_state = ARRIVED`, triggering `NOTICE` $\to$ `TALK`.
+     - Expand `_nearest_person_distance()` in `main.gd` to check all `HospitalNpc` children in `Furniture` (both seated and standing).
+  2. Implement Two-Stage Doorway Sub-Goal Waypoint Navigation for RL:
+     - In `RLController` (`sim_vision/godot/scripts/rl_controller.gd`) and `HospitalShiftEnv` (`src/training/hospital_env.py`): Implement `route_through_corridor_goal()` with two-stage doorway crossing:
+       a) First steer to the corridor doorway approach point $(door_x, -1.0)$ / $(door_x, 1.0)$.
+       b) Second steer across the threshold into the room $(door_x, -2.6)$ / $(door_x, 2.6)$ before targeting destination coordinates deep inside the room.
+     - Expand 17-ray LiDAR lookahead repulsion from $0.35\,\text{m}$ to $0.65\,\text{m}$ and add dynamic speed regulation (`speed_factor = clampf(center_min / 0.65, 0.35, 1.0)`), eliminating wall clipping and doorframe snags.
+     - Match `teacher_action()` in `hospital_env.py` to provide high-quality safe navigation trajectories during behavior cloning warm-up.
+- **Why:** Ensures all hospital patients (especially seated elderly patients on benches) immediately engage in voice dialogue upon robot arrival, and eliminates pathfinding collisions across room doorways.
+- **Rejected:** Lowering global $H_{\text{target}}$ to 0.50 — causes robot to stop too far from standing patients ($> 2.5\,\text{m}$).
+- **Touches:** `sim_vision/godot/scripts/main.gd`, `sim_vision/godot/scripts/hospital_npc.gd`, `sim_vision/godot/scripts/npc.gd`, `sim_vision/godot/scripts/rl_controller.gd`, `src/training/hospital_env.py`, `docs/AI-Human-logs/Vuong.md`
+- **Evidence:** 151/151 GUT unit tests passing (13,015 asserts, 0 failures); 30-epoch PPO training run (`PPOHospital-doorway-curriculum`) launched on RTX 4060 GPU with clean doorway clearance.

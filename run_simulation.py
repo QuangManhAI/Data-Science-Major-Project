@@ -128,16 +128,26 @@ def find_godot(explicit_path: Optional[str] = None) -> Optional[Path]:
     return None
 
 
-def wait_for_ws(port: int, host: str = "127.0.0.1", timeout: float = 60.0, desc: str = "") -> bool:
+def wait_for_ws(
+    port: int,
+    host: str = "127.0.0.1",
+    timeout: float = 180.0,
+    desc: str = "",
+    proc: Optional[subprocess.Popen] = None,
+) -> bool:
     """Wait until WebSocket server is ready and responds to handshake."""
     start = time.time()
     url = f"ws://{host}:{port}"
-    log(f"[Launcher] Waiting for {desc} on {url}...")
+    log(f"[Launcher] Waiting for {desc} on {url} (timeout={int(timeout)}s)...")
     while time.time() - start < timeout:
+        if proc is not None and proc.poll() is not None:
+            log(f"[Launcher] -> {desc} exited unexpectedly with code {proc.returncode}!")
+            return False
         try:
             from websockets.sync.client import connect
             with connect(url, open_timeout=1.0, close_timeout=1.0) as ws:
-                log(f"[Launcher] -> {desc} is ready!")
+                elapsed = time.time() - start
+                log(f"[Launcher] -> {desc} is ready! ({elapsed:.1f}s)")
                 return True
         except Exception:
             time.sleep(0.5)
@@ -180,6 +190,18 @@ def main() -> None:
         type=str,
         default=None,
         help="Optional Godot scene to launch (e.g. res://tools/dialogue_batch.tscn)",
+    )
+    parser.add_argument(
+        "--controller",
+        choices=["fsm", "rl"],
+        default="fsm",
+        help="Robot navigation controller mode ('fsm' rule-based or 'rl' RLController + RLEnvBridge)",
+    )
+    parser.add_argument(
+        "--rl-checkpoint",
+        type=str,
+        default=None,
+        help="Optional path to a trained RL checkpoint (.pt) loaded with weights_only=True",
     )
     args = parser.parse_args()
 
@@ -227,10 +249,10 @@ def main() -> None:
         log("[Launcher] TTS server disabled/skipped. Simulation will run in subtitle fallback mode.")
 
     # Wait for WebSocket servers to be healthy
-    ok_yolo = wait_for_ws(8765, desc="YOLO Server")
-    ok_stt = wait_for_ws(8766, desc="STT Server")
+    ok_yolo = wait_for_ws(8765, desc="YOLO Server", proc=yolo_proc)
+    ok_stt = wait_for_ws(8766, desc="STT Server", proc=stt_proc)
     if should_run_tts:
-        wait_for_ws(8767, desc="TTS Server")
+        wait_for_ws(8767, desc="TTS Server", proc=tts_proc)
 
     if not ok_yolo or not ok_stt:
         log("[Launcher] ERROR: One or more backend servers failed to start.")
@@ -257,10 +279,20 @@ def main() -> None:
         cleanup()
         sys.exit(1)
 
-    log(f"[Launcher] Launching Godot: {godot_exe}")
+    log(f"[Launcher] Launching Godot: {godot_exe} (controller={args.controller})")
     godot_cmd = [str(godot_exe), "--path", str(GODOT_DIR)]
     if args.scene:
         godot_cmd.append(args.scene)
+    if args.controller == "rl":
+        if args.rl_checkpoint:
+            from src.utils.checkpoint_utils import load_checkpoint
+
+            ckpt = load_checkpoint(args.rl_checkpoint)
+            log(
+                f"[Launcher] Loaded RL checkpoint: {args.rl_checkpoint} "
+                f"(epoch={ckpt.get('epoch')}, best_val_acc={ckpt.get('best_val_acc')})"
+            )
+        godot_cmd.extend(["--", "--controller=rl"])
 
     godot_proc = subprocess.Popen(godot_cmd)
     CHILD_PROCESSES.append(godot_proc)

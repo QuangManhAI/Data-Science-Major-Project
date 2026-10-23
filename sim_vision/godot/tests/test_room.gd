@@ -102,3 +102,52 @@ func test_distance_to_rect() -> void:
 	assert_almost_eq(Room.distance_to_rect(Vector2(3, 0.5), r), 1.0, 1e-6)
 	assert_almost_eq(Room.distance_to_rect(Vector2(1, -2), r), 2.0, 1e-6)
 	assert_almost_eq(Room.distance_to_rect(Vector2(5, 5), r), 5.0, 1e-6)
+
+
+func test_has_medical_staff_and_waiting_patients_and_new_props() -> void:
+	var furniture: Node = room.get_node_or_null(^"Furniture")
+	assert_not_null(furniture)
+	for staff_name: String in ["MedicalStaffNurse", "MedicalStaffDoctor"]:
+		var staff := furniture.get_node_or_null(NodePath(staff_name)) as HospitalNpc
+		assert_not_null(staff, "expected %s in Furniture" % staff_name)
+		assert_true(staff.staff_role in ["nurse", "doctor"])
+		assert_not_null(staff.get_node_or_null(^"RoleBadge"))
+	for i: int in range(1, 7):
+		var pat_name: String = "WaitingPatient%d" % i
+		var pat := furniture.get_node_or_null(NodePath(pat_name)) as HospitalNpc
+		assert_not_null(pat, "expected %s in Furniture" % pat_name)
+		assert_true(pat.is_seated, "%s should be seated" % pat_name)
+		assert_eq(pat.staff_role, "patient")
+	for prop_name: String in [
+		"LobbyQueueKiosk",
+		"LobbyWaterDispenser",
+		"LobbyInfoStandee",
+		"LobbySanitizerStand",
+		"CorridorSanitizerStand",
+		"EmergencyVitalMonitor",
+		"EmergencyIVStand",
+		"EmergencyStretcherCart",
+		"ClinicVitalMonitor",
+		"ClinicIVStand",
+	]:
+		assert_not_null(furniture.get_node_or_null(NodePath(prop_name)), "expected prop %s" % prop_name)
+
+func test_npc_walking_and_pardon_step_aside() -> void:
+	var furn: Node = room.get_node_or_null(^"Furniture")
+	var doc := furn.get_node_or_null(^"MedicalStaffDoctor") as HospitalNpc
+	assert_not_null(doc)
+	assert_true(doc.walks, "doctor should patrol corridor")
+	assert_true(doc.pardon_enabled, "doctor should have pardon enabled")
+	var p_target: Vector3 = HospitalNpc.compute_pardon_target(
+		Vector3(0.0, 0.0, 0.0), Vector3(-1.0, 0.0, 0.0), Vector3(1.0, 0.0, 0.0), 0.55
+	)
+	assert_almost_eq(absf(p_target.z), 0.55, 1e-4, "steps aside perpendicular to robot heading")
+	var fake_robot := Node3D.new()
+	add_child_autofree(fake_robot)
+	fake_robot.global_position = doc.global_position + Vector3(0.8, 0.0, 0.0)
+	doc.setup_robot(fake_robot)
+	await wait_physics_frames(3)
+	assert_true(doc.is_pardoning(), "doctor enters pardon state when robot is within trigger distance")
+	fake_robot.global_position = doc.global_position + Vector3(5.0, 0.0, 0.0)
+	await wait_physics_frames(3)
+	assert_false(doc.is_pardoning(), "doctor exits pardon state when robot moves away")

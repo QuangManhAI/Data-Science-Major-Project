@@ -208,6 +208,19 @@ python run_simulation.py
 
 ---
 
+### 📊 Interactive RL Training & Telemetry Web Dashboard
+
+Launch the real-time Gradio web dashboard to configure, train, monitor, and inspect RL policies:
+```bash
+python run_dashboard.py
+```
+- **Real-Time Live Telemetry**: Live updating multi-line graphs for Shared Team Reward ($R_{\text{team}}$), PPO/Imitation Loss, Shift Productivity (Patients Helped), and Safety/Collisions.
+- **Run Resumption & Inspection**: Select any previous run from a dropdown to immediately load historical curves and continue training with `--resume` or `--force-resume`.
+- **Configurable Flags**: Adjust epochs, steps, early-stopping patience, curriculum stage, CUDA GPU acceleration, and TensorBoard via checkboxes and sliders.
+- **Godot 3D Shortcut**: Instantly launch the visual 3D simulation with the selected run's best checkpoint.
+
+---
+
 ### Manual Launch (Separate Terminals)
 
 If you prefer running components individually in separate terminals:

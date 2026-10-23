@@ -37,6 +37,7 @@
 | [D-021](#d-021--25-epoch-ppo-training-run-on-cuda-and-10-shift-comprehensive-benchmark) | 25-Epoch PPO training run on CUDA and 10-shift comprehensive benchmark | human | accepted |
 | [D-022](#d-022--ad-camera-rotation-and-multi-npc-hospital-speech-support) | A/D camera rotation and multi-NPC hospital speech support | human | accepted |
 | [D-023](#d-023--fix-seated-patient-arrival-trigger-and-implement-two-stage-doorway-waypoint-navigation) | Fix seated patient arrival trigger and implement two-stage doorway waypoint navigation | human | accepted |
+| [D-024](#d-024--implement-gradio-web-dashboard-for-rl-training-control-live-telemetry-and-history-inspection) | Implement Gradio web dashboard for RL training control, live telemetry, and history inspection | human | accepted |
 
 ---
 
@@ -318,3 +319,20 @@
 - **Rejected:** Lowering global $H_{\text{target}}$ to 0.50 — causes robot to stop too far from standing patients ($> 2.5\,\text{m}$).
 - **Touches:** `sim_vision/godot/scripts/main.gd`, `sim_vision/godot/scripts/hospital_npc.gd`, `sim_vision/godot/scripts/npc.gd`, `sim_vision/godot/scripts/rl_controller.gd`, `src/training/hospital_env.py`, `docs/AI-Human-logs/Vuong.md`
 - **Evidence:** 151/151 GUT unit tests passing (13,015 asserts, 0 failures); 30-epoch PPO training run (`PPOHospital-doorway-curriculum`) launched on RTX 4060 GPU with clean doorway clearance.
+
+
+### D-024 — Implement Gradio Web Dashboard for RL Training Control, Live Telemetry, and History Inspection
+- **Status:** accepted
+- **When:** 2026-10-23T16:45:00+07:00
+- **Decided by:** human-approved via `/grill-me` alignment (`rl_ui_dashboard_plan.md`)
+- **Trigger:** "make me a UI that have those funtionality / 1. it can start the trainig either new or contnue from a previous runs, flags can be tick using tick box / 2. when training, its show in realtime, episode, avg reward, times, in grahp etc... / 3. when continuse the previous run, it load the previous run training grahpts, stats etc .."
+- **Decision:**
+  1. Build a Gradio 6.30 Web Dashboard (`src/ui/rl_dashboard.py`) and single-command launcher (`run_dashboard.py`).
+  2. Implement decoupled background subprocess execution (`start_training`, `stop_training`) streaming real-time metrics and logs with clean SIGINT/SIGTERM handling to preserve checkpoints.
+  3. Implement historical run inspection and dropdown loader (`find_existing_runs`, `inspect_run`) immediately rendering 4 multi-line charts (Reward, Loss, Productivity, Safety) and KPI cards from any past run under `experiments/runs/`.
+  4. Provide tick boxes and intuitive widgets for all training flags (`--device cuda`, `--resume`, `--force-resume`, `--tb`, `--smoke`, `--stage`).
+  5. Add Godot 3D quick-launch shortcut to directly spin up `run_simulation.py --controller rl --rl-checkpoint ...` with the selected run's checkpoint.
+- **Why:** Replaces manual terminal command typing with a modern visual controller, provides live visual feedback during continuous reinforcement learning, and allows instant comparative inspection of historical training runs without leaving the browser.
+- **Rejected:** Native Tkinter GUI (limited modern web-grade charting, desktop-only) or custom full-stack React app (unnecessary engineering overhead when Gradio 6.30 is already installed in root `.venv`).
+- **Touches:** `src/ui/rl_dashboard.py`, `run_dashboard.py`, `tests/test_dashboard.py`, `README.md`, `docs/AI-Human-logs/Vuong.md`
+- **Evidence:** 4/4 automated tests in `tests/test_dashboard.py` passed; `run_dashboard.py --help` verified; all 151 Godot GUT tests pass; verified loading of 80-epoch converged run (`PPOHospital-converged-80ep-full`) with peak $R_{\text{team}} = 103.0$ and 4.0 patients helped/shift.

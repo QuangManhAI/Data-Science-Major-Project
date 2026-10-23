@@ -109,12 +109,13 @@ def train_hospital_rl(
     ent_coef: float = 0.01,
     vf_coef: float = 0.5,
     bc_coef_init: float = 0.6,
-    patience: int = 12,
+    patience: int = 20,
     seed: int = 42,
     stage_override: int = 0,
+    val_episodes_override: int = 0,
     resume: bool = False,
     force_resume: bool = False,
-     resume_from: str | Path | None = None,
+    resume_from: str | Path | None = None,
     device_choice: str = "auto",
     enable_tb: bool = False,
     smoke: bool = False,
@@ -128,7 +129,7 @@ def train_hospital_rl(
         batch_size = 60
 
     shift_duration_s = 36.0 if smoke else 180.0
-    val_episodes = 2 if smoke else 4
+    val_episodes = 2 if smoke else (val_episodes_override if val_episodes_override > 0 else 2)
 
     existing_run_dir: Path | None = None
     if resume_from is not None:
@@ -258,8 +259,14 @@ def train_hospital_rl(
     )
 
     t0 = time.time()
+    prev_stage: int | None = None
     for epoch in range(start_epoch, epochs + 1):
         stage = stage_override if stage_override in (1, 2) else (1 if epoch <= max(1, int(0.4 * epochs)) else 2)
+        if prev_stage is not None and stage != prev_stage:
+            logger.info(f"Curriculum advanced from Stage {prev_stage} to Stage {stage}. Resetting patience counter.")
+            no_improve_epochs = 0
+            best_val_acc = -float("inf")
+        prev_stage = stage
         env.set_stage(stage)
         obs = env.reset(seed=seed + epoch * 17)
 
@@ -526,6 +533,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--run-name", type=str, default="PPOHospital-curriculum")
     parser.add_argument("--epochs", type=int, default=20)
     parser.add_argument("--steps-per-epoch", type=int, default=900)
+    parser.add_argument("--patience", type=int, default=20, help="Early stopping patience")
+    parser.add_argument("--val-episodes", type=int, default=2, help="Number of evaluation episodes per epoch")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--stage", type=int, default=0, choices=[0, 1, 2])
     parser.add_argument("--resume", action="store_true", help="Resume from latest <run_name>_last.pt")
@@ -546,6 +555,8 @@ def main(argv: list[str] | None = None) -> None:
         run_name=args.run_name,
         epochs=args.epochs,
         steps_per_epoch=args.steps_per_epoch,
+        patience=args.patience,
+        val_episodes_override=args.val_episodes,
         seed=args.seed,
         stage_override=args.stage,
         resume=args.resume,

@@ -36,8 +36,8 @@ var _rng := RandomNumberGenerator.new()
 var _was_walking: bool = false
 var _tween: Tween = null
 
-@onready var human: Human = get_parent() as Human
-@onready var player: AudioStreamPlayer3D = get_node(^"../Head/Voice")
+@onready var human: Node3D = get_parent() as Node3D
+var player: AudioStreamPlayer3D = null
 
 
 func _ready() -> void:
@@ -45,7 +45,14 @@ func _ready() -> void:
 		_rng.seed = seed
 	else:
 		_rng.randomize()
-	player.finished.connect(_on_audio_finished)
+	if player == null:
+		player = get_node_or_null(^"../Head/Voice") as AudioStreamPlayer3D
+	if player == null and human != null:
+		player = human.get_node_or_null(^"Head/Voice") as AudioStreamPlayer3D
+	if player == null and human != null:
+		player = human.get_node_or_null(^"Voice") as AudioStreamPlayer3D
+	if player != null and not player.finished.is_connected(_on_audio_finished):
+		player.finished.connect(_on_audio_finished)
 
 
 func setup(robot_node: Node3D, state_fn: Callable) -> void:
@@ -143,7 +150,8 @@ static func load_voice(id: String, dir: String = VOICES_DIR) -> AudioStream:
 func reset() -> void:
 	if _tween != null:
 		_tween.kill()
-	player.stop()
+	if player != null:
+		player.stop()
 	if state != IDLE:
 		_resume_walking()
 	state = IDLE
@@ -187,15 +195,21 @@ func on_reply_shown() -> void:
 
 func _notice() -> void:
 	state = NOTICE
-	_was_walking = human.walks
-	human.walks = false
-	human.velocity = Vector3.ZERO
-	var target: float = Npc.yaw_towards(human.global_position, robot.global_position)
-	var end_yaw: float = human.rotation.y + Npc.shortest_turn(human.rotation.y, target)
-	_tween = create_tween()
-	_tween.tween_property(human, ^"rotation:y", end_yaw, Config.TURN_DURATION_S) \
-			.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-	_tween.finished.connect(_start_talk)
+	_was_walking = bool(human.get("walks")) if human != null and human.get("walks") != null else false
+	if human != null:
+		human.set("walks", false)
+		if human.get("velocity") != null:
+			human.set("velocity", Vector3.ZERO)
+	var is_seated_val: bool = bool(human.get("is_seated")) if human != null and human.get("is_seated") != null else false
+	if is_seated_val:
+		_start_talk()
+	else:
+		var target: float = Npc.yaw_towards(human.global_position, robot.global_position)
+		var end_yaw: float = human.rotation.y + Npc.shortest_turn(human.rotation.y, target)
+		_tween = create_tween()
+		_tween.tween_property(human, ^"rotation:y", end_yaw, Config.TURN_DURATION_S) \
+				.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+		_tween.finished.connect(_start_talk)
 
 
 func _start_talk() -> void:
@@ -218,10 +232,16 @@ func _start_talk() -> void:
 	if _used_intents.size() >= _distinct_intents():
 		_used_intents.clear()
 	state = TALK
-	var anim: AnimationPlayer = human.get_node(^"AnimationPlayer")
-	anim.play(TALK_ANIM if anim.has_animation(TALK_ANIM) else IDLE_ANIM, 0.3)
-	player.stream = stream
-	player.play()
+	var anim: AnimationPlayer = human.get_node_or_null(^"AnimationPlayer") as AnimationPlayer if human != null else null
+	if anim == null and human != null:
+		var model_node: Node3D = human.get_node_or_null(^"Model") as Node3D
+		if model_node != null:
+			anim = model_node.get_node_or_null(^"AnimationPlayer") as AnimationPlayer
+	if anim != null and anim.has_animation(TALK_ANIM):
+		anim.play(TALK_ANIM, 0.3)
+	if player != null:
+		player.stream = stream
+		player.play()
 	talk_started.emit(id)
 
 
@@ -240,7 +260,8 @@ func _on_audio_finished() -> void:
 
 
 func _resume_walking() -> void:
-	human.walks = _was_walking
+	if human != null and human.get("walks") != null:
+		human.set("walks", _was_walking)
 
 
 func _distinct_intents() -> int:

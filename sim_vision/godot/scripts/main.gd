@@ -22,6 +22,8 @@ const RLControllerScript = preload("res://scripts/rl_controller.gd")
 
 var state: int = Config.RobotState.SEARCH
 var camera_mode: int = CameraMode.FOLLOW
+var camera_orbit_angle: float = 0.0
+const CAMERA_ORBIT_SPEED: float = 2.0
 
 var _rng := RandomNumberGenerator.new()
 var _controller: Node
@@ -89,11 +91,21 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif key.keycode == KEY_C:
 		camera_mode = (camera_mode + 1) % 3
 		_update_viewer_camera()
+	elif key.keycode == KEY_A and not key.echo:
+		camera_orbit_angle += 0.25
+		_update_viewer_camera()
+	elif key.keycode == KEY_D and not key.echo:
+		camera_orbit_angle -= 0.25
+		_update_viewer_camera()
 	elif key.keycode == KEY_ESCAPE:
 		get_tree().quit()
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
+	if Input.is_key_pressed(KEY_A):
+		camera_orbit_angle += CAMERA_ORBIT_SPEED * delta
+	elif Input.is_key_pressed(KEY_D):
+		camera_orbit_angle -= CAMERA_ORBIT_SPEED * delta
 	_update_viewer_camera()
 	# Quá LOST_TIMEOUT_S không có kết quả mới (nhưng vẫn kết nối) ➔ coi như không thấy ai.
 	var now: int = Time.get_ticks_msec()
@@ -162,7 +174,11 @@ func _update_viewer_camera() -> void:
 	match camera_mode:
 		CameraMode.FOLLOW:
 			var cam_target := robot.global_position + Vector3(0.0, 0.8, 0.0)
-			var cam_pos := robot.global_position + Vector3(0.0, 2.0, 2.4)
+			var orbit_dist: float = 2.4
+			var orbit_height: float = 1.2
+			var ox: float = sin(camera_orbit_angle) * orbit_dist
+			var oz: float = cos(camera_orbit_angle) * orbit_dist
+			var cam_pos := cam_target + Vector3(ox, orbit_height, oz)
 			cam_pos.x = clampf(cam_pos.x, -11.5, 11.5)
 			cam_pos.y = clampf(cam_pos.y, 0.8, 2.8)
 			cam_pos.z = clampf(cam_pos.z, -8.5, 8.5)
@@ -294,7 +310,10 @@ func _setup_hospital_npcs() -> void:
 	if furn != null:
 		for child: Node in furn.get_children():
 			if child is HospitalNpc:
-				(child as HospitalNpc).setup_robot(robot)
+				var h_npc := child as HospitalNpc
+				h_npc.setup_robot(robot)
+				if dialogue != null and h_npc.has_npc():
+					dialogue.register_npc(h_npc.get_npc())
 
 
 func _nearest_person_distance() -> float:

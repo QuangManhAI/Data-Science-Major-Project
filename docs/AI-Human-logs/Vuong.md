@@ -274,3 +274,19 @@
 - **Rejected:** Running on CPU without GPU acceleration — would increase wall-clock training time substantially.
 - **Touches:** `src/training/rl_hospital_train.py`, `src/training/benchmark_and_plot.py`, `experiments/results/rl_hospital/evaluation_report.md`, `experiments/results/README.md`, `experiments/plots/rl_training_curves.png`
 - **Evidence:** 25-epoch training completed in 250s with best validation $R_{\text{team}} = 27.50$ at Epoch 24; 10-shift benchmark completed with mean $R_{\text{team}} = 41.60 \pm 27.08$ and 11 patient escorts in Stage 2.
+
+
+### D-022 — A/D Camera Rotation and Multi-NPC Hospital Speech Support
+- **Status:** accepted
+- **When:** 2026-10-23T13:42:00+07:00
+- **Decided by:** human
+- **Trigger:** "1. when spectating the robot, add A-D key for camera rotations / 2. it seem that, except from the first ever NPC that we create, no other NPC/patient have the ability to speek"
+- **Decision:**
+  1. Add 360° camera orbit controls via `A` (orbit left/clockwise) and `D` (orbit right/counter-clockwise) keys in `CameraMode.FOLLOW` spectating mode on `Main` (`main.gd`) with smooth delta integration and keypress stepping, updating HUD help text in `main.tscn`.
+  2. Extend `HospitalNpc` (`hospital_npc.gd`) to automatically instantiate `Head/Voice` (`AudioStreamPlayer3D`) and an `Npc` dialogue component, mapping female textures to speaker `B` and male textures to speaker `A`.
+  3. Generalize `Npc` (`npc.gd`) to accept generic `Node3D` parents, allowing seated patients to initiate conversation without getting off benches while preserving full walk/rotation logic for walking NPCs.
+  4. Upgrade `DialogueManager` (`dialogue_manager.gd`) with multi-NPC registration (`register_npc`, `active_npc`), dynamically tracking whichever patient or medical staff member is currently speaking to the robot.
+- **Why:** Enables full rotational inspection of robot locomotion and LiDAR navigation from any spectating angle, and activates voice interactions for all hospital patients and staff rather than just the initial test avatar.
+- **Rejected:** Hardcoding camera angles — prevents user from checking blind spots behind doors and obstacles.
+- **Touches:** `sim_vision/godot/scenes/main.tscn`, `sim_vision/godot/scripts/main.gd`, `sim_vision/godot/scripts/npc.gd`, `sim_vision/godot/scripts/hospital_npc.gd`, `sim_vision/godot/scripts/dialogue_manager.gd`, `sim_vision/godot/scripts/rl_env_bridge.gd`
+- **Evidence:** `test_main.gd` passes 10/10 (328 asserts); `test_dialogue.gd` passes 21/21; `test_human.gd` passes 7/7; `test_rl_env.gd` passes 5/5; `test_room.gd` passes 12/12.

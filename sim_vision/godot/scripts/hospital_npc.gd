@@ -4,6 +4,7 @@ extends StaticBody3D
 ## Hỗ trợ cả đứng/ngồi tại chỗ lẫn đi bộ theo `waypoints` (`walks = true`) và tự động
 ## bước sang một bên nhường đường ("pardon") khi robot đi ngang qua (`pardon_enabled = true`).
 
+const NpcScript = preload("res://scripts/npc.gd")
 const WALK_ANIM_RES: String = "res://assets/models/human_m06/anims/walk.res"
 const ARRIVE_TOL: float = 0.05
 const PARDON_TRIGGER_DIST: float = 1.4
@@ -23,6 +24,10 @@ const PARDON_SIDESTEP_M: float = 0.55
 @export var pardon_enabled: bool = true
 
 var robot_ref: Node3D = null
+@export var can_speak: bool = true
+@export var speaker_gender: String = "auto"
+
+var _npc: Node = null
 
 var _anim_player: AnimationPlayer
 var _wp_index: int = 0
@@ -37,6 +42,8 @@ func _ready() -> void:
 	_home_pos = global_position
 	_anchor_pos = global_position
 	_home_yaw = rotation.y
+	if can_speak:
+		_setup_speech()
 
 	var model := get_node_or_null(^"Model") as Node3D
 	if model == null:
@@ -90,6 +97,11 @@ func _ready() -> void:
 
 func setup_robot(robot_node: Node3D) -> void:
 	robot_ref = robot_node
+	if _npc != null and _npc.has_method("setup"):
+		_npc.setup(robot_node, func() -> int:
+			var m = get_tree().current_scene
+			return m.state if m != null and "state" in m else Config.RobotState.SEARCH
+		)
 
 
 func is_pardoning() -> bool:
@@ -330,3 +342,41 @@ func _create_walking_cane() -> void:
 	handle.mesh = handle_box
 	handle.position = Vector3(0.0, 0.80, -0.04)
 	cane.add_child(handle)
+
+func _setup_speech() -> void:
+	var head := get_node_or_null(^"Head") as Node3D
+	if head == null:
+		head = Node3D.new()
+		head.name = "Head"
+		head.position = Vector3(0.0, 1.2 if is_seated else 1.6, 0.08)
+		add_child(head)
+
+	var voice_player := head.get_node_or_null(^"Voice") as AudioStreamPlayer3D
+	if voice_player == null:
+		voice_player = AudioStreamPlayer3D.new()
+		voice_player.name = "Voice"
+		voice_player.unit_size = 5.0
+		voice_player.volume_db = 6.0
+		head.add_child(voice_player)
+
+	var npc_node := NpcScript.new()
+	npc_node.name = "Npc"
+	var spk: String = speaker_gender
+	if spk == "auto":
+		var t_lower: String = tex_dir.to_lower()
+		var n_lower: String = name.to_lower()
+		if "female" in t_lower or "f0" in t_lower or "f0" in n_lower or "nurse" in n_lower:
+			spk = "B"
+		else:
+			spk = "A"
+	npc_node.speaker = spk
+	add_child(npc_node)
+	_npc = npc_node
+
+
+func has_npc() -> bool:
+	return _npc != null
+
+
+func get_npc() -> Node:
+	return _npc

@@ -36,6 +36,8 @@ var clarify_count: int = 0
 var used_clips: Array[String] = []
 
 var _start_ms: int = 0
+var active_npc: Npc = null
+var _registered_npcs: Array[Npc] = []
 var _reply: Dictionary = {}         # transcript đang trả lời
 var _row: Dictionary = {}           # dòng log chờ kết quả TTS
 
@@ -51,10 +53,9 @@ var _row: Dictionary = {}           # dòng log chờ kết quả TTS
 func _ready() -> void:
 	_start_ms = Time.get_ticks_msec()
 	# Main chưa _ready (con _ready trước cha) ➔ lấy Robot bằng get_node, đọc main.state lúc gọi.
+	active_npc = npc
 	npc.setup(main.get_node(^"Robot"), func() -> int: return main.state)
-	npc.talk_started.connect(_on_talk_started)
-	npc.talk_aborted.connect(_on_talk_aborted)
-	npc.utterance_finished.connect(_on_utterance_finished)
+	register_npc(npc)
 	stt.transcript_received.connect(_on_transcript)
 	stt.error_received.connect(_on_stt_error)
 	stt.connection_changed.connect(_on_stt_connection_changed)
@@ -95,6 +96,10 @@ func reset() -> void:
 	action = ""
 	clarify_count = 0
 	used_clips.clear()
+	for n: Npc in _registered_npcs:
+		if is_instance_valid(n):
+			n.reset()
+	active_npc = npc
 	if voice != null and voice.speaking:
 		voice.speaking = false            # không phát finished_speaking cho lượt đã hủy
 		voice.stop()
@@ -163,7 +168,8 @@ func _on_talk_aborted(_clip_id: String) -> void:
 func _on_utterance_finished(clip_id: String) -> void:
 	utt_id += 1
 	pending_clip = clip_id
-	sent_distance_m = Human.flat_distance(main.get_node(^"Robot").global_position, npc.human.global_position)
+	var speaker_node: Node3D = active_npc.human if (active_npc != null and active_npc.human != null) else npc.human
+	sent_distance_m = Human.flat_distance(main.get_node(^"Robot").global_position, speaker_node.global_position)
 	main.set_dialogue_state(Config.RobotState.THINK)
 	deadline_ms = Time.get_ticks_msec() + int(Config.STT_TIMEOUT_S * 1000.0)
 	if not stt.send_utterance(utt_id, clip_id, sent_distance_m, snr_db, noise):
@@ -282,10 +288,29 @@ func _fail(error: String) -> void:
 func _finish() -> void:
 	action = ""
 	main.set_dialogue_state(Config.RobotState.ARRIVED)
-	npc.on_reply_shown()
+	if active_npc != null:
+		active_npc.on_reply_shown()
+	else:
+		npc.on_reply_shown()
 
 
 func _log(row: Dictionary) -> void:
 	if logger != null:
 		logger.log_row(row)
 	turn_completed.emit(row)
+
+func register_npc(other_npc: Npc) -> void:
+	if other_npc == null or _registered_npcs.has(other_npc):
+		return
+	_registered_npcs.append(other_npc)
+	other_npc.talk_started.connect(func(clip_id: String) -> void:
+		active_npc = other_npc
+		_on_talk_started(clip_id)
+	)
+	other_npc.talk_aborted.connect(func(clip_id: String) -> void:
+		_on_talk_aborted(clip_id)
+	)
+	other_npc.utterance_finished.connect(func(clip_id: String) -> void:
+		active_npc = other_npc
+		_on_utterance_finished(clip_id)
+	)

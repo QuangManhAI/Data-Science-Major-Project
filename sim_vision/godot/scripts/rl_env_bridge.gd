@@ -46,9 +46,32 @@ var task_phase: int = TaskPhase.SEARCH_PATIENT
 var active_action: String = ""
 var active_target_key: String = ""
 var active_goal_pos: Vector3 = Vector3.ZERO
+var goal_position: Vector3 = Vector3.ZERO
+var goal_key: String = ""
 var patients_helped: int = 0
 var cumulative_team_reward: float = 0.0
 var prev_goal_dist: float = -1.0
+
+var robot_ref: Robot = null
+var room_ref: Room = null
+
+
+func setup(p_robot: Robot, p_room: Room) -> void:
+	robot_ref = p_robot
+	room_ref = p_room
+
+
+func begin_post_dialogue_task(act: String, target_str: String, floor_num: int, _patient: Human = null) -> void:
+	goal_key = resolve_destination_key(act, target_str, floor_num)
+	if act == "guide":
+		task_phase = TaskPhase.GUIDE_ESCORT
+		if room_ref != null:
+			goal_position = room_ref.get_room_waypoint(goal_key)
+	elif act in ["call_staff", "emergency"]:
+		task_phase = TaskPhase.CALL_STAFF
+		var from_pos: Vector3 = robot_ref.global_position if robot_ref != null else Vector3.ZERO
+		goal_position = find_nearest_staff_position(room_ref, from_pos)
+
 
 
 ## Ánh xạ (action, target_id, floor_num) sang khóa waypoint thực tế trên Tầng 1:

@@ -82,6 +82,7 @@ logs/
 # Vision benchmark evaluation data & model weights
 /data/vision_eval_600/
 /sim_vision/data/
+!/sim_vision/data/README.md
 /models/intel_person/*.bin
 /models/yolo11n/*.pt
 /models/yolo26n/*.pt

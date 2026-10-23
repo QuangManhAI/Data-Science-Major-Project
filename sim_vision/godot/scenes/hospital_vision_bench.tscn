@@ -1,0 +1,61 @@
+[gd_scene load_steps=7 format=3]
+
+[ext_resource type="Script" path="res://scripts/scene_dataset_generator.gd" id="1"]
+[ext_resource type="PackedScene" path="res://scenes/room.tscn" id="2"]
+[ext_resource type="PackedScene" path="res://scenes/human.tscn" id="3"]
+[ext_resource type="PackedScene" uid="uid://cmp2xg33vjs5l" path="res://assets/models/wheelchair_01/wheelchair_01_1k.gltf" id="4"]
+[ext_resource type="PackedScene" uid="uid://7oy6g5hqrsg3" path="res://assets/models/WetFloorSign_01/WetFloorSign_01_1k.gltf" id="5"]
+[ext_resource type="PackedScene" uid="uid://b1ocd4cak56rn" path="res://assets/models/plastic_monobloc_chair_01/plastic_monobloc_chair_01_1k.gltf" id="6"]
+
+[node name="HospitalVisionBench" type="Node3D"]
+
+[node name="Room" parent="." instance=ExtResource("2")]
+
+[node name="RobotCamera" type="Camera3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.15, 2)
+fov = 75.0
+near = 0.05
+
+[node name="ActorsPool" type="Node3D" parent="."]
+
+[node name="standing_male" parent="ActorsPool" instance=ExtResource("3")]
+
+[node name="standing_female" parent="ActorsPool" instance=ExtResource("3")]
+
+[node name="wheelchair_patient" type="Node3D" parent="ActorsPool"]
+
+[node name="PatientBody" parent="ActorsPool/wheelchair_patient" instance=ExtResource("3")]
+transform = Transform3D(1, 0, 0, 0, 0.85, 0, 0, 0, 1, 0, -0.25, 0)
+
+[node name="WheelchairProp" parent="ActorsPool/wheelchair_patient" instance=ExtResource("4")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)
+
+[node name="elderly_stooped_cane" parent="ActorsPool" instance=ExtResource("3")]
+transform = Transform3D(1, 0, 0, 0, 0.9, 0.2, 0, -0.2, 0.9, 0, 0, 0)
+
+[node name="seated_bench_patient" type="Node3D" parent="ActorsPool"]
+
+[node name="PatientBody" parent="ActorsPool/seated_bench_patient" instance=ExtResource("3")]
+transform = Transform3D(1, 0, 0, 0, 0.85, 0, 0, 0, 1, 0, -0.25, 0)
+
+[node name="BenchProp" parent="ActorsPool/seated_bench_patient" instance=ExtResource("6")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)
+
+[node name="HardNegativesPool" type="Node3D" parent="."]
+
+[node name="empty_wheelchair" parent="HardNegativesPool" instance=ExtResource("4")]
+
+[node name="iv_pole_stretcher" parent="HardNegativesPool" instance=ExtResource("5")]
+
+[node name="self_service_kiosk" parent="HardNegativesPool" instance=ExtResource("6")]
+
+[node name="wall_doctor_poster" parent="HardNegativesPool" instance=ExtResource("5")]
+
+[node name="DatasetGenerator" type="Node3D" parent="." node_paths=PackedStringArray("robot_camera", "world_env", "main_dir_light", "actors_pool", "hard_negatives_pool")]
+script = ExtResource("1")
+robot_camera = NodePath("../RobotCamera")
+world_env = NodePath("../Room/WorldEnvironment")
+main_dir_light = NodePath("../Room/Sun")
+actors_pool = NodePath("../ActorsPool")
+hard_negatives_pool = NodePath("../HardNegativesPool")
+auto_start_on_ready = true

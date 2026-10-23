@@ -339,25 +339,39 @@ func _capture_and_record_frame(
 
 
 func _compute_actor_ground_truth(actor_root: Node3D, subcategory: String, vp_size: Vector2) -> Dictionary:
-	var body_meshes: Array[MeshInstance3D] = []
-	var colliders: Array[CollisionObject3D] = []
-	_collect_actor_components(actor_root, body_meshes, colliders)
-
 	var world_pts := PackedVector3Array()
-	for m_inst in body_meshes:
-		if m_inst.mesh == null or not m_inst.is_visible_in_tree():
-			continue
-		var local_aabb: AABB = m_inst.get_aabb()
-		var xf: Transform3D = m_inst.global_transform
-		for ix in [0.05, 0.50, 0.95]:
-			for iy in [0.02, 0.25, 0.50, 0.75, 0.98]:
-				for iz in [0.05, 0.50, 0.95]:
-					var local_p: Vector3 = local_aabb.position + Vector3(
-						local_aabb.size.x * ix,
-						local_aabb.size.y * iy,
-						local_aabb.size.z * iz
-					)
-					world_pts.append(xf * local_p)
+	var h: float = 1.75
+	var r: float = 0.28
+
+	if subcategory == "wheelchair":
+		h = 1.30
+		r = 0.35
+		# NPC ngồi xe lăn: thân người thấp hơn, hông hơi bè
+		for y_norm in [0.05, 0.20, 0.40, 0.60, 0.80, 0.98]:
+			var y_val: float = h * y_norm
+			for theta in [0.0, 45.0, 90.0, 135.0, 180.0, 225.0, 270.0, 315.0]:
+				var rad = deg_to_rad(theta)
+				var cur_r = r if y_val < 0.6 else r * 0.8
+				var lp = Vector3(cur_r * cos(rad), y_val, cur_r * 0.7 * sin(rad))
+				world_pts.append(actor_root.global_transform * lp)
+	elif subcategory == "elderly_cane":
+		h = 1.55
+		r = 0.28
+		for y_norm in [0.05, 0.20, 0.40, 0.60, 0.80, 0.98]:
+			var y_val: float = h * y_norm
+			for theta in [0.0, 45.0, 90.0, 135.0, 180.0, 225.0, 270.0, 315.0]:
+				var rad = deg_to_rad(theta)
+				var lp = Vector3(r * cos(rad), y_val, r * 0.65 * sin(rad))
+				world_pts.append(actor_root.global_transform * lp)
+	else:
+		# Dáng đứng chuẩn
+		for y_norm in [0.02, 0.15, 0.35, 0.55, 0.75, 0.90, 0.98]:
+			var y_val: float = h * y_norm
+			for theta in [0.0, 45.0, 90.0, 135.0, 180.0, 225.0, 270.0, 315.0]:
+				var rad = deg_to_rad(theta)
+				var cur_r = r if y_val > 1.0 else r * 0.75
+				var lp = Vector3(cur_r * cos(rad), y_val, cur_r * 0.65 * sin(rad))
+				world_pts.append(actor_root.global_transform * lp)
 
 	if world_pts.is_empty():
 		return {"valid": false}
@@ -395,6 +409,10 @@ func _compute_actor_ground_truth(actor_root: Node3D, subcategory: String, vp_siz
 	var vis_hits: int = 0
 	var tested_rays: int = 0
 	var stride: int = maxi(1, world_pts.size() / 15)
+
+	var colliders: Array[CollisionObject3D] = []
+	var body_meshes: Array[MeshInstance3D] = []
+	_collect_actor_components(actor_root, body_meshes, colliders)
 
 	for i in range(0, world_pts.size(), stride):
 		var target_p: Vector3 = world_pts[i]

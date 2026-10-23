@@ -79,22 +79,25 @@ def evaluate_model(
     }
 
     # Khởi tạo thống kê theo từng slice động từ dữ liệu
-    unique_slices = sorted(list({rec.get("slice", "unknown") for rec in records}))
+    unique_slices = sorted(list({rec.get("group_name") or rec.get("slice", "unknown") for rec in records}))
     for s in unique_slices:
         stats["slice_metrics"][s] = {"tp": 0, "fn": 0, "fp": 0, "frames": 0}
 
     for rec in records:
-        slice_name = rec.get("slice", "unknown")
+        slice_name = rec.get("group_name") or rec.get("slice", "unknown")
         if slice_name in stats["slice_metrics"]:
             stats["slice_metrics"][slice_name]["frames"] += 1
 
-        img_rel = rec["image_path"]
+        img_rel = rec.get("image_path") or rec.get("image_metadata", {}).get("file_path", "")
         img_path = dataset_dir / img_rel
         img = cv2.imread(str(img_path))
         if img is None:
             continue
         orig_h, orig_w = img.shape[:2]
-        cam_fov = float(rec.get("context_5w1h", {}).get("how_camera_fov_deg", 75.0))
+        cam_fov = float(
+            rec.get("robot_camera_6dof", {}).get("intrinsics", {}).get("fov_horizontal_deg")
+            or rec.get("context_5w1h", {}).get("how_camera_fov_deg", 75.0)
+        )
 
         # Chạy suy luận qua detector
         preds_norm, infer_ms = detector.detect(img)
@@ -112,10 +115,12 @@ def evaluate_model(
             for p in preds_norm
         ]
 
-        gts = [g for g in rec.get("ground_truths", []) if not g.get("ignore_eval", False)]
+        raw_gts = rec.get("ground_truth_annotations") or rec.get("ground_truths", [])
+        gts = [g for g in raw_gts if not g.get("ignore_eval", False)]
 
         # Lát cắt Hard Negatives (không có người thật)
-        if slice_name in ("S5_Hard_Neg", "D8_Hard_Neg", "D8_Hard_Negatives") or len(gts) == 0:
+        is_hard_neg = rec.get("is_hard_negative", False) or slice_name in ("S5_Hard_Neg", "D8_Hard_Neg", "D8_Hard_Negatives", "Hard_Negatives_And_Traps") or len(gts) == 0
+        if is_hard_neg:
             stats["total_hard_neg_frames"] += 1
             if len(preds_px) > 0:
                 stats["fp_hard_neg_frames"] += 1
@@ -132,7 +137,8 @@ def evaluate_model(
             for idx, gt in enumerate(gts):
                 if idx in matched_gt:
                     continue
-                iou = compute_iou(pred[:4], gt["bbox_xyxy"])
+                gt_box = gt.get("bbox_xyxy") or gt.get("bbox_xyxy_px")
+                iou = compute_iou(pred[:4], gt_box)
                 if iou > best_iou:
                     best_iou = iou
                     best_idx = idx
@@ -144,6 +150,7 @@ def evaluate_model(
                     stats["slice_metrics"][slice_name]["tp"] += 1
 
                 gt_item = gts[best_idx]
+                gt_box = gt_item.get("bbox_xyxy") or gt_item.get("bbox_xyxy_px")
                 subcat = gt_item.get("subcategory", "")
                 v_vis = float(gt_item.get("visibility_ratio", 1.0))
                 if subcat in ("wheelchair", "elderly_cane"):
@@ -153,7 +160,7 @@ def evaluate_model(
 
                 # Tính Bearing Error (sai số góc hướng)
                 cx_pred = 0.5 * (pred[0] + pred[2])
-                cx_gt = 0.5 * (gt_item["bbox_xyxy"][0] + gt_item["bbox_xyxy"][2])
+                cx_gt = 0.5 * (gt_box[0] + gt_box[2])
                 bearing_err = abs(cx_pred - cx_gt) / float(orig_w) * cam_fov
                 stats["bearing_errors_deg"].append(bearing_err)
             else:
@@ -306,6 +313,12 @@ def main() -> None:
             "D7_Lighting": "D7: Nhiễu ánh sáng & Hiệu ứng PBR (Ngược sáng, chói lóa, đèn sự cố)",
             "D8_Hard_Negatives": "D8: Bẫy âm tính giả (Xe lăn rỗng, giường rỗng, poster y tế, kiosk)",
             "D8_Hard_Neg": "D8: Bẫy âm tính giả (Đạo cụ y tế rỗng, poster, kiosk tiếp đón)",
+            "Demographics_And_Attire_Contrast": "N1: Nhân khẩu học & Màu áo tương phản (Blouse trắng, Scrub xanh, Cụ già)",
+            "Clinical_Poses_And_Seated_Morphology": "N2: Tư thế lâm sàng & Biến dạng người ngồi (Ghế chờ, Ho gập 45°, Đọc bệnh án)",
+            "Prop_Interactions_And_Occlusion": "N3: Che khuất bởi đạo cụ y tế (Cột IV, Monitor, Kiosk, Xe cáng)",
+            "Hard_Negatives_And_Traps": "N4: Bẫy đạo cụ y tế rỗng (Standee 2D, Cột IV rỗng, Cáng trống)",
+            "Kinematics_And_Dynamic_Avoidance": "N5: Động học & Né ngang Pardon Sidestep 0.55m",
+            "Crowd_Density_And_Social_Disentanglement": "N6: Mật độ xã hội & Phân rã đối tượng kề sát (Cụ già ngồi kề, Hàng chờ)",
         }
 
         # Bảng ma trận đối chứng trực diện giữa các models

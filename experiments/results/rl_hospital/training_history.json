@@ -1,0 +1,38 @@
+{
+  "run_name": "PPOHospital-curriculum",
+  "run_dir": "C:\\document\\Study documents\\Robo-helper-in-Hospital\\experiments\\runs\\20261023_125428_PPOHospital-curriculum",
+  "best_epoch": 3,
+  "best_val_r_team": 0.0,
+  "history": {
+    "train_losses": [
+      12.16922370592753,
+      1.1632913202047348,
+      19.803191026051838
+    ],
+    "val_losses": [
+      -0.0,
+      -0.0,
+      -0.0
+    ],
+    "train_accs": [
+      32.0,
+      2.0,
+      0.0
+    ],
+    "val_accs": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "val_patients_helped": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "val_collisions": [
+      155.0,
+      157.0,
+      111.0
+    ]
+  }
+}

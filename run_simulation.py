@@ -191,6 +191,18 @@ def main() -> None:
         default=None,
         help="Optional Godot scene to launch (e.g. res://tools/dialogue_batch.tscn)",
     )
+    parser.add_argument(
+        "--controller",
+        choices=["fsm", "rl"],
+        default="fsm",
+        help="Robot navigation controller mode ('fsm' rule-based or 'rl' RLController + RLEnvBridge)",
+    )
+    parser.add_argument(
+        "--rl-checkpoint",
+        type=str,
+        default=None,
+        help="Optional path to a trained RL checkpoint (.pt) loaded with weights_only=True",
+    )
     args = parser.parse_args()
 
     # Register exit hooks
@@ -267,10 +279,20 @@ def main() -> None:
         cleanup()
         sys.exit(1)
 
-    log(f"[Launcher] Launching Godot: {godot_exe}")
+    log(f"[Launcher] Launching Godot: {godot_exe} (controller={args.controller})")
     godot_cmd = [str(godot_exe), "--path", str(GODOT_DIR)]
     if args.scene:
         godot_cmd.append(args.scene)
+    if args.controller == "rl":
+        if args.rl_checkpoint:
+            from src.utils.checkpoint_utils import load_checkpoint
+
+            ckpt = load_checkpoint(args.rl_checkpoint)
+            log(
+                f"[Launcher] Loaded RL checkpoint: {args.rl_checkpoint} "
+                f"(epoch={ckpt.get('epoch')}, best_val_acc={ckpt.get('best_val_acc')})"
+            )
+        godot_cmd.extend(["--", "--controller=rl"])
 
     godot_proc = subprocess.Popen(godot_cmd)
     CHILD_PROCESSES.append(godot_proc)

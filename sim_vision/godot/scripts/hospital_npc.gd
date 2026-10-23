@@ -1,8 +1,14 @@
 class_name HospitalNpc
 extends StaticBody3D
-## NPC tĩnh/ngồi chờ trong bệnh viện (Nhân viên y tế: Bác sĩ, Điều dưỡng; Bệnh nhân ngồi chờ).
-## Kế thừa StaticBody3D kèm CollisionShape3D (BoxShape3D) để Room.get_furniture_footprints()
-## tự động tránh spawn robot hoặc $Human chồng lên.
+## NPC trong bệnh viện (Nhân viên y tế: Bác sĩ, Điều dưỡng; Bệnh nhân cao tuổi / ngồi chờ).
+## Hỗ trợ cả đứng/ngồi tại chỗ lẫn đi bộ theo `waypoints` (`walks = true`) và tự động
+## bước sang một bên nhường đường ("pardon") khi robot đi ngang qua (`pardon_enabled = true`).
+
+const WALK_ANIM_RES: String = "res://assets/models/human_m06/anims/walk.res"
+const ARRIVE_TOL: float = 0.05
+const PARDON_TRIGGER_DIST: float = 1.4
+const PARDON_CLEAR_DIST: float = 1.85
+const PARDON_SIDESTEP_M: float = 0.55
 
 @export var tex_dir: String = "res://assets/models/medical_f01/textures"
 @export var anim_path: String = "res://assets/models/human_m06/anims/f_idle.res"
@@ -11,11 +17,27 @@ extends StaticBody3D
 @export var staff_role: String = ""  # "nurse" | "doctor" | "patient"
 @export var badge_text: String = ""
 @export var has_cane: bool = false
+@export var walks: bool = false
+@export var waypoints: Array[Vector3] = []
+@export var walk_speed: float = 0.48
+@export var pardon_enabled: bool = true
+
+var robot_ref: Node3D = null
 
 var _anim_player: AnimationPlayer
+var _wp_index: int = 0
+var _home_pos: Vector3 = Vector3.ZERO
+var _home_yaw: float = 0.0
+var _anchor_pos: Vector3 = Vector3.ZERO
+var _is_pardoning: bool = false
+var _pardon_target: Vector3 = Vector3.ZERO
 
 
 func _ready() -> void:
+	_home_pos = global_position
+	_anchor_pos = global_position
+	_home_yaw = rotation.y
+
 	var model := get_node_or_null(^"Model") as Node3D
 	if model == null:
 		return
@@ -57,10 +79,104 @@ func _ready() -> void:
 		var lib := AnimationLibrary.new()
 		var anim_res: Animation = load(anim_path)
 		lib.add_animation(&"loop", anim_res)
+		if ResourceLoader.exists(WALK_ANIM_RES):
+			lib.add_animation(&"walk", load(WALK_ANIM_RES))
 		_anim_player.add_animation_library(&"npc", lib)
-		_anim_player.play(&"npc/loop")
+		var start_anim: StringName = &"npc/walk" if _can_walk() else &"npc/loop"
+		_anim_player.play(start_anim)
 		if anim_offset > 0.0:
 			_anim_player.advance(anim_offset)
+
+
+func setup_robot(robot_node: Node3D) -> void:
+	robot_ref = robot_node
+
+
+func is_pardoning() -> bool:
+	return _is_pardoning
+
+
+func _physics_process(delta: float) -> void:
+	if is_seated:
+		return
+
+	if pardon_enabled and robot_ref != null and is_instance_valid(robot_ref):
+		var dist_robot: float = Human.flat_distance(global_position, robot_ref.global_position)
+		if not _is_pardoning and dist_robot <= PARDON_TRIGGER_DIST:
+			_is_pardoning = true
+			var r_fwd: Vector3 = -robot_ref.global_transform.basis.z
+			_pardon_target = HospitalNpc.compute_pardon_target(
+				_anchor_pos, robot_ref.global_position, r_fwd, PARDON_SIDESTEP_M
+			)
+		elif _is_pardoning and dist_robot >= PARDON_CLEAR_DIST:
+			_is_pardoning = false
+
+	if _is_pardoning:
+		var d_target: float = Human.flat_distance(global_position, _pardon_target)
+		if d_target > ARRIVE_TOL:
+			_move_step_towards(_pardon_target, walk_speed * delta)
+		else:
+			_play_anim(&"npc/loop")
+			if robot_ref != null and is_instance_valid(robot_ref):
+				rotation.y = atan2(
+					robot_ref.global_position.x - global_position.x,
+					robot_ref.global_position.z - global_position.z
+				)
+		return
+
+	if _can_walk():
+		var target: Vector3 = waypoints[_wp_index]
+		if Human.flat_distance(global_position, target) <= ARRIVE_TOL:
+			_wp_index = Human.next_waypoint_index(_wp_index, waypoints.size())
+			target = waypoints[_wp_index]
+		_move_step_towards(target, walk_speed * delta)
+		_anchor_pos = global_position
+	else:
+		var d_home: float = Human.flat_distance(global_position, _home_pos)
+		if d_home > ARRIVE_TOL:
+			_move_step_towards(_home_pos, walk_speed * delta)
+		else:
+			global_position = _home_pos
+			rotation.y = _home_yaw
+			_play_anim(&"npc/loop")
+
+
+func _can_walk() -> bool:
+	return not is_seated and walks and waypoints.size() >= 2
+
+
+func _move_step_towards(target: Vector3, max_step: float) -> void:
+	var next_pos: Vector3 = Human.step_towards(global_position, target, max_step)
+	var dir := Vector3(next_pos.x - global_position.x, 0.0, next_pos.z - global_position.z)
+	if dir.length() > 1e-5:
+		rotation.y = atan2(dir.x, dir.z)
+	global_position = next_pos
+	_play_anim(&"npc/walk")
+
+
+func _play_anim(anim_name: StringName) -> void:
+	if _anim_player == null:
+		return
+	if _anim_player.has_animation(anim_name) and _anim_player.current_animation != anim_name:
+		_anim_player.play(anim_name, 0.25)
+
+
+## Tính vị trí bước sang ngang ("pardon") vuông góc với hướng đi của robot, ưu tiên phía xa đường đi của robot.
+static func compute_pardon_target(npc_pos: Vector3, robot_pos: Vector3, robot_fwd: Vector3, sidestep: float = PARDON_SIDESTEP_M) -> Vector3:
+	var fwd_2d := Vector2(robot_fwd.x, robot_fwd.z)
+	if fwd_2d.length() < 1e-4:
+		fwd_2d = Vector2(0.0, -1.0)
+	else:
+		fwd_2d = fwd_2d.normalized()
+	var perp := Vector2(-fwd_2d.y, fwd_2d.x)
+	var rel := Vector2(npc_pos.x - robot_pos.x, npc_pos.z - robot_pos.z)
+	var side_sign: float = 1.0 if rel.dot(perp) >= 0.0 else -1.0
+	var offset: Vector2 = perp * (sidestep * side_sign)
+	return Vector3(
+		clampf(npc_pos.x + offset.x, -11.4, 11.4),
+		npc_pos.y,
+		clampf(npc_pos.z + offset.y, -8.4, 8.4)
+	)
 
 
 func _make_part_mat(part: String) -> StandardMaterial3D:
@@ -160,7 +276,6 @@ func _create_role_badge() -> void:
 func _create_walking_cane() -> void:
 	var cane := Node3D.new()
 	cane.name = "WalkingCane"
-	# Position resting slightly in front and to the right hand side of the patient
 	cane.position = Vector3(-0.18, 0.0, 0.56) if is_seated else Vector3(-0.24, 0.0, 0.22)
 	cane.rotation = Vector3(0.08, 0.0, 0.0) if is_seated else Vector3(0.0, 0.0, 0.0)
 	add_child(cane)

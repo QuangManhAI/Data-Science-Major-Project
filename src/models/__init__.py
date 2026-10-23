@@ -1,1 +1,1 @@
-"""Model layer: model builders and freeze/unfreeze strategies."""
+"""RL policy and value networks for the Hospital Helper Robot."""

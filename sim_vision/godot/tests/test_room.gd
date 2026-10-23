@@ -102,3 +102,32 @@ func test_distance_to_rect() -> void:
 	assert_almost_eq(Room.distance_to_rect(Vector2(3, 0.5), r), 1.0, 1e-6)
 	assert_almost_eq(Room.distance_to_rect(Vector2(1, -2), r), 2.0, 1e-6)
 	assert_almost_eq(Room.distance_to_rect(Vector2(5, 5), r), 5.0, 1e-6)
+
+
+func test_has_medical_staff_and_waiting_patients_and_new_props() -> void:
+	var furniture: Node = room.get_node_or_null(^"Furniture")
+	assert_not_null(furniture)
+	for staff_name: String in ["MedicalStaffNurse", "MedicalStaffDoctor"]:
+		var staff := furniture.get_node_or_null(NodePath(staff_name)) as HospitalNpc
+		assert_not_null(staff, "expected %s in Furniture" % staff_name)
+		assert_true(staff.staff_role in ["nurse", "doctor"])
+		assert_not_null(staff.get_node_or_null(^"RoleBadge"))
+	for i: int in range(1, 7):
+		var pat_name: String = "WaitingPatient%d" % i
+		var pat := furniture.get_node_or_null(NodePath(pat_name)) as HospitalNpc
+		assert_not_null(pat, "expected %s in Furniture" % pat_name)
+		assert_true(pat.is_seated, "%s should be seated" % pat_name)
+		assert_eq(pat.staff_role, "patient")
+	for prop_name: String in [
+		"LobbyQueueKiosk",
+		"LobbyWaterDispenser",
+		"LobbyInfoStandee",
+		"LobbySanitizerStand",
+		"CorridorSanitizerStand",
+		"EmergencyVitalMonitor",
+		"EmergencyIVStand",
+		"EmergencyStretcherCart",
+		"ClinicVitalMonitor",
+		"ClinicIVStand",
+	]:
+		assert_not_null(furniture.get_node_or_null(NodePath(prop_name)), "expected prop %s" % prop_name)

@@ -52,7 +52,8 @@ class PhoWhisperTranscriber:
 
     def __init__(self, model_id: str = config.STT_MODEL_ID, device: str = "auto", beams: int = 1) -> None:
         import torch
-        from transformers import WhisperForConditionalGeneration, WhisperProcessor
+        from transformers.models.whisper.modeling_whisper import WhisperForConditionalGeneration
+        from transformers.models.whisper.processing_whisper import WhisperProcessor
 
         if not 1 <= beams <= 5:
             raise ValueError("beams must be in 1..5")

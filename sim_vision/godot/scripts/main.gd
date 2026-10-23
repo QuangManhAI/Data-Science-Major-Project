@@ -216,6 +216,16 @@ func human_distance() -> float:
 	return Human.flat_distance(robot.global_position, human.global_position)
 
 
+func _nearest_person_distance() -> float:
+	var d: float = human_distance()
+	var furn: Node = room.get_node_or_null(^"Furniture") if room != null else null
+	if furn != null:
+		for child: Node in furn.get_children():
+			if child is HospitalNpc:
+				d = minf(d, Human.flat_distance(robot.global_position, (child as Node3D).global_position))
+	return d
+
+
 ## Góc thật tới người so với hướng trước của robot (−Z), dương khi người bên trái.
 func human_angle_deg() -> float:
 	return RunLogger.signed_angle_deg(-robot.global_transform.basis.z, human.global_position - robot.global_position)
@@ -279,7 +289,7 @@ func set_dialogue_state(s: int) -> void:
 
 ## Áp an toàn rồi gửi lệnh cho robot; trả lệnh cuối cùng.
 func _apply(cmd: Dictionary) -> Dictionary:
-	var safe: Dictionary = Main.apply_safety(cmd, human_distance(), robot.front_obstacle_distance())
+	var safe: Dictionary = Main.apply_safety(cmd, _nearest_person_distance(), robot.front_obstacle_distance())
 	state = safe["state"]
 	robot.set_command(safe["v"], safe["omega"])
 	return safe

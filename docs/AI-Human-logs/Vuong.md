@@ -3,10 +3,10 @@
 - **Motivation/Background**: Captures architectural, toolchain, and model selection choices made during AI-assisted development to ensure long-term auditability and prevent unrecorded drift.
 - **Purpose**: Maintain an immutable, attributable provenance log of decisions for the hospital navigation robot project.
 - **Overview Pipeline**: Follows the decision log convention defined in `agents/templates/DECISION_LOG_TEMPLATE.md` and metadata header rules in `agents/rules/MD_CONVENTION.md`.
-- **Detailed Plan**: §1 Decision Index Table; §2 Decision Log Entries (D-001 to D-016).
+- **Detailed Plan**: §1 Decision Index Table; §2 Decision Log Entries (D-001 to D-019).
 - **References**: [agents/templates/DECISION_LOG_TEMPLATE.md](../../agents/templates/DECISION_LOG_TEMPLATE.md), [agents/rules/MD_CONVENTION.md](../../agents/rules/MD_CONVENTION.md).
 - **Created**: 2026-10-21T21:25:00+07:00
-- **Last Updated**: 2026-10-22T09:42:00+07:00
+- **Last Updated**: 2026-10-23T11:23:00+07:00
 
 ---
 
@@ -30,6 +30,9 @@
 | [D-014](#d-014--expansion-to-floor-1-vietnamese-hospital-environment) | Expansion to Floor-1 Vietnamese hospital environment (24m x 18m) | human | accepted |
 | [D-015](#d-015--hospital-room-enrichment-medical-pedal-waste-bins-and-refined-collisions) | Hospital room enrichment, medical pedal waste bins, and refined collisions | human | accepted |
 | [D-016](#d-016--camera-viewpoint-height-correction-and-automatic-ceiling-culling) | Camera viewpoint height correction and automatic ceiling culling | agent-proposed, human-approved | accepted |
+| [D-017](#d-017--vietnamese-medical-staff-npcs-waiting-patients-and-clinical-facility-props) | Vietnamese medical staff NPCs, waiting patients, and clinical facility props | human | accepted |
+| [D-018](#d-018--stt-startup-timeout-resilience-and-rocketbox-surface-material-mapping) | STT startup timeout resilience and Rocketbox surface material mapping | human | accepted |
+| [D-019](#d-019--elderly-patient-variants-and-walking-canes-for-old-patient-dominated-hospital) | Elderly patient variants and walking canes for old-patient-dominated hospital | human | accepted |
 
 ---
 
@@ -210,3 +213,36 @@
 - **Rejected:** Removing ceiling mesh entirely — ceiling is necessary for first-person robot camera and realistic interior lighting when inside rooms.
 - **Touches:** `sim_vision/godot/scripts/main.gd`, `sim_vision/godot/scripts/room.gd`, `sim_vision/godot/tests/test_room.gd`
 - **Evidence:** All 142/142 GUT tests pass; all 3 camera modes render interior hospital environments without roof clipping.
+
+### D-017 — Vietnamese medical staff NPCs, waiting patients, and clinical facility props
+- **Status:** accepted
+- **When:** 2026-10-23T08:40:00+07:00
+- **Decided by:** human
+- **Trigger:** "hey, add more NPC to our env, 2 medical staff (vietnam style, it can be the variant between doctor or nurse) 4 more patient, most of them waiting in the wainting rooms. Overall, we need more assests"
+- **Decision:** Add `HospitalNpc` (`sim_vision/godot/scripts/hospital_npc.gd`) and populate `room.tscn` with 2 Vietnamese-style medical staff (`MedicalStaffNurse` with white nurse cap and blue collar trim at reception, `MedicalStaffDoctor` in white lab coat in the corridor), seated waiting patients on lobby/corridor benches, and 8 hospital prop scenes (`queue_kiosk.tscn`, `queue_display.tscn`, `water_dispenser.tscn`, `sanitizer_stand.tscn`, `vital_monitor.tscn`, `iv_stand.tscn`, `stretcher_cart.tscn`, `info_standee.tscn`).
+- **Why:** Increases visual realism and obstacle density in the waiting lobby, corridor, Emergency 101, and Clinic 112 while automatically registering `StaticBody3D` footprints with `Room.get_furniture_footprints()`.
+- **Rejected:** Unrigged static mannequins without idle animations — lacks lifelike hospital atmosphere.
+- **Touches:** `sim_vision/godot/scripts/hospital_npc.gd`, `sim_vision/godot/scenes/room.tscn`, `sim_vision/godot/scenes/props/npc_medical_nurse.tscn`, `sim_vision/godot/scenes/props/npc_medical_doctor.tscn`, `sim_vision/godot/scenes/props/queue_kiosk.tscn`, `sim_vision/godot/scenes/props/queue_display.tscn`, `sim_vision/godot/scenes/props/water_dispenser.tscn`, `sim_vision/godot/scenes/props/sanitizer_stand.tscn`, `sim_vision/godot/scenes/props/vital_monitor.tscn`, `sim_vision/godot/scenes/props/iv_stand.tscn`, `sim_vision/godot/scenes/props/stretcher_cart.tscn`, `sim_vision/godot/scenes/props/info_standee.tscn`
+- **Evidence:** `test_has_medical_staff_and_waiting_patients_and_new_props` in `test_room.gd` passes.
+
+### D-018 — STT startup timeout resilience and Rocketbox surface material mapping
+- **Status:** accepted
+- **When:** 2026-10-23T10:15:00+07:00
+- **Decided by:** human
+- **Trigger:** "[Launcher] -> STT Server timed out after 60.0s!" / "the human model is broken"
+- **Decision:** Increase `wait_for_port` timeout in `run_simulation.py` from `60.0s` to `180.0s` with early `proc.poll()` crash detection, replace slow `AutoModelForSpeechSeq2Seq` lazy discovery in `transcriber.py` with direct `WhisperForConditionalGeneration` and `WhisperProcessor` imports, and map `HospitalNpc` mesh surfaces dynamically by FBX material name (`body`, `head`, `opacity`) using `TRANSPARENCY_ALPHA_HASH` and `CULL_DISABLED` on the hair/eyelash opacity layer.
+- **Why:** Concurrent cold-start loading of YOLOv8, VieNeu-TTS ONNX, and PhoASR-whisper-small exceeded 60s on Windows disk/CUDA initialization. Additionally, Rocketbox FBX meshes order surfaces as `[0: body, 1: head, 2: opacity]`, so hardcoding surface 0 as `head` mapped face textures onto the torso and body textures onto the hair/eyelash transparency layer.
+- **Rejected:** Hardcoding surface indices — balding avatars have 2 surfaces while standard avatars have 3 surfaces.
+- **Touches:** `run_simulation.py`, `sim_vision/python/voice/transcriber.py`, `sim_vision/python/voice/stt_server.py`, `sim_vision/godot/scripts/hospital_npc.gd`
+- **Evidence:** Forward+ viewport renders verified clean facial, clothing, and hair rendering across all NPCs; all 3 servers start and pass health checks.
+
+### D-019 — Elderly patient variants and walking canes for old-patient-dominated hospital
+- **Status:** accepted
+- **When:** 2026-10-23T10:49:00+07:00
+- **Decided by:** human
+- **Trigger:** "ok, now add more 2 patent but with model of old people, make a few varient of old patient, our hospital will be old patient dominated"
+- **Decision:** Expand seated waiting patients from 4 to 6 (`WaitingPatient1` to `WaitingPatient6`), with 5 distinct elderly patient variants (`npc_patient_f02.tscn` silver-haired woman in white sweater, `npc_patient_elder_m03.tscn` silver-haired man in tweed blazer, `npc_patient_elder_f09.tscn` silver-haired grandmother in brown cardigan, `npc_patient_m05.tscn` white-haired bearded man coughing in corridor, and `npc_patient_elder_m14.tscn` balding senior man) plus 3D wooden walking canes (`has_cane = true` in `HospitalNpc`).
+- **Why:** Reflects demographic reality where hospital outpatient waiting rooms are predominantly elderly patients with varied attire, hair, and mobility aids.
+- **Rejected:** Duplicating a single elderly model across multiple seats — looks repetitive and artificial.
+- **Touches:** `sim_vision/godot/scripts/hospital_npc.gd`, `sim_vision/godot/scenes/room.tscn`, `sim_vision/godot/scenes/props/npc_patient_elder_m03.tscn`, `sim_vision/godot/scenes/props/npc_patient_elder_f09.tscn`, `sim_vision/godot/scenes/props/npc_patient_elder_m14.tscn`, `sim_vision/godot/scenes/props/npc_patient_f02.tscn`, `sim_vision/godot/scenes/props/npc_patient_m05.tscn`, `sim_vision/godot/scenes/props/npc_patient_f08.tscn`, `sim_vision/godot/assets/CREDITS.md`, `sim_vision/godot/tests/test_room.gd`
+- **Evidence:** `Godot_v4.7.2-stable_win64_console.exe --headless --path sim_vision/godot -s addons/gut/gut_cmdln.gd -gtest=res://tests/test_room.gd -gexit` passes 145/145 tests (12,928 asserts) across all 14 test suites.

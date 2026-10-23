@@ -38,7 +38,10 @@
 - **2026-10-23T10:09:00+07:00**: Tinh chỉnh toàn bộ grid parameters trong Godot để đạt chuẩn chính xác **150 frames/trục** (tổng cộng đủ **1,200 frames**).
 - **2026-10-23T10:24:18+07:00**: Kết xuất hoàn tất đúng **1,200 frames** (D1-D8 mỗi trục đúng 150 frames).
 - **2026-10-23T10:25:25+07:00**: Chạy benchmark đối chứng chính thức 4 models (`yolov8n`, `yolo11n`, `yolo26n`, `intel/person-retail-0013`) trên 1,200 frames. Xuất báo cáo tại [`sim_vision/reports/vision_48cases_benchmark.md`](../../sim_vision/reports/vision_48cases_benchmark.md).
-- **2026-10-23T10:27:15+07:00**: Hoàn thành Jupyter Notebook chuyên sâu [`notebooks/01_vision_model_benchmark_visualization.ipynb`](../../notebooks/01_vision_model_benchmark_visualization.ipynb) (11 MB) bao gồm 2D Spatial Heatmap, Thư viện 16 ảnh 3D, Radar Chart, Degeneracy Curves, và Live Inference Side-by-Side trên 6 ca biên thất bại nghiêm trọng nhất của CẢ 4 MODEL.
+- **2026-10-23T10:27:15+07:00**: Hoàn thành Jupyter Notebook sơ bộ `notebooks/01_vision_model_benchmark_visualization.ipynb` (11 MB).
+- **2026-10-23T10:46:00+07:00**: Nâng cấp toàn diện Jupyter Notebook lên chuẩn **Maximum Insight (50 Hạng Mục / 10 Nhóm Chiều Sâu)** tại [`notebooks/01_vision_model_benchmark_visualization.ipynb`](../../notebooks/01_vision_model_benchmark_visualization.ipynb) (28 MB):
+  - Tích hợp trọn vẹn 10 nhóm phân tích: G1 Không gian 3D & Sơ đồ mặt bằng, G2 Hình học nhãn & Phân bố dữ liệu, G3 Hiệu năng 4 models (Bar, Radar, PR Curves, F1-Score, Confusion Matrix), G4 Đường cong suy biến vật lý, G5 Tác động lên điều khiển robot 50Hz (Boxplot Δθ, Time-series simulation, PDF/CDF latency, Pareto Front), G6 Độ tin cậy ECE & IoU, G7 Thư viện 16 ảnh thực tế Godot & Pipeline 4 bước chiếu điểm, G8 Trực quan hóa suy luận trực tiếp CẢ 4 MODEL trên 12 ca biên tồi tệ nhất (48 panels hình ảnh), G9 Giải thích thuật toán First Principles (DFL vs SSD, NMS vs NMS-Free, C2PSA Attention), G10 Cây quyết định Robot FSM & Ma trận khuyến nghị triển khai.
+  - Toàn bộ 40 cells được pre-executed 100% không có lỗi, nhúng sẵn tất cả biểu đồ và hình ảnh trực quan trực tiếp bên trong file notebook.
 
 ---
 

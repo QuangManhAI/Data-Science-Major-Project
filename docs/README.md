@@ -21,6 +21,7 @@ docs/
 ├── OVERVIEW.md                                  # 🧭 Lộ trình phát triển sống & Theo dõi các cột mốc
 │
 ├── reports/                                     # 📊 Báo Cáo Kỹ Thuật & Đánh Giá Benchmark Thị Giác
+│   ├── cases_under_70pct_detection_forensic_report.md
 │   ├── master_failure_cases_and_low_detection_rates_report.md
 │   ├── horizontal_label_detection_visualization_report.md
 │   └── README.md

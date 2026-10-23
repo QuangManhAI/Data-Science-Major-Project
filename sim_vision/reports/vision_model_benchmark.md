@@ -1,59 +1,84 @@
 # Báo Cáo Đánh Giá Đối Chứng Vision Models (Godot Hospital Dataset)
 
-- **Ngày đánh giá**: 2026-10-23T09:23:30+0700
-- **Tổng số frames**: 600 (định dạng 640x480, 5 Slices phân tầng)
+- **Ngày đánh giá**: 2026-10-23T18:49:04+0700
+- **Tổng số frames**: 1200 (định dạng 640x480, 5 Slices phân tầng)
 - **Ngưỡng kiểm thử**: $\tau_{\text{conf}} = 0.50$, $\tau_{\text{IoU}} = 0.50$
 
 ## 1. Bảng Tổng Hợp Chỉ Số Cốt Lõi
 
 | Model | Precision | Recall (Toàn bộ) | Recall (Xe lăn / Người già) | Recall (Đám đông che khuất) | Báo động giả (FPR Đạo cụ rỗng) | Sai số góc lái $\Delta\theta$ (độ) | Latency P95 (ms) |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **yolov8n.pt (Baseline)** | 89.04% | 78.66% | 59.83% | 27.17% | 0.00% | 0.37° | 8.1 ms |
-| **yolo11n.pt (C2PSA Attention)** | 89.06% | 78.85% | 60.26% | 26.09% | 0.00% | 0.40° | 10.1 ms |
-| **yolo26n.pt (NMS-Free)** | 89.07% | 77.27% | 57.64% | 26.09% | 0.00% | 0.33° | 11.2 ms |
-| **intel/person-retail-0013 (OpenVINO)** | 84.27% | 85.77% | 73.80% | 42.39% | 6.60% | 0.37° | 10.5 ms |
+| **yolov8n.pt (Baseline)** | 44.79% | 86.16% | 65.79% | 41.03% | 67.86% | 0.26° | 40.6 ms |
+| **yolo11n.pt (C2PSA Attention)** | 44.55% | 85.02% | 58.95% | 42.74% | 67.50% | 0.26° | 48.6 ms |
+| **yolo26n.pt (NMS-Free)** | 45.19% | 84.35% | 57.89% | 37.61% | 67.14% | 0.28° | 44.7 ms |
+| **intel/person-retail-0013 (OpenVINO)** | 44.60% | 82.73% | 65.26% | 72.65% | 68.57% | 0.23° | 10.9 ms |
 
 ## 2. Đánh Giá Phân Tầng Theo Từng Lát Cắt Kịch Bản (Stratified Slices)
 
-### yolov8n.pt (Baseline)
+### Bảng Ma Trận Đối Chứng Độ Nhạy (Recall / FP) Theo Từng Trục Kịch Bản
+
+| Trục kiểm thử | Chi tiết kịch bản | **yolov8n.pt (Baseline)** | **yolo11n.pt (C2PSA Attention)** | **yolo26n.pt (NMS-Free)** | **intel/person-retail-0013 (OpenVINO)** |
+| :--- | :--- | :---: | :---: | :---: | :---: |
+| `D1_Architecture` | D1: Vật cản kiến trúc cố định (Mép cửa phòng khám 110, mép tường, trụ) | 94.5% | 95.2% | 95.2% | 95.9% |
+| `D2_Furniture` | D2: Đạo cụ & nội thất che khuất (Quầy lễ tân, rèm che, xe tiêm) | 84.0% | 84.0% | 84.0% | 100.0% |
+| `D3_Clinical_Poses` | D3: Dị biệt dáng đi & lâm sàng (Xe lăn, nạng/gậy, cáng nằm, khom lưng) | 78.7% | 76.0% | 76.7% | 74.7% |
+| `D4_Crowd_Dyn` | D4: Động học đám đông (Đi song song, che lấp lẫn nhau, xếp hàng) | 65.1% | 61.9% | 59.4% | 72.3% |
+| `D5_Distances` | D5: Biến dạng cự ly & Cắt biên ảnh (0.6m đến 10m, mép FOV) | 100.0% | 100.0% | 100.0% | 56.8% |
+| `D6_Kinematics` | D6: Góc quay cơ thể & Động học (0°, 45°, 90°, 135°, 180°, 270°) | 100.0% | 100.0% | 99.3% | 96.0% |
+| `D7_Lighting` | D7: Nhiễu ánh sáng & Hiệu ứng PBR (Ngược sáng, chói lóa, đèn sự cố) | 100.0% | 100.0% | 100.0% | 100.0% |
+| `D8_Hard_Negatives` | D8: Bẫy âm tính giả (Xe lăn rỗng, giường rỗng, poster y tế, kiosk) | 106 FP | 104 FP | 106 FP | 124 FP |
+
+### Chi tiết: yolov8n.pt (Baseline)
 
 | Slice | Mô tả | Số frame | TP | FP | FN | Recall |
 | :--- | :--- | :---: | :---: | :---: | :---: | :---: |
-| `S1_Baseline` | Hành lang chuẩn (1-2 người đi bộ) | 120 | 120 | 0 | 0 | 100.00% |
-| `S2_Vulnerable` | Bệnh nhân xe lăn & người già khom lưng | 180 | 89 | 20 | 19 | 82.41% |
-| `S3_Crowd_Occ` | Quầy tiếp đón đông người & chồng lấp | 150 | 120 | 10 | 68 | 63.83% |
-| `S4_Photometric` | Nhiễu ánh sáng (ngược sáng / tối / chói) | 90 | 69 | 19 | 21 | 76.67% |
-| `S5_Hard_Neg` | Bẫy đạo cụ y tế rỗng (xe lăn, kiosk) | 60 | 0 | 0 | 0 | N/A (0 GT) |
+| `D1_Architecture` | D1: Vật cản kiến trúc cố định (Mép cửa phòng khám 110, mép tường, trụ) | 150 | 137 | 132 | 8 | 94.48% |
+| `D2_Furniture` | D2: Đạo cụ & nội thất che khuất (Quầy lễ tân, rèm che, xe tiêm) | 150 | 42 | 178 | 8 | 84.00% |
+| `D3_Clinical_Poses` | D3: Dị biệt dáng đi & lâm sàng (Xe lăn, nạng/gậy, cáng nằm, khom lưng) | 150 | 118 | 129 | 32 | 78.67% |
+| `D4_Crowd_Dyn` | D4: Động học đám đông (Đi song song, che lấp lẫn nhau, xếp hàng) | 150 | 181 | 184 | 97 | 65.11% |
+| `D5_Distances` | D5: Biến dạng cự ly & Cắt biên ảnh (0.6m đến 10m, mép FOV) | 150 | 125 | 97 | 0 | 100.00% |
+| `D6_Kinematics` | D6: Góc quay cơ thể & Động học (0°, 45°, 90°, 135°, 180°, 270°) | 150 | 150 | 150 | 0 | 100.00% |
+| `D7_Lighting` | D7: Nhiễu ánh sáng & Hiệu ứng PBR (Ngược sáng, chói lóa, đèn sự cố) | 150 | 150 | 137 | 0 | 100.00% |
+| `D8_Hard_Negatives` | D8: Bẫy âm tính giả (Xe lăn rỗng, giường rỗng, poster y tế, kiosk) | 150 | 0 | 106 | 0 | N/A (0 GT) |
 
-### yolo11n.pt (C2PSA Attention)
-
-| Slice | Mô tả | Số frame | TP | FP | FN | Recall |
-| :--- | :--- | :---: | :---: | :---: | :---: | :---: |
-| `S1_Baseline` | Hành lang chuẩn (1-2 người đi bộ) | 120 | 118 | 2 | 2 | 98.33% |
-| `S2_Vulnerable` | Bệnh nhân xe lăn & người già khom lưng | 180 | 89 | 20 | 19 | 82.41% |
-| `S3_Crowd_Occ` | Quầy tiếp đón đông người & chồng lấp | 150 | 120 | 12 | 68 | 63.83% |
-| `S4_Photometric` | Nhiễu ánh sáng (ngược sáng / tối / chói) | 90 | 72 | 15 | 18 | 80.00% |
-| `S5_Hard_Neg` | Bẫy đạo cụ y tế rỗng (xe lăn, kiosk) | 60 | 0 | 0 | 0 | N/A (0 GT) |
-
-### yolo26n.pt (NMS-Free)
+### Chi tiết: yolo11n.pt (C2PSA Attention)
 
 | Slice | Mô tả | Số frame | TP | FP | FN | Recall |
 | :--- | :--- | :---: | :---: | :---: | :---: | :---: |
-| `S1_Baseline` | Hành lang chuẩn (1-2 người đi bộ) | 120 | 120 | 0 | 0 | 100.00% |
-| `S2_Vulnerable` | Bệnh nhân xe lăn & người già khom lưng | 180 | 84 | 28 | 24 | 77.78% |
-| `S3_Crowd_Occ` | Quầy tiếp đón đông người & chồng lấp | 150 | 119 | 11 | 69 | 63.30% |
-| `S4_Photometric` | Nhiễu ánh sáng (ngược sáng / tối / chói) | 90 | 68 | 9 | 22 | 75.56% |
-| `S5_Hard_Neg` | Bẫy đạo cụ y tế rỗng (xe lăn, kiosk) | 60 | 0 | 0 | 0 | N/A (0 GT) |
+| `D1_Architecture` | D1: Vật cản kiến trúc cố định (Mép cửa phòng khám 110, mép tường, trụ) | 150 | 138 | 131 | 7 | 95.17% |
+| `D2_Furniture` | D2: Đạo cụ & nội thất che khuất (Quầy lễ tân, rèm che, xe tiêm) | 150 | 42 | 175 | 8 | 84.00% |
+| `D3_Clinical_Poses` | D3: Dị biệt dáng đi & lâm sàng (Xe lăn, nạng/gậy, cáng nằm, khom lưng) | 150 | 114 | 129 | 36 | 76.00% |
+| `D4_Crowd_Dyn` | D4: Động học đám đông (Đi song song, che lấp lẫn nhau, xếp hàng) | 150 | 172 | 183 | 106 | 61.87% |
+| `D5_Distances` | D5: Biến dạng cự ly & Cắt biên ảnh (0.6m đến 10m, mép FOV) | 150 | 125 | 97 | 0 | 100.00% |
+| `D6_Kinematics` | D6: Góc quay cơ thể & Động học (0°, 45°, 90°, 135°, 180°, 270°) | 150 | 150 | 151 | 0 | 100.00% |
+| `D7_Lighting` | D7: Nhiễu ánh sáng & Hiệu ứng PBR (Ngược sáng, chói lóa, đèn sự cố) | 150 | 150 | 139 | 0 | 100.00% |
+| `D8_Hard_Negatives` | D8: Bẫy âm tính giả (Xe lăn rỗng, giường rỗng, poster y tế, kiosk) | 150 | 0 | 104 | 0 | N/A (0 GT) |
 
-### intel/person-retail-0013 (OpenVINO)
+### Chi tiết: yolo26n.pt (NMS-Free)
 
 | Slice | Mô tả | Số frame | TP | FP | FN | Recall |
 | :--- | :--- | :---: | :---: | :---: | :---: | :---: |
-| `S1_Baseline` | Hành lang chuẩn (1-2 người đi bộ) | 120 | 113 | 0 | 7 | 94.17% |
-| `S2_Vulnerable` | Bệnh nhân xe lăn & người già khom lưng | 180 | 100 | 53 | 8 | 92.59% |
-| `S3_Crowd_Occ` | Quầy tiếp đón đông người & chồng lấp | 150 | 135 | 10 | 53 | 71.81% |
-| `S4_Photometric` | Nhiễu ánh sáng (ngược sáng / tối / chói) | 90 | 86 | 0 | 4 | 95.56% |
-| `S5_Hard_Neg` | Bẫy đạo cụ y tế rỗng (xe lăn, kiosk) | 60 | 0 | 18 | 0 | N/A (0 GT) |
+| `D1_Architecture` | D1: Vật cản kiến trúc cố định (Mép cửa phòng khám 110, mép tường, trụ) | 150 | 138 | 131 | 7 | 95.17% |
+| `D2_Furniture` | D2: Đạo cụ & nội thất che khuất (Quầy lễ tân, rèm che, xe tiêm) | 150 | 42 | 155 | 8 | 84.00% |
+| `D3_Clinical_Poses` | D3: Dị biệt dáng đi & lâm sàng (Xe lăn, nạng/gậy, cáng nằm, khom lưng) | 150 | 115 | 130 | 35 | 76.67% |
+| `D4_Crowd_Dyn` | D4: Động học đám đông (Đi song song, che lấp lẫn nhau, xếp hàng) | 150 | 165 | 171 | 113 | 59.35% |
+| `D5_Distances` | D5: Biến dạng cự ly & Cắt biên ảnh (0.6m đến 10m, mép FOV) | 150 | 125 | 99 | 0 | 100.00% |
+| `D6_Kinematics` | D6: Góc quay cơ thể & Động học (0°, 45°, 90°, 135°, 180°, 270°) | 150 | 149 | 149 | 1 | 99.33% |
+| `D7_Lighting` | D7: Nhiễu ánh sáng & Hiệu ứng PBR (Ngược sáng, chói lóa, đèn sự cố) | 150 | 150 | 131 | 0 | 100.00% |
+| `D8_Hard_Negatives` | D8: Bẫy âm tính giả (Xe lăn rỗng, giường rỗng, poster y tế, kiosk) | 150 | 0 | 106 | 0 | N/A (0 GT) |
+
+### Chi tiết: intel/person-retail-0013 (OpenVINO)
+
+| Slice | Mô tả | Số frame | TP | FP | FN | Recall |
+| :--- | :--- | :---: | :---: | :---: | :---: | :---: |
+| `D1_Architecture` | D1: Vật cản kiến trúc cố định (Mép cửa phòng khám 110, mép tường, trụ) | 150 | 139 | 157 | 6 | 95.86% |
+| `D2_Furniture` | D2: Đạo cụ & nội thất che khuất (Quầy lễ tân, rèm che, xe tiêm) | 150 | 50 | 132 | 0 | 100.00% |
+| `D3_Clinical_Poses` | D3: Dị biệt dáng đi & lâm sàng (Xe lăn, nạng/gậy, cáng nằm, khom lưng) | 150 | 112 | 121 | 38 | 74.67% |
+| `D4_Crowd_Dyn` | D4: Động học đám đông (Đi song song, che lấp lẫn nhau, xếp hàng) | 150 | 201 | 154 | 77 | 72.30% |
+| `D5_Distances` | D5: Biến dạng cự ly & Cắt biên ảnh (0.6m đến 10m, mép FOV) | 150 | 71 | 110 | 54 | 56.80% |
+| `D6_Kinematics` | D6: Góc quay cơ thể & Động học (0°, 45°, 90°, 135°, 180°, 270°) | 150 | 144 | 150 | 6 | 96.00% |
+| `D7_Lighting` | D7: Nhiễu ánh sáng & Hiệu ứng PBR (Ngược sáng, chói lóa, đèn sự cố) | 150 | 150 | 129 | 0 | 100.00% |
+| `D8_Hard_Negatives` | D8: Bẫy âm tính giả (Xe lăn rỗng, giường rỗng, poster y tế, kiosk) | 150 | 0 | 124 | 0 | N/A (0 GT) |
 
 ## 3. Kết Luận Thực Nghiệm & Quyết Định Lựa Chọn Model
 

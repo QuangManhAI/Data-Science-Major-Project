@@ -434,22 +434,22 @@ func _compute_actor_ground_truth(actor_root: Node3D, subcategory: String, vp_siz
 	var r: float = 0.28
 
 	if subcategory == "wheelchair":
-		h = 1.30
-		r = 0.35
-		for y_norm in [0.05, 0.20, 0.40, 0.60, 0.80, 0.98]:
+		h = 1.35
+		r = 0.40
+		for y_norm in [0.02, 0.15, 0.35, 0.55, 0.75, 0.90, 0.98]:
 			var y_val: float = h * y_norm
 			for theta in [0.0, 45.0, 90.0, 135.0, 180.0, 225.0, 270.0, 315.0]:
 				var rad = deg_to_rad(theta)
-				var cur_r = r if y_val < 0.6 else r * 0.8
-				var lp = Vector3(cur_r * cos(rad), y_val, cur_r * 0.7 * sin(rad))
+				var cur_r = r if y_val < 0.65 else r * 0.75
+				var z_offset = 0.12 if y_val < 0.65 else 0.0
+				var lp = Vector3(cur_r * cos(rad), y_val, cur_r * sin(rad) + z_offset)
 				world_pts.append(actor_root.global_transform * lp)
 	elif subcategory == "recumbent_bed":
-		# Nằm ngang trên giường bệnh (dài 1.75m theo phương Z, rộng 0.5m theo phương X, cao 0.35m theo Y)
-		for z_norm in [0.05, 0.25, 0.50, 0.75, 0.95]:
-			var z_val: float = (z_norm - 0.5) * 1.75
-			for x_norm in [-0.22, 0.0, 0.22]:
-				for y_norm in [0.1, 0.35]:
-					var lp = Vector3(x_norm, y_norm, z_val)
+		# Nằm ngửa trên đệm giường cấp cứu (đầu trên gối Z = -0.75m, chân duỗi Z = +0.90m, cao Y = 0.62m - 0.88m)
+		for z_val in [-0.75, -0.45, -0.15, 0.20, 0.55, 0.90]:
+			for x_val in [-0.25, 0.0, 0.25]:
+				for y_val in [0.62, 0.75, 0.88]:
+					var lp = Vector3(x_val, y_val, z_val)
 					world_pts.append(actor_root.global_transform * lp)
 	elif subcategory == "elderly_cane":
 		h = 1.55

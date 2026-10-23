@@ -1,0 +1,282 @@
+[
+  {
+    "model_name": "yolov8n.pt (Baseline)",
+    "precision": 0.4479,
+    "recall_overall": 0.8616,
+    "recall_wheelchair": 0.6579,
+    "recall_occluded": 0.4103,
+    "fpr_empty": 0.6786,
+    "mean_bearing_err_deg": 0.26,
+    "latency_p50_ms": 33.95,
+    "latency_p95_ms": 40.63,
+    "raw_counts": {
+      "tp": 903,
+      "fp": 1113,
+      "fn": 145,
+      "tp_wc": 125,
+      "fn_wc": 65,
+      "tp_occ": 48,
+      "fn_occ": 69
+    },
+    "slice_metrics": {
+      "D1_Architecture": {
+        "tp": 137,
+        "fn": 8,
+        "fp": 132,
+        "frames": 150
+      },
+      "D2_Furniture": {
+        "tp": 42,
+        "fn": 8,
+        "fp": 178,
+        "frames": 150
+      },
+      "D3_Clinical_Poses": {
+        "tp": 118,
+        "fn": 32,
+        "fp": 129,
+        "frames": 150
+      },
+      "D4_Crowd_Dyn": {
+        "tp": 181,
+        "fn": 97,
+        "fp": 184,
+        "frames": 150
+      },
+      "D5_Distances": {
+        "tp": 125,
+        "fn": 0,
+        "fp": 97,
+        "frames": 150
+      },
+      "D6_Kinematics": {
+        "tp": 150,
+        "fn": 0,
+        "fp": 150,
+        "frames": 150
+      },
+      "D7_Lighting": {
+        "tp": 150,
+        "fn": 0,
+        "fp": 137,
+        "frames": 150
+      },
+      "D8_Hard_Negatives": {
+        "tp": 0,
+        "fn": 0,
+        "fp": 106,
+        "frames": 150
+      }
+    }
+  },
+  {
+    "model_name": "yolo11n.pt (C2PSA Attention)",
+    "precision": 0.4455,
+    "recall_overall": 0.8502,
+    "recall_wheelchair": 0.5895,
+    "recall_occluded": 0.4274,
+    "fpr_empty": 0.675,
+    "mean_bearing_err_deg": 0.26,
+    "latency_p50_ms": 39.98,
+    "latency_p95_ms": 48.57,
+    "raw_counts": {
+      "tp": 891,
+      "fp": 1109,
+      "fn": 157,
+      "tp_wc": 112,
+      "fn_wc": 78,
+      "tp_occ": 50,
+      "fn_occ": 67
+    },
+    "slice_metrics": {
+      "D1_Architecture": {
+        "tp": 138,
+        "fn": 7,
+        "fp": 131,
+        "frames": 150
+      },
+      "D2_Furniture": {
+        "tp": 42,
+        "fn": 8,
+        "fp": 175,
+        "frames": 150
+      },
+      "D3_Clinical_Poses": {
+        "tp": 114,
+        "fn": 36,
+        "fp": 129,
+        "frames": 150
+      },
+      "D4_Crowd_Dyn": {
+        "tp": 172,
+        "fn": 106,
+        "fp": 183,
+        "frames": 150
+      },
+      "D5_Distances": {
+        "tp": 125,
+        "fn": 0,
+        "fp": 97,
+        "frames": 150
+      },
+      "D6_Kinematics": {
+        "tp": 150,
+        "fn": 0,
+        "fp": 151,
+        "frames": 150
+      },
+      "D7_Lighting": {
+        "tp": 150,
+        "fn": 0,
+        "fp": 139,
+        "frames": 150
+      },
+      "D8_Hard_Negatives": {
+        "tp": 0,
+        "fn": 0,
+        "fp": 104,
+        "frames": 150
+      }
+    }
+  },
+  {
+    "model_name": "yolo26n.pt (NMS-Free)",
+    "precision": 0.4519,
+    "recall_overall": 0.8435,
+    "recall_wheelchair": 0.5789,
+    "recall_occluded": 0.3761,
+    "fpr_empty": 0.6714,
+    "mean_bearing_err_deg": 0.28,
+    "latency_p50_ms": 36.53,
+    "latency_p95_ms": 44.66,
+    "raw_counts": {
+      "tp": 884,
+      "fp": 1072,
+      "fn": 164,
+      "tp_wc": 110,
+      "fn_wc": 80,
+      "tp_occ": 44,
+      "fn_occ": 73
+    },
+    "slice_metrics": {
+      "D1_Architecture": {
+        "tp": 138,
+        "fn": 7,
+        "fp": 131,
+        "frames": 150
+      },
+      "D2_Furniture": {
+        "tp": 42,
+        "fn": 8,
+        "fp": 155,
+        "frames": 150
+      },
+      "D3_Clinical_Poses": {
+        "tp": 115,
+        "fn": 35,
+        "fp": 130,
+        "frames": 150
+      },
+      "D4_Crowd_Dyn": {
+        "tp": 165,
+        "fn": 113,
+        "fp": 171,
+        "frames": 150
+      },
+      "D5_Distances": {
+        "tp": 125,
+        "fn": 0,
+        "fp": 99,
+        "frames": 150
+      },
+      "D6_Kinematics": {
+        "tp": 149,
+        "fn": 1,
+        "fp": 149,
+        "frames": 150
+      },
+      "D7_Lighting": {
+        "tp": 150,
+        "fn": 0,
+        "fp": 131,
+        "frames": 150
+      },
+      "D8_Hard_Negatives": {
+        "tp": 0,
+        "fn": 0,
+        "fp": 106,
+        "frames": 150
+      }
+    }
+  },
+  {
+    "model_name": "intel/person-retail-0013 (OpenVINO)",
+    "precision": 0.446,
+    "recall_overall": 0.8273,
+    "recall_wheelchair": 0.6526,
+    "recall_occluded": 0.7265,
+    "fpr_empty": 0.6857,
+    "mean_bearing_err_deg": 0.23,
+    "latency_p50_ms": 8.53,
+    "latency_p95_ms": 10.86,
+    "raw_counts": {
+      "tp": 867,
+      "fp": 1077,
+      "fn": 181,
+      "tp_wc": 124,
+      "fn_wc": 66,
+      "tp_occ": 85,
+      "fn_occ": 32
+    },
+    "slice_metrics": {
+      "D1_Architecture": {
+        "tp": 139,
+        "fn": 6,
+        "fp": 157,
+        "frames": 150
+      },
+      "D2_Furniture": {
+        "tp": 50,
+        "fn": 0,
+        "fp": 132,
+        "frames": 150
+      },
+      "D3_Clinical_Poses": {
+        "tp": 112,
+        "fn": 38,
+        "fp": 121,
+        "frames": 150
+      },
+      "D4_Crowd_Dyn": {
+        "tp": 201,
+        "fn": 77,
+        "fp": 154,
+        "frames": 150
+      },
+      "D5_Distances": {
+        "tp": 71,
+        "fn": 54,
+        "fp": 110,
+        "frames": 150
+      },
+      "D6_Kinematics": {
+        "tp": 144,
+        "fn": 6,
+        "fp": 150,
+        "frames": 150
+      },
+      "D7_Lighting": {
+        "tp": 150,
+        "fn": 0,
+        "fp": 129,
+        "frames": 150
+      },
+      "D8_Hard_Negatives": {
+        "tp": 0,
+        "fn": 0,
+        "fp": 124,
+        "frames": 150
+      }
+    }
+  }
+]

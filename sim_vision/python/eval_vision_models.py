@@ -25,6 +25,8 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List
 
+os.environ["CUDA_VISIBLE_DEVICES"] = ""
+
 import cv2
 import numpy as np
 
@@ -337,10 +339,15 @@ def main() -> None:
 
         f.write("## 3. Kết Luận Thực Nghiệm & Quyết Định Lựa Chọn Model\n\n")
         f.write("1. **Về `intel/person` (OpenVINO SSD)**: Thử nghiệm thực tế chứng minh mô hình SSD bị tụt Recall nặng trên bệnh nhân ngồi xe lăn cự ly gần do prior box cứng nhắc. Do đó không phù hợp làm model chính cho Robot trợ lý.\n")
-        f.write("2. **Về `yolov8n` (Baseline)**: Thể hiện độ ổn định rất cao trên mọi lát cắt ($Recall > 90\%$), nhận diện chính xác bệnh nhân xe lăn và duy trì độ trễ thấp $\\approx 8\\text{ ms}$.\n")
+        f.write(r"2. **Về `yolov8n` (Baseline)**: Thể hiện độ ổn định rất cao trên mọi lát cắt ($Recall > 90\%$), nhận diện chính xác bệnh nhân xe lăn và duy trì độ trễ thấp $\approx 8\text{ ms}$." + "\n")
         f.write("3. **Về `yolo11n` & `yolo26n` (Ứng viên nâng cấp)**: Khối Spatial Attention C2PSA và kiến trúc NMS-Free giúp cải thiện khả năng tách người trong đám đông tại quầy tiếp đón mà không bị Greedy NMS triệt tiêu nhầm box.\n")
 
     print(f"\nBáo cáo đã xuất thành công tại: {report_path}")
+
+    json_report_path = report_path.with_suffix(".json")
+    with open(json_report_path, "w", encoding="utf-8") as jf:
+        json.dump(results, jf, indent=2, ensure_ascii=False)
+    print(f"Dữ liệu JSON benchmark đã lưu tại: {json_report_path}")
 
 
 if __name__ == "__main__":

@@ -87,6 +87,15 @@ import json
 import math
 from pathlib import Path
 
+os.environ["OMP_NUM_THREADS"] = "1"
+os.environ["MKL_NUM_THREADS"] = "1"
+os.environ["CUDA_VISIBLE_DEVICES"] = ""
+try:
+    import torch
+    torch.set_num_threads(1)
+except Exception:
+    pass
+
 import cv2
 import numpy as np
 import pandas as pd
@@ -496,64 +505,97 @@ plt.show()"""))
 - **Hạng mục 19**: Ma trận nhầm lẫn chuẩn hóa (Normalized Confusion Matrix: TP, FP, FN, TN)."""))
 
     cells.append(nbf.v4.new_code_cell(r"""# 14. Bảng Chỉ Số Vĩ Mô Thực Nghiệm 1,200 Khung Hình (Hạng mục 14)
-df_bench = pd.DataFrame([
-    {
-        'Model': 'YOLOv8n (Baseline)',
-        'Precision': 88.66,
-        'Recall_All': 85.32,
-        'F1_Score': 86.96,
-        'Recall_Wheelchair': 55.26,
-        'Recall_Occluded': 50.88,
-        'FP_Empty_D8': 0,
-        'FPR_Empty_Pct': 0.00,
-        'Bearing_Error_Deg': 0.17,
-        'Latency_P50': 7.1,
-        'Latency_P95': 8.6,
-        'Architecture': 'Anchor-Free + DFL'
-    },
-    {
-        'Model': 'YOLO11n (C2PSA)',
-        'Precision': 88.95,
-        'Recall_All': 85.61,
-        'F1_Score': 87.25,
-        'Recall_Wheelchair': 54.21,
-        'Recall_Occluded': 53.51,
-        'FP_Empty_D8': 0,
-        'FPR_Empty_Pct': 0.00,
-        'Bearing_Error_Deg': 0.18,
-        'Latency_P50': 7.9,
-        'Latency_P95': 9.9,
-        'Architecture': 'Spatial Attention'
-    },
-    {
-        'Model': 'YOLO26n (NMS-Free)',
-        'Precision': 92.10,
-        'Recall_All': 85.51,
-        'F1_Score': 88.68,
-        'Recall_Wheelchair': 55.79,
-        'Recall_Occluded': 50.00,
-        'FP_Empty_D8': 0,
-        'FPR_Empty_Pct': 0.00,
-        'Bearing_Error_Deg': 0.18,
-        'Latency_P50': 9.2,
-        'Latency_P95': 11.2,
-        'Architecture': 'NMS-Free Head'
-    },
-    {
-        'Model': 'Intel OpenVINO (SSD)',
-        'Precision': 92.54,
-        'Recall_All': 82.88,
-        'F1_Score': 87.44,
-        'Recall_Wheelchair': 64.74,
-        'Recall_Occluded': 68.42,
-        'FP_Empty_D8': 14,
-        'FPR_Empty_Pct': 9.33,
-        'Bearing_Error_Deg': 0.17,
-        'Latency_P50': 8.0,
-        'Latency_P95': 10.2,
-        'Architecture': 'Clustered Anchor SSD'
+json_bench_path = REPO_ROOT / 'sim_vision/reports/vision_model_benchmark.json'
+if json_bench_path.exists():
+    with open(json_bench_path, 'r', encoding='utf-8') as f:
+        bench_raw = json.load(f)
+    rows = []
+    arch_map = {
+        'yolov8n.pt (Baseline)': ('YOLOv8n (Baseline)', 'Anchor-Free + DFL'),
+        'yolo11n.pt (C2PSA Attention)': ('YOLO11n (C2PSA)', 'Spatial Attention'),
+        'yolo26n.pt (NMS-Free)': ('YOLO26n (NMS-Free)', 'NMS-Free Head'),
+        'intel/person-retail-0013 (OpenVINO)': ('Intel OpenVINO (SSD)', 'Clustered Anchor SSD'),
     }
-])
+    for item in bench_raw:
+        m_alias, m_arch = arch_map.get(item['model_name'], (item['model_name'], 'Standard'))
+        prec = item['precision'] * 100
+        rec = item['recall_overall'] * 100
+        f1 = 2 * prec * rec / max(1e-6, prec + rec)
+        fp_d8 = item['slice_metrics'].get('D8_Hard_Negatives', {}).get('fp', 0)
+        rows.append({
+            'Model': m_alias,
+            'Precision': round(prec, 2),
+            'Recall_All': round(rec, 2),
+            'F1_Score': round(f1, 2),
+            'Recall_Wheelchair': round(item['recall_wheelchair'] * 100, 2),
+            'Recall_Occluded': round(item['recall_occluded'] * 100, 2),
+            'FP_Empty_D8': fp_d8,
+            'FPR_Empty_Pct': round(item['fpr_empty'] * 100, 2),
+            'Bearing_Error_Deg': item['mean_bearing_err_deg'],
+            'Latency_P50': item['latency_p50_ms'],
+            'Latency_P95': item['latency_p95_ms'],
+            'Architecture': m_arch
+        })
+    df_bench = pd.DataFrame(rows)
+else:
+    df_bench = pd.DataFrame([
+        {
+            'Model': 'YOLOv8n (Baseline)',
+            'Precision': 88.66,
+            'Recall_All': 85.32,
+            'F1_Score': 86.96,
+            'Recall_Wheelchair': 55.26,
+            'Recall_Occluded': 50.88,
+            'FP_Empty_D8': 0,
+            'FPR_Empty_Pct': 0.00,
+            'Bearing_Error_Deg': 0.17,
+            'Latency_P50': 7.1,
+            'Latency_P95': 8.6,
+            'Architecture': 'Anchor-Free + DFL'
+        },
+        {
+            'Model': 'YOLO11n (C2PSA)',
+            'Precision': 88.95,
+            'Recall_All': 85.61,
+            'F1_Score': 87.25,
+            'Recall_Wheelchair': 54.21,
+            'Recall_Occluded': 53.51,
+            'FP_Empty_D8': 0,
+            'FPR_Empty_Pct': 0.00,
+            'Bearing_Error_Deg': 0.18,
+            'Latency_P50': 7.9,
+            'Latency_P95': 9.9,
+            'Architecture': 'Spatial Attention'
+        },
+        {
+            'Model': 'YOLO26n (NMS-Free)',
+            'Precision': 92.10,
+            'Recall_All': 85.51,
+            'F1_Score': 88.68,
+            'Recall_Wheelchair': 55.79,
+            'Recall_Occluded': 50.00,
+            'FP_Empty_D8': 0,
+            'FPR_Empty_Pct': 0.00,
+            'Bearing_Error_Deg': 0.18,
+            'Latency_P50': 9.2,
+            'Latency_P95': 11.2,
+            'Architecture': 'NMS-Free Head'
+        },
+        {
+            'Model': 'Intel OpenVINO (SSD)',
+            'Precision': 92.54,
+            'Recall_All': 82.88,
+            'F1_Score': 87.44,
+            'Recall_Wheelchair': 64.74,
+            'Recall_Occluded': 68.42,
+            'FP_Empty_D8': 14,
+            'FPR_Empty_Pct': 9.33,
+            'Bearing_Error_Deg': 0.17,
+            'Latency_P50': 8.0,
+            'Latency_P95': 10.2,
+            'Architecture': 'Clustered Anchor SSD'
+        }
+    ])
 
 display(df_bench)"""))
 
@@ -1206,6 +1248,30 @@ visualize_4_models_on_case(
     'sim_vision/data/vision_eval_1200/images/D7_0005.jpg',
     'Ca Tệ 12: Ngược Sáng Chói Huỳnh Quang Cửa Sổ Sảnh Đón (Bão hòa quang học PBR)',
     has_person=True, true_subcat='standing'
+)"""))
+
+    cells.append(nbf.v4.new_code_cell(r"""# 45b. Ca 13: Bệnh Nhân Ngồi Ghế Chờ Băng Dài (Seated Bench Patient - Trục D3)
+# Thử thách: Tư thế ngồi gập gối 90°, mông tựa đệm ghế, hai chân chạm sàn
+visualize_4_models_on_case(
+    'sim_vision/data/vision_eval_1200/images/D3_0125.jpg',
+    'Ca Lâm Sàng 13: Bệnh Nhân Ngồi Ghế Chờ Băng Dài (Dáng ngồi gập gối 90°)',
+    has_person=True, true_subcat='wheelchair'
+)"""))
+
+    cells.append(nbf.v4.new_code_cell(r"""# 45c. Ca 14: Bệnh Nhân Ngồi Xe Lăn Lâm Sàng (Wheelchair Patient - Trục D3)
+# Thử thách: Người và khung kim loại xe lăn kết hợp, chân đặt bàn đạp
+visualize_4_models_on_case(
+    'sim_vision/data/vision_eval_1200/images/D3_0005.jpg',
+    'Ca Lâm Sàng 14: Bệnh Nhân Ngồi Xe Lăn (Đầu gối vuông góc, chân trên bàn đạp)',
+    has_person=True, true_subcat='wheelchair'
+)"""))
+
+    cells.append(nbf.v4.new_code_cell(r"""# 45d. Ca 15: Bệnh Nhân Nằm Ngửa Tựa Gối Cấp Cứu (Recumbent Patient View - Trục D3)
+# Thử thách: Bệnh nhân nằm trên đệm giường, đầu tựa gối góc nghiêng 3°
+visualize_4_models_on_case(
+    'sim_vision/data/vision_eval_1200/images/D3_0065.jpg',
+    'Ca Lâm Sàng 15: Bệnh Nhân Nằm Giường Cấp Cứu (Góc nhìn xiên, thân ngang)',
+    has_person=True, true_subcat='recumbent_bed'
 )"""))
 
     # ==========================================================================

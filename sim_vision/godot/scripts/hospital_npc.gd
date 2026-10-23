@@ -119,7 +119,7 @@ func _physics_process(delta: float) -> void:
 		if not _is_pardoning and dist_robot <= PARDON_TRIGGER_DIST:
 			_is_pardoning = true
 			var r_fwd: Vector3 = -robot_ref.global_transform.basis.z
-			_pardon_target = HospitalNpc.compute_pardon_target(
+			_pardon_target = compute_pardon_target(
 				_anchor_pos, robot_ref.global_position, r_fwd, PARDON_SIDESTEP_M
 			)
 		elif _is_pardoning and dist_robot >= PARDON_CLEAR_DIST:

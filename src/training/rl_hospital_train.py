@@ -115,6 +115,7 @@ def train_hospital_rl(
     resume: bool = False,
     force_resume: bool = False,
      resume_from: str | Path | None = None,
+    device_choice: str = "auto",
     enable_tb: bool = False,
     smoke: bool = False,
     experiments_root: str | Path = "experiments",
@@ -143,7 +144,15 @@ def train_hospital_rl(
         enable_tb=enable_tb,
     )
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    if device_choice == "cuda":
+        if not torch.cuda.is_available():
+            raise RuntimeError("CUDA is strictly required (--device cuda) but no CUDA device is available.")
+        device = torch.device("cuda")
+    elif device_choice == "cpu":
+        device = torch.device("cpu")
+    else:
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    logger.info(f"Using device: {device} ({torch.cuda.get_device_name(0) if device.type == 'cuda' else 'CPU'})")
     seed_everything(seed)
 
     agent = PPOHospitalAgent(obs_dim=OBS_DIM, act_dim=ACT_DIM).to(device)
@@ -525,6 +534,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="Rewind to <run_name>_best.pt and continue with fresh early-stopping budget",
     )
+    parser.add_argument("--device", type=str, default="auto", choices=["auto", "cuda", "cpu"], help="Hardware device")
     parser.add_argument("--tb", action="store_true", help="Enable TensorBoard logging")
     parser.add_argument("--smoke", action="store_true", help="Fast smoke test run")
     return parser.parse_args(argv)
@@ -540,6 +550,7 @@ def main(argv: list[str] | None = None) -> None:
         stage_override=args.stage,
         resume=args.resume,
         force_resume=args.force_resume,
+        device_choice=args.device,
         enable_tb=args.tb,
         smoke=args.smoke,
     )

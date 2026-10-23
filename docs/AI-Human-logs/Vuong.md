@@ -262,3 +262,15 @@
 - **Rejected:** Monolithic end-to-end policy predicting words/intents from raw camera pixels — fragile, slow to train, and discards existing high-accuracy PhoWhisper/PhoBERT pipeline.
 - **Touches:** `sim_vision/godot/scripts/robot.gd`, `sim_vision/godot/scripts/main.gd`, `sim_vision/godot/scripts/rl_env_bridge.gd`, `sim_vision/godot/scripts/rl_controller.gd`, `sim_vision/godot/tests/test_rl_env.gd`, `src/utils/run_logger.py`, `src/utils/checkpoint_utils.py`, `src/models/ppo_agent.py`, `src/training/hospital_env.py`, `src/training/rl_hospital_train.py`, `sim_vision/python/test_rl_hospital.py`, `run_simulation.py`, `docs/RL_TRAINING_PLAN.md`
 - **Evidence:** All 5 Godot RL tests in `test_rl_env.gd` passed (81 asserts); all 11 `test_robot.gd` tests passed; all 10 `test_main.gd` tests passed; all 7 Python RL tests in `test_rl_hospital.py` passed (100%); CLI smoke training (`--smoke`), `--resume`, and `--force-resume` verified.
+
+
+### D-021 — 25-Epoch PPO Training Run on CUDA and 10-Shift Comprehensive Benchmark
+- **Status:** accepted
+- **When:** 2026-10-23T13:12:00+07:00
+- **Decided by:** human-approved via `/grill-me` alignment (`rl_full_training_plan.md`)
+- **Trigger:** "Full PPO Training Run & Evaluation (Train Phase-1 agent for 20-30 epochs, generate curves, evaluate metrics)"
+- **Decision:** Execute 25-epoch PPO training run on CUDA (`NVIDIA GeForce RTX 4060 Laptop GPU`) with 1,200 steps per epoch across the 2-stage curriculum (Stage 1: epochs 1–10 Lobby/Corridor; Stage 2: epochs 11–25 Full 6-room hospital). Run 10 evaluation shifts per stage, plot training curves to `experiments/plots/rl_training_curves.png`, and publish `experiments/results/rl_hospital/evaluation_report.md`.
+- **Why:** Confirms empirical convergence of the PPO policy under realistic multi-shift hospital dynamics, validates elderly patient tether regulation (> 86% compliance in Stage 1, > 71% in Stage 2), and provides publication-grade evaluation curves and checkpoint artifacts.
+- **Rejected:** Running on CPU without GPU acceleration — would increase wall-clock training time substantially.
+- **Touches:** `src/training/rl_hospital_train.py`, `src/training/benchmark_and_plot.py`, `experiments/results/rl_hospital/evaluation_report.md`, `experiments/results/README.md`, `experiments/plots/rl_training_curves.png`
+- **Evidence:** 25-epoch training completed in 250s with best validation $R_{\text{team}} = 27.50$ at Epoch 24; 10-shift benchmark completed with mean $R_{\text{team}} = 41.60 \pm 27.08$ and 11 patient escorts in Stage 2.

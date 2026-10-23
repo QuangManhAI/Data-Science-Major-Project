@@ -1,0 +1,1016 @@
+[
+  {
+    "dataset": "Dataset 1 (Baseline)",
+    "cid": "C07",
+    "title": "C07: Quầy Lễ Tân Cao 1.1m",
+    "group": "D2_Baseline",
+    "is_empty": false,
+    "gts_count": 0,
+    "failures": {
+      "YOLOv8n": {
+        "type": "LOW_IOU_DRIFT",
+        "details": "Sai lệch biên hộp bao (IoU=0.00 < 0.40)"
+      },
+      "YOLO11n": {
+        "type": "LOW_IOU_DRIFT",
+        "details": "Sai lệch biên hộp bao (IoU=0.00 < 0.40)"
+      },
+      "YOLO26n": {
+        "type": "LOW_IOU_DRIFT",
+        "details": "Sai lệch biên hộp bao (IoU=0.00 < 0.40)"
+      },
+      "Intel OpenVINO": {
+        "type": "LOW_IOU_DRIFT",
+        "details": "Sai lệch biên hộp bao (IoU=0.00 < 0.40)"
+      }
+    }
+  },
+  {
+    "dataset": "Dataset 1 (Baseline)",
+    "cid": "C08",
+    "title": "C08: Ngồi Sau Bàn Khám & Màn Hình",
+    "group": "D2_Baseline",
+    "is_empty": false,
+    "gts_count": 0,
+    "failures": {
+      "YOLOv8n": {
+        "type": "LOW_IOU_DRIFT",
+        "details": "Sai lệch biên hộp bao (IoU=0.00 < 0.40)"
+      },
+      "YOLO11n": {
+        "type": "LOW_IOU_DRIFT",
+        "details": "Sai lệch biên hộp bao (IoU=0.00 < 0.40)"
+      },
+      "YOLO26n": {
+        "type": "LOW_IOU_DRIFT",
+        "details": "Sai lệch biên hộp bao (IoU=0.00 < 0.40)"
+      },
+      "Intel OpenVINO": {
+        "type": "LOW_IOU_DRIFT",
+        "details": "Sai lệch biên hộp bao (IoU=0.00 < 0.40)"
+      }
+    }
+  },
+  {
+    "dataset": "Dataset 1 (Baseline)",
+    "cid": "C09",
+    "title": "C09: Khuất Sau Vách Rèm Y Tế",
+    "group": "D2_Baseline",
+    "is_empty": false,
+    "gts_count": 0,
+    "failures": {
+      "YOLOv8n": {
+        "type": "LOW_IOU_DRIFT",
+        "details": "Sai lệch biên hộp bao (IoU=0.00 < 0.40)"
+      },
+      "YOLO11n": {
+        "type": "LOW_IOU_DRIFT",
+        "details": "Sai lệch biên hộp bao (IoU=0.00 < 0.40)"
+      },
+      "YOLO26n": {
+        "type": "LOW_IOU_DRIFT",
+        "details": "Sai lệch biên hộp bao (IoU=0.00 < 0.40)"
+      },
+      "Intel OpenVINO": {
+        "type": "LOW_IOU_DRIFT",
+        "details": "Sai lệch biên hộp bao (IoU=0.00 < 0.40)"
+      }
+    }
+  },
+  {
+    "dataset": "Dataset 1 (Baseline)",
+    "cid": "C10",
+    "title": "C10: Khuất Sau Xe Đẩy Thuốc 2 Tầng",
+    "group": "D2_Baseline",
+    "is_empty": false,
+    "gts_count": 0,
+    "failures": {
+      "YOLOv8n": {
+        "type": "LOW_IOU_DRIFT",
+        "details": "Sai lệch biên hộp bao (IoU=0.00 < 0.40)"
+      },
+      "YOLO11n": {
+        "type": "LOW_IOU_DRIFT",
+        "details": "Sai lệch biên hộp bao (IoU=0.00 < 0.40)"
+      },
+      "YOLO26n": {
+        "type": "LOW_IOU_DRIFT",
+        "details": "Sai lệch biên hộp bao (IoU=0.00 < 0.40)"
+      },
+      "Intel OpenVINO": {
+        "type": "LOW_IOU_DRIFT",
+        "details": "Sai lệch biên hộp bao (IoU=0.00 < 0.40)"
+      }
+    }
+  },
+  {
+    "dataset": "Dataset 1 (Baseline)",
+    "cid": "C12",
+    "title": "C12: Ngồi Sau Hàng Ghế Chờ Inox",
+    "group": "D2_Baseline",
+    "is_empty": false,
+    "gts_count": 1,
+    "failures": {
+      "YOLO11n": {
+        "type": "LOW_IOU_DRIFT",
+        "details": "Sai lệch biên hộp bao (IoU=0.00 < 0.40)"
+      }
+    }
+  },
+  {
+    "dataset": "Dataset 1 (Baseline)",
+    "cid": "C13",
+    "title": "C13: Xe Lăn Nhìn Trực Diện (0°)",
+    "group": "D3_Baseline",
+    "is_empty": false,
+    "gts_count": 1,
+    "failures": {
+      "YOLOv8n": {
+        "type": "LOW_IOU_DRIFT",
+        "details": "Sai lệch biên hộp bao (IoU=0.29 < 0.40)"
+      },
+      "YOLO11n": {
+        "type": "LOW_IOU_DRIFT",
+        "details": "Sai lệch biên hộp bao (IoU=0.29 < 0.40)"
+      },
+      "YOLO26n": {
+        "type": "LOW_IOU_DRIFT",
+        "details": "Sai lệch biên hộp bao (IoU=0.28 < 0.40)"
+      },
+      "Intel OpenVINO": {
+        "type": "LOW_IOU_DRIFT",
+        "details": "Sai lệch biên hộp bao (IoU=0.38 < 0.40)"
+      }
+    }
+  },
+  {
+    "dataset": "Dataset 1 (Baseline)",
+    "cid": "C15",
+    "title": "C15: Xe Lăn Nhìn Ngang Hông 90°",
+    "group": "D3_Baseline",
+    "is_empty": false,
+    "gts_count": 1,
+    "failures": {
+      "YOLOv8n": {
+        "type": "LOW_IOU_DRIFT",
+        "details": "Sai lệch biên hộp bao (IoU=0.28 < 0.40)"
+      },
+      "YOLO11n": {
+        "type": "LOW_IOU_DRIFT",
+        "details": "Sai lệch biên hộp bao (IoU=0.21 < 0.40)"
+      },
+      "YOLO26n": {
+        "type": "LOW_IOU_DRIFT",
+        "details": "Sai lệch biên hộp bao (IoU=0.29 < 0.40)"
+      },
+      "Intel OpenVINO": {
+        "type": "LOW_IOU_DRIFT",
+        "details": "Sai lệch biên hộp bao (IoU=0.00 < 0.40)"
+      }
+    }
+  },
+  {
+    "dataset": "Dataset 1 (Baseline)",
+    "cid": "C16",
+    "title": "C16: Người Già Còng Lưng Chống Gậy",
+    "group": "D3_Baseline",
+    "is_empty": false,
+    "gts_count": 1,
+    "failures": {
+      "YOLOv8n": {
+        "type": "LOW_IOU_DRIFT",
+        "details": "Sai lệch biên hộp bao (IoU=0.00 < 0.40)"
+      },
+      "YOLO11n": {
+        "type": "LOW_IOU_DRIFT",
+        "details": "Sai lệch biên hộp bao (IoU=0.00 < 0.40)"
+      },
+      "YOLO26n": {
+        "type": "LOW_IOU_DRIFT",
+        "details": "Sai lệch biên hộp bao (IoU=0.00 < 0.40)"
+      },
+      "Intel OpenVINO": {
+        "type": "LOW_IOU_DRIFT",
+        "details": "Sai lệch biên hộp bao (IoU=0.00 < 0.40)"
+      }
+    }
+  },
+  {
+    "dataset": "Dataset 1 (Baseline)",
+    "cid": "C19",
+    "title": "C19: Đẩy Xe Lăn Sát Sau (NMS Trap)",
+    "group": "D4_Baseline",
+    "is_empty": false,
+    "gts_count": 2,
+    "failures": {
+      "YOLOv8n": {
+        "type": "LOW_IOU_DRIFT",
+        "details": "Sai lệch biên hộp bao (IoU=0.25 < 0.40)"
+      },
+      "YOLO11n": {
+        "type": "LOW_IOU_DRIFT",
+        "details": "Sai lệch biên hộp bao (IoU=0.25 < 0.40)"
+      },
+      "YOLO26n": {
+        "type": "LOW_IOU_DRIFT",
+        "details": "Sai lệch biên hộp bao (IoU=0.24 < 0.40)"
+      },
+      "Intel OpenVINO": {
+        "type": "LOW_IOU_DRIFT",
+        "details": "Sai lệch biên hộp bao (IoU=0.40 < 0.40)"
+      }
+    }
+  },
+  {
+    "dataset": "Dataset 1 (Baseline)",
+    "cid": "C20",
+    "title": "C20: Phụ Huynh Dắt Bệnh Nhi",
+    "group": "D4_Baseline",
+    "is_empty": false,
+    "gts_count": 2,
+    "failures": {
+      "YOLOv8n": {
+        "type": "LOW_IOU_DRIFT",
+        "details": "Sai lệch biên hộp bao (IoU=0.16 < 0.40)"
+      },
+      "YOLO11n": {
+        "type": "LOW_IOU_DRIFT",
+        "details": "Sai lệch biên hộp bao (IoU=0.22 < 0.40)"
+      },
+      "YOLO26n": {
+        "type": "FN_PARTIAL_NMS",
+        "details": "Bỏ sót 1 người (1/2 detected)"
+      }
+    }
+  },
+  {
+    "dataset": "Dataset 1 (Baseline)",
+    "cid": "C23",
+    "title": "C23: Cụm 4 Người Trước Bảng Chỉ Dẫn",
+    "group": "D4_Baseline",
+    "is_empty": false,
+    "gts_count": 2,
+    "failures": {
+      "YOLOv8n": {
+        "type": "FN_PARTIAL_NMS",
+        "details": "Bỏ sót 1 người (1/2 detected)"
+      },
+      "YOLO11n": {
+        "type": "FN_PARTIAL_NMS",
+        "details": "Bỏ sót 1 người (1/2 detected)"
+      },
+      "YOLO26n": {
+        "type": "FN_PARTIAL_NMS",
+        "details": "Bỏ sót 1 người (1/2 detected)"
+      },
+      "Intel OpenVINO": {
+        "type": "FN_PARTIAL_NMS",
+        "details": "Bỏ sót 1 người (1/2 detected)"
+      }
+    }
+  },
+  {
+    "dataset": "Dataset 1 (Baseline)",
+    "cid": "C25",
+    "title": "C25: Cận Cảnh Cực Đoan (0.6m)",
+    "group": "D5_Baseline",
+    "is_empty": false,
+    "gts_count": 1,
+    "failures": {
+      "Intel OpenVINO": {
+        "type": "LOW_IOU_DRIFT",
+        "details": "Sai lệch biên hộp bao (IoU=0.25 < 0.40)"
+      }
+    }
+  },
+  {
+    "dataset": "Dataset 1 (Baseline)",
+    "cid": "C26",
+    "title": "C26: Cận Cảnh Vùng An Toàn (0.9m)",
+    "group": "D5_Baseline",
+    "is_empty": false,
+    "gts_count": 1,
+    "failures": {
+      "Intel OpenVINO": {
+        "type": "LOW_IOU_DRIFT",
+        "details": "Sai lệch biên hộp bao (IoU=0.00 < 0.40)"
+      }
+    }
+  },
+  {
+    "dataset": "Dataset 1 (Baseline)",
+    "cid": "C29",
+    "title": "C29: Cắt Mép Trái Khung Hình",
+    "group": "D5_Baseline",
+    "is_empty": false,
+    "gts_count": 1,
+    "failures": {
+      "Intel OpenVINO": {
+        "type": "FN_TOTAL_MISS",
+        "details": "Bỏ sót hoàn toàn 0/1 người"
+      }
+    }
+  },
+  {
+    "dataset": "Dataset 1 (Baseline)",
+    "cid": "C30",
+    "title": "C30: Cắt Mép Phải Khung Hình",
+    "group": "D5_Baseline",
+    "is_empty": false,
+    "gts_count": 0,
+    "failures": {
+      "YOLOv8n": {
+        "type": "FN_TOTAL_MISS",
+        "details": "Bỏ sót hoàn toàn 0/0 người"
+      },
+      "YOLO11n": {
+        "type": "FN_TOTAL_MISS",
+        "details": "Bỏ sót hoàn toàn 0/0 người"
+      },
+      "YOLO26n": {
+        "type": "FN_TOTAL_MISS",
+        "details": "Bỏ sót hoàn toàn 0/0 người"
+      },
+      "Intel OpenVINO": {
+        "type": "FN_TOTAL_MISS",
+        "details": "Bỏ sót hoàn toàn 0/0 người"
+      }
+    }
+  },
+  {
+    "dataset": "Dataset 1 (Baseline)",
+    "cid": "C43",
+    "title": "C43: Xe Lăn Trống Không Người",
+    "group": "D8_Baseline",
+    "is_empty": true,
+    "gts_count": 0,
+    "failures": {
+      "YOLOv8n": {
+        "type": "FP_HALLUCINATION",
+        "details": "1 FP boxes, max_conf=0.87"
+      },
+      "YOLO11n": {
+        "type": "FP_HALLUCINATION",
+        "details": "1 FP boxes, max_conf=0.91"
+      },
+      "YOLO26n": {
+        "type": "FP_HALLUCINATION",
+        "details": "1 FP boxes, max_conf=0.88"
+      },
+      "Intel OpenVINO": {
+        "type": "FP_HALLUCINATION",
+        "details": "2 FP boxes, max_conf=1.00"
+      }
+    }
+  },
+  {
+    "dataset": "Dataset 1 (Baseline)",
+    "cid": "C44",
+    "title": "C44: Giường Bệnh Cấp Cứu Trống",
+    "group": "D8_Baseline",
+    "is_empty": true,
+    "gts_count": 0,
+    "failures": {
+      "YOLOv8n": {
+        "type": "FP_HALLUCINATION",
+        "details": "1 FP boxes, max_conf=0.87"
+      },
+      "YOLO11n": {
+        "type": "FP_HALLUCINATION",
+        "details": "1 FP boxes, max_conf=0.87"
+      },
+      "YOLO26n": {
+        "type": "FP_HALLUCINATION",
+        "details": "1 FP boxes, max_conf=0.89"
+      },
+      "Intel OpenVINO": {
+        "type": "FP_HALLUCINATION",
+        "details": "1 FP boxes, max_conf=0.98"
+      }
+    }
+  },
+  {
+    "dataset": "Dataset 1 (Baseline)",
+    "cid": "C46",
+    "title": "C46: Poster Bác Sĩ 2D Dán Tường",
+    "group": "D8_Baseline",
+    "is_empty": true,
+    "gts_count": 0,
+    "failures": {
+      "YOLOv8n": {
+        "type": "FP_HALLUCINATION",
+        "details": "1 FP boxes, max_conf=0.90"
+      },
+      "YOLO11n": {
+        "type": "FP_HALLUCINATION",
+        "details": "1 FP boxes, max_conf=0.87"
+      },
+      "YOLO26n": {
+        "type": "FP_HALLUCINATION",
+        "details": "1 FP boxes, max_conf=0.88"
+      },
+      "Intel OpenVINO": {
+        "type": "FP_HALLUCINATION",
+        "details": "1 FP boxes, max_conf=0.98"
+      }
+    }
+  },
+  {
+    "dataset": "Dataset 1 (Baseline)",
+    "cid": "C47",
+    "title": "C47: Kiosk Tự Phục Vụ 1.6m",
+    "group": "D8_Baseline",
+    "is_empty": true,
+    "gts_count": 0,
+    "failures": {
+      "YOLOv8n": {
+        "type": "FP_HALLUCINATION",
+        "details": "1 FP boxes, max_conf=0.84"
+      },
+      "YOLO11n": {
+        "type": "FP_HALLUCINATION",
+        "details": "1 FP boxes, max_conf=0.85"
+      },
+      "YOLO26n": {
+        "type": "FP_HALLUCINATION",
+        "details": "1 FP boxes, max_conf=0.84"
+      },
+      "Intel OpenVINO": {
+        "type": "FP_HALLUCINATION",
+        "details": "1 FP boxes, max_conf=1.00"
+      }
+    }
+  },
+  {
+    "dataset": "Dataset 1 (Baseline)",
+    "cid": "C48",
+    "title": "C48: Cụm Bình Chữa Cháy & Thùng Rác",
+    "group": "D8_Baseline",
+    "is_empty": true,
+    "gts_count": 0,
+    "failures": {
+      "YOLOv8n": {
+        "type": "FP_HALLUCINATION",
+        "details": "1 FP boxes, max_conf=0.54"
+      },
+      "YOLO11n": {
+        "type": "FP_HALLUCINATION",
+        "details": "1 FP boxes, max_conf=0.66"
+      },
+      "YOLO26n": {
+        "type": "FP_HALLUCINATION",
+        "details": "1 FP boxes, max_conf=0.74"
+      },
+      "Intel OpenVINO": {
+        "type": "FP_HALLUCINATION",
+        "details": "1 FP boxes, max_conf=0.97"
+      }
+    }
+  },
+  {
+    "dataset": "Dataset 2 (Clinical)",
+    "cid": "N1.1",
+    "title": "N1.1: Bác Sĩ Blouse Trắng Ngụy Trang (ΔE=8.4)",
+    "group": "N1_Clinical",
+    "is_empty": false,
+    "gts_count": 1,
+    "failures": {
+      "YOLOv8n": {
+        "type": "LOW_IOU_DRIFT",
+        "details": "Sai lệch biên hộp bao (IoU=0.32 < 0.40)"
+      },
+      "YOLO11n": {
+        "type": "LOW_IOU_DRIFT",
+        "details": "Sai lệch biên hộp bao (IoU=0.32 < 0.40)"
+      },
+      "YOLO26n": {
+        "type": "LOW_IOU_DRIFT",
+        "details": "Sai lệch biên hộp bao (IoU=0.31 < 0.40)"
+      },
+      "Intel OpenVINO": {
+        "type": "LOW_IOU_DRIFT",
+        "details": "Sai lệch biên hộp bao (IoU=0.00 < 0.40)"
+      }
+    }
+  },
+  {
+    "dataset": "Dataset 2 (Clinical)",
+    "cid": "N1.2",
+    "title": "N1.2: Y Tá Scrub Xanh Trùng Rèm Y Tế",
+    "group": "N1_Clinical",
+    "is_empty": false,
+    "gts_count": 1,
+    "failures": {
+      "Intel OpenVINO": {
+        "type": "LOW_IOU_DRIFT",
+        "details": "Sai lệch biên hộp bao (IoU=0.06 < 0.40)"
+      }
+    }
+  },
+  {
+    "dataset": "Dataset 2 (Clinical)",
+    "cid": "N1.4",
+    "title": "N1.4: Cụ Ông Lưng Còng Nghiêng 35°",
+    "group": "N1_Clinical",
+    "is_empty": false,
+    "gts_count": 1,
+    "failures": {
+      "Intel OpenVINO": {
+        "type": "FN_TOTAL_MISS",
+        "details": "Bỏ sót hoàn toàn 0/1 người"
+      }
+    }
+  },
+  {
+    "dataset": "Dataset 2 (Clinical)",
+    "cid": "N1.5",
+    "title": "N1.5: Cụ Ông Áo Kẻ Sọc Nhiễu Tần Số",
+    "group": "N1_Clinical",
+    "is_empty": false,
+    "gts_count": 1,
+    "failures": {
+      "Intel OpenVINO": {
+        "type": "LOW_IOU_DRIFT",
+        "details": "Sai lệch biên hộp bao (IoU=0.25 < 0.40)"
+      }
+    }
+  },
+  {
+    "dataset": "Dataset 2 (Clinical)",
+    "cid": "N2.1",
+    "title": "N2.1: Ngồi Ghế Băng Dài Tựa Lưng",
+    "group": "N2_Clinical",
+    "is_empty": false,
+    "gts_count": 1,
+    "failures": {
+      "Intel OpenVINO": {
+        "type": "FN_TOTAL_MISS",
+        "details": "Bỏ sót hoàn toàn 0/1 người"
+      }
+    }
+  },
+  {
+    "dataset": "Dataset 2 (Clinical)",
+    "cid": "N2.2",
+    "title": "N2.2: Ngồi Gập Người Ho Khạc 45°",
+    "group": "N2_Clinical",
+    "is_empty": false,
+    "gts_count": 1,
+    "failures": {
+      "Intel OpenVINO": {
+        "type": "FN_TOTAL_MISS",
+        "details": "Bỏ sót hoàn toàn 0/1 người"
+      }
+    }
+  },
+  {
+    "dataset": "Dataset 2 (Clinical)",
+    "cid": "N2.4",
+    "title": "N2.4: Bác Sĩ Cúi Đầu Đọc Bệnh Án",
+    "group": "N2_Clinical",
+    "is_empty": false,
+    "gts_count": 1,
+    "failures": {
+      "YOLOv8n": {
+        "type": "LOW_IOU_DRIFT",
+        "details": "Sai lệch biên hộp bao (IoU=0.26 < 0.40)"
+      },
+      "YOLO11n": {
+        "type": "LOW_IOU_DRIFT",
+        "details": "Sai lệch biên hộp bao (IoU=0.27 < 0.40)"
+      },
+      "YOLO26n": {
+        "type": "LOW_IOU_DRIFT",
+        "details": "Sai lệch biên hộp bao (IoU=0.27 < 0.40)"
+      },
+      "Intel OpenVINO": {
+        "type": "LOW_IOU_DRIFT",
+        "details": "Sai lệch biên hộp bao (IoU=0.25 < 0.40)"
+      }
+    }
+  },
+  {
+    "dataset": "Dataset 2 (Clinical)",
+    "cid": "N3.2",
+    "title": "N3.2: Điều Dưỡng Sau Xe Đẩy Monitor 1.2m",
+    "group": "N3_Clinical",
+    "is_empty": false,
+    "gts_count": 1,
+    "failures": {
+      "YOLOv8n": {
+        "type": "FN_TOTAL_MISS",
+        "details": "Bỏ sót hoàn toàn 0/1 người"
+      },
+      "YOLO11n": {
+        "type": "FN_TOTAL_MISS",
+        "details": "Bỏ sót hoàn toàn 0/1 người"
+      },
+      "YOLO26n": {
+        "type": "FN_TOTAL_MISS",
+        "details": "Bỏ sót hoàn toàn 0/1 người"
+      },
+      "Intel OpenVINO": {
+        "type": "FN_TOTAL_MISS",
+        "details": "Bỏ sót hoàn toàn 0/1 người"
+      }
+    }
+  },
+  {
+    "dataset": "Dataset 2 (Clinical)",
+    "cid": "N3.3",
+    "title": "N3.3: Bệnh Nhân Bấm Kiosk 1.55m (70% Occ)",
+    "group": "N3_Clinical",
+    "is_empty": false,
+    "gts_count": 1,
+    "failures": {
+      "YOLOv8n": {
+        "type": "LOW_IOU_DRIFT",
+        "details": "Sai lệch biên hộp bao (IoU=0.00 < 0.40)"
+      },
+      "YOLO11n": {
+        "type": "LOW_IOU_DRIFT",
+        "details": "Sai lệch biên hộp bao (IoU=0.00 < 0.40)"
+      },
+      "YOLO26n": {
+        "type": "LOW_IOU_DRIFT",
+        "details": "Sai lệch biên hộp bao (IoU=0.00 < 0.40)"
+      },
+      "Intel OpenVINO": {
+        "type": "LOW_IOU_DRIFT",
+        "details": "Sai lệch biên hộp bao (IoU=0.00 < 0.40)"
+      }
+    }
+  },
+  {
+    "dataset": "Dataset 2 (Clinical)",
+    "cid": "N3.5",
+    "title": "N3.5: Rửa Tay Cột Khử Khuẩn (Tay Duỗi)",
+    "group": "N3_Clinical",
+    "is_empty": false,
+    "gts_count": 1,
+    "failures": {
+      "YOLO11n": {
+        "type": "LOW_IOU_DRIFT",
+        "details": "Sai lệch biên hộp bao (IoU=0.12 < 0.40)"
+      },
+      "Intel OpenVINO": {
+        "type": "LOW_IOU_DRIFT",
+        "details": "Sai lệch biên hộp bao (IoU=0.11 < 0.40)"
+      }
+    }
+  },
+  {
+    "dataset": "Dataset 2 (Clinical)",
+    "cid": "N3.6",
+    "title": "N3.6: Hộ Lý Đẩy Xe Cáng Cấp Cứu 2.1m",
+    "group": "N3_Clinical",
+    "is_empty": false,
+    "gts_count": 1,
+    "failures": {
+      "YOLOv8n": {
+        "type": "LOW_IOU_DRIFT",
+        "details": "Sai lệch biên hộp bao (IoU=0.16 < 0.40)"
+      },
+      "YOLO11n": {
+        "type": "LOW_IOU_DRIFT",
+        "details": "Sai lệch biên hộp bao (IoU=0.16 < 0.40)"
+      },
+      "YOLO26n": {
+        "type": "LOW_IOU_DRIFT",
+        "details": "Sai lệch biên hộp bao (IoU=0.16 < 0.40)"
+      },
+      "Intel OpenVINO": {
+        "type": "LOW_IOU_DRIFT",
+        "details": "Sai lệch biên hộp bao (IoU=0.12 < 0.40)"
+      }
+    }
+  },
+  {
+    "dataset": "Dataset 2 (Clinical)",
+    "cid": "N4.1",
+    "title": "N4.1: Bẫy Cột Truyền Dịch Inox Rỗng",
+    "group": "N4_Clinical",
+    "is_empty": true,
+    "gts_count": 0,
+    "failures": {
+      "YOLOv8n": {
+        "type": "FP_HALLUCINATION",
+        "details": "1 FP boxes, max_conf=0.93"
+      },
+      "YOLO11n": {
+        "type": "FP_HALLUCINATION",
+        "details": "1 FP boxes, max_conf=0.92"
+      },
+      "YOLO26n": {
+        "type": "FP_HALLUCINATION",
+        "details": "1 FP boxes, max_conf=0.91"
+      }
+    }
+  },
+  {
+    "dataset": "Dataset 2 (Clinical)",
+    "cid": "N4.2",
+    "title": "N4.2: Bẫy Cột Khử Khuẩn Tự Động Rỗng",
+    "group": "N4_Clinical",
+    "is_empty": true,
+    "gts_count": 0,
+    "failures": {
+      "YOLOv8n": {
+        "type": "FP_HALLUCINATION",
+        "details": "1 FP boxes, max_conf=0.89"
+      },
+      "YOLO11n": {
+        "type": "FP_HALLUCINATION",
+        "details": "1 FP boxes, max_conf=0.92"
+      },
+      "YOLO26n": {
+        "type": "FP_HALLUCINATION",
+        "details": "1 FP boxes, max_conf=0.91"
+      }
+    }
+  },
+  {
+    "dataset": "Dataset 2 (Clinical)",
+    "cid": "N4.4",
+    "title": "N4.4: Bẫy Xe Đẩy Máy Monitor Rỗng",
+    "group": "N4_Clinical",
+    "is_empty": true,
+    "gts_count": 0,
+    "failures": {
+      "YOLOv8n": {
+        "type": "FP_HALLUCINATION",
+        "details": "1 FP boxes, max_conf=0.81"
+      },
+      "YOLO11n": {
+        "type": "FP_HALLUCINATION",
+        "details": "1 FP boxes, max_conf=0.87"
+      },
+      "YOLO26n": {
+        "type": "FP_HALLUCINATION",
+        "details": "1 FP boxes, max_conf=0.89"
+      },
+      "Intel OpenVINO": {
+        "type": "FP_HALLUCINATION",
+        "details": "1 FP boxes, max_conf=0.81"
+      }
+    }
+  },
+  {
+    "dataset": "Dataset 2 (Clinical)",
+    "cid": "N4.5",
+    "title": "N4.5: Bẫy Xe Cáng Cấp Cứu Nệm Trắng Rỗng",
+    "group": "N4_Clinical",
+    "is_empty": true,
+    "gts_count": 0,
+    "failures": {
+      "YOLOv8n": {
+        "type": "FP_HALLUCINATION",
+        "details": "1 FP boxes, max_conf=0.85"
+      },
+      "YOLO11n": {
+        "type": "FP_HALLUCINATION",
+        "details": "1 FP boxes, max_conf=0.86"
+      },
+      "YOLO26n": {
+        "type": "FP_HALLUCINATION",
+        "details": "1 FP boxes, max_conf=0.89"
+      },
+      "Intel OpenVINO": {
+        "type": "FP_HALLUCINATION",
+        "details": "1 FP boxes, max_conf=0.95"
+      }
+    }
+  },
+  {
+    "dataset": "Dataset 2 (Clinical)",
+    "cid": "N4.8",
+    "title": "N4.8: Bẫy Màn Hình LED Gọi Số Treo Tường",
+    "group": "N4_Clinical",
+    "is_empty": true,
+    "gts_count": 0,
+    "failures": {
+      "YOLOv8n": {
+        "type": "FP_HALLUCINATION",
+        "details": "1 FP boxes, max_conf=0.94"
+      },
+      "YOLO11n": {
+        "type": "FP_HALLUCINATION",
+        "details": "1 FP boxes, max_conf=0.92"
+      },
+      "YOLO26n": {
+        "type": "FP_HALLUCINATION",
+        "details": "1 FP boxes, max_conf=0.92"
+      },
+      "Intel OpenVINO": {
+        "type": "FP_HALLUCINATION",
+        "details": "1 FP boxes, max_conf=0.98"
+      }
+    }
+  },
+  {
+    "dataset": "Dataset 2 (Clinical)",
+    "cid": "N5.1",
+    "title": "N5.1: Đi Tuần Tra Đối Đầu (v_rel=1.08 m/s)",
+    "group": "N5_Clinical",
+    "is_empty": false,
+    "gts_count": 1,
+    "failures": {
+      "YOLOv8n": {
+        "type": "FN_TOTAL_MISS",
+        "details": "Bỏ sót hoàn toàn 0/1 người"
+      },
+      "YOLO11n": {
+        "type": "FN_TOTAL_MISS",
+        "details": "Bỏ sót hoàn toàn 0/1 người"
+      },
+      "YOLO26n": {
+        "type": "FN_TOTAL_MISS",
+        "details": "Bỏ sót hoàn toàn 0/1 người"
+      },
+      "Intel OpenVINO": {
+        "type": "FN_TOTAL_MISS",
+        "details": "Bỏ sót hoàn toàn 0/1 người"
+      }
+    }
+  },
+  {
+    "dataset": "Dataset 2 (Clinical)",
+    "cid": "N5.2",
+    "title": "N5.2: Bước Né Ngang Nhường Đường (0.55m)",
+    "group": "N5_Clinical",
+    "is_empty": false,
+    "gts_count": 1,
+    "failures": {
+      "YOLOv8n": {
+        "type": "LOW_IOU_DRIFT",
+        "details": "Sai lệch biên hộp bao (IoU=0.09 < 0.40)"
+      },
+      "YOLO11n": {
+        "type": "LOW_IOU_DRIFT",
+        "details": "Sai lệch biên hộp bao (IoU=0.09 < 0.40)"
+      },
+      "YOLO26n": {
+        "type": "LOW_IOU_DRIFT",
+        "details": "Sai lệch biên hộp bao (IoU=0.09 < 0.40)"
+      },
+      "Intel OpenVINO": {
+        "type": "LOW_IOU_DRIFT",
+        "details": "Sai lệch biên hộp bao (IoU=0.07 < 0.40)"
+      }
+    }
+  },
+  {
+    "dataset": "Dataset 2 (Clinical)",
+    "cid": "N5.3",
+    "title": "N5.3: Chuyển Hướng 90° Qua Ngưỡng Cửa",
+    "group": "N5_Clinical",
+    "is_empty": false,
+    "gts_count": 1,
+    "failures": {
+      "YOLOv8n": {
+        "type": "FN_TOTAL_MISS",
+        "details": "Bỏ sót hoàn toàn 0/1 người"
+      },
+      "YOLO11n": {
+        "type": "FN_TOTAL_MISS",
+        "details": "Bỏ sót hoàn toàn 0/1 người"
+      },
+      "YOLO26n": {
+        "type": "FN_TOTAL_MISS",
+        "details": "Bỏ sót hoàn toàn 0/1 người"
+      },
+      "Intel OpenVINO": {
+        "type": "FN_TOTAL_MISS",
+        "details": "Bỏ sót hoàn toàn 0/1 người"
+      }
+    }
+  },
+  {
+    "dataset": "Dataset 2 (Clinical)",
+    "cid": "N5.4",
+    "title": "N5.4: Điều Dưỡng Rẽ Bất Ngờ Từ Góc Khuất",
+    "group": "N5_Clinical",
+    "is_empty": false,
+    "gts_count": 1,
+    "failures": {
+      "YOLOv8n": {
+        "type": "LOW_IOU_DRIFT",
+        "details": "Sai lệch biên hộp bao (IoU=0.13 < 0.40)"
+      },
+      "YOLO11n": {
+        "type": "LOW_IOU_DRIFT",
+        "details": "Sai lệch biên hộp bao (IoU=0.13 < 0.40)"
+      },
+      "YOLO26n": {
+        "type": "LOW_IOU_DRIFT",
+        "details": "Sai lệch biên hộp bao (IoU=0.13 < 0.40)"
+      },
+      "Intel OpenVINO": {
+        "type": "LOW_IOU_DRIFT",
+        "details": "Sai lệch biên hộp bao (IoU=0.14 < 0.40)"
+      }
+    }
+  },
+  {
+    "dataset": "Dataset 2 (Clinical)",
+    "cid": "N6.1",
+    "title": "N6.1: Hai Cụ Già Ngồi Kề Nhau (NMS Trap)",
+    "group": "N6_Clinical",
+    "is_empty": false,
+    "gts_count": 2,
+    "failures": {
+      "Intel OpenVINO": {
+        "type": "FN_TOTAL_MISS",
+        "details": "Bỏ sót hoàn toàn 0/2 người"
+      }
+    }
+  },
+  {
+    "dataset": "Dataset 2 (Clinical)",
+    "cid": "N6.2",
+    "title": "N6.2: Cặp Đôi Bác Sĩ Đứng - Bệnh Nhân Ngồi",
+    "group": "N6_Clinical",
+    "is_empty": false,
+    "gts_count": 2,
+    "failures": {
+      "Intel OpenVINO": {
+        "type": "FN_TOTAL_MISS",
+        "details": "Bỏ sót hoàn toàn 0/2 người"
+      }
+    }
+  },
+  {
+    "dataset": "Dataset 2 (Clinical)",
+    "cid": "N6.3",
+    "title": "N6.3: Hàng Chờ 3 Bệnh Nhân Trước Kiosk",
+    "group": "N6_Clinical",
+    "is_empty": false,
+    "gts_count": 3,
+    "failures": {
+      "YOLOv8n": {
+        "type": "FN_TOTAL_MISS",
+        "details": "Bỏ sót hoàn toàn 0/3 người"
+      },
+      "YOLO11n": {
+        "type": "FN_TOTAL_MISS",
+        "details": "Bỏ sót hoàn toàn 0/3 người"
+      },
+      "YOLO26n": {
+        "type": "FN_TOTAL_MISS",
+        "details": "Bỏ sót hoàn toàn 0/3 người"
+      },
+      "Intel OpenVINO": {
+        "type": "FN_TOTAL_MISS",
+        "details": "Bỏ sót hoàn toàn 0/3 người"
+      }
+    }
+  },
+  {
+    "dataset": "Dataset 2 (Clinical)",
+    "cid": "N6.4",
+    "title": "N6.4: Thảo Luận: 180° Quay Lưng vs 0° Mặt",
+    "group": "N6_Clinical",
+    "is_empty": false,
+    "gts_count": 2,
+    "failures": {
+      "YOLOv8n": {
+        "type": "LOW_IOU_DRIFT",
+        "details": "Sai lệch biên hộp bao (IoU=0.10 < 0.40)"
+      },
+      "YOLO11n": {
+        "type": "LOW_IOU_DRIFT",
+        "details": "Sai lệch biên hộp bao (IoU=0.10 < 0.40)"
+      },
+      "YOLO26n": {
+        "type": "LOW_IOU_DRIFT",
+        "details": "Sai lệch biên hộp bao (IoU=0.08 < 0.40)"
+      },
+      "Intel OpenVINO": {
+        "type": "FN_PARTIAL_NMS",
+        "details": "Bỏ sót 1 người (1/2 detected)"
+      }
+    }
+  },
+  {
+    "dataset": "Dataset 2 (Clinical)",
+    "cid": "N6.5",
+    "title": "N6.5: Bệnh Nhân Được Người Nhà Dìu Đi Chậm",
+    "group": "N6_Clinical",
+    "is_empty": false,
+    "gts_count": 2,
+    "failures": {
+      "YOLOv8n": {
+        "type": "LOW_IOU_DRIFT",
+        "details": "Sai lệch biên hộp bao (IoU=0.32 < 0.40)"
+      },
+      "YOLO11n": {
+        "type": "LOW_IOU_DRIFT",
+        "details": "Sai lệch biên hộp bao (IoU=0.32 < 0.40)"
+      },
+      "YOLO26n": {
+        "type": "LOW_IOU_DRIFT",
+        "details": "Sai lệch biên hộp bao (IoU=0.32 < 0.40)"
+      }
+    }
+  }
+]

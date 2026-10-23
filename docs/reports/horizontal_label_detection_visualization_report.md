@@ -91,7 +91,61 @@ Biểu đồ ma trận 4 góc dưới đây đối chiếu đồng thời 4 thô
 
 ---
 
-## 💡 Kết Luận Kỹ Thuật & Khuyến Nghị Trực Quan Hóa
+## 🔍 5. Hồ Sơ Chuyên Sâu Các Ca Bị 0.0% & Danh Mục Ảnh Kiểm Chứng Thực Tế
+
+Trong bảng xếp hạng cột ngang toàn bộ 83 ca kiểm thử, các ca ghi nhận mức đo lường **`0.0%`** phản ánh những "tử huyệt" vật lý và thuật toán đặc thù của thị giác máy tính trong môi trường lâm sàng bệnh viện. Về mặt kỹ thuật, hiện tượng **`0.0%`** được phân rã thành hai cơ chế độc lập:
+1. **Tỷ Lệ Phát Hiện Bằng Không (`FN_TOTAL_MISS` — Detection Rate = 0.0%)**: Mô hình hoàn toàn không đưa ra bounding box nào (confidence rớt dưới ngưỡng phát hiện hoặc bị triệt tiêu triệt để bởi bộ lọc NMS).
+2. **Sai Lệch Biên Cực Đoan (`LOW_IOU_DRIFT` — $\text{IoU} = 0.00$ / Ground Truth Trượt Hoàn Toàn)**: Mắt người thấy rõ người, AI có phát hiện được một phần đối tượng (thường là chỏm đầu hoặc vai nhô lên), nhưng do bị đồ đạc nội thất che khuất $>60\%$ thân dưới, bounding box dự đoán **không giao nhau tí nào** với Ground Truth cơ thể thật chiếm dụng không gian ($\text{IoU} = 0.00 < 0.40$).
+
+---
+
+### 5.1. Nhóm Bỏ Sót Hoàn Toàn Trên Cả 4 Mô Hình (Detection Rate = 0.0%)
+
+Cả 4 mô hình (**YOLOv8n**, **YOLO11n**, **YOLO26n**, **Intel OpenVINO**) đều đồng loạt bỏ sót $100\%$ đối tượng:
+
+| Mã Ca | Tình Huống Lâm Sàng | File Ảnh Mẫu (Samples) | File Gốc Trong Dataset | Tại Sao Bị 0.0%? (Bản Chất Thị Giác & Động Học Vật Lý) |
+| :---: | :--- | :--- | :--- | :--- |
+| **N5.1** | Đi tuần tra đối đầu trực diện ($v_{\text{rel}}=1.08\text{ m/s}$) | [N5_1_Patrol_Looming_Reverse.jpg](file:///home/bush/Projects/Data-Science-Major-Project/sim_vision/data/samples/dataset_2_clinical_36cases/N5_1_Patrol_Looming_Reverse.jpg) | [N5_1_0015.jpg](file:///home/bush/Projects/Data-Science-Major-Project/sim_vision/data/vision_eval_extended_10800/images/N5_1_0015.jpg) | **Mờ chuyển động (Motion Blur)**: Vận tốc tương đối đối đầu $1.08\text{ m/s}$ làm nhòe gradient biên cạnh Sobel, triệt tiêu các đặc trưng cục bộ ở tầng Feature Pyramid ($P_3, P_4$), mô hình không gom đủ trọng số để kích hoạt anchor. |
+| **N5.3** | Chuyển hướng 90° luồn qua khung cửa hẹp | [N5_3_Doorway_Turn_90deg.jpg](file:///home/bush/Projects/Data-Science-Major-Project/sim_vision/data/samples/dataset_2_clinical_36cases/N5_3_Doorway_Turn_90deg.jpg) | [N5_3_0015.jpg](file:///home/bush/Projects/Data-Science-Major-Project/sim_vision/data/vision_eval_extended_10800/images/N5_3_0015.jpg) | **Biến dạng tỷ lệ khung hình (Aspect Ratio)**: Người xoay ngang $90^\circ$ khi đi qua cửa, diện tích chiếu 2D co hẹp méo mó đột ngột, phá vỡ tỷ lệ $H/W \approx 3.0$ chuẩn của người đứng, khiến mạng nơ-ron không kích hoạt lớp `person`. |
+| **N6.3** | Hàng chờ 3 bệnh nhân nối đuôi trước Kiosk | [N6_3_Queue_3_Patients_Sequence.jpg](file:///home/bush/Projects/Data-Science-Major-Project/sim_vision/data/samples/dataset_2_clinical_36cases/N6_3_Queue_3_Patients_Sequence.jpg) | [N6_3_0015.jpg](file:///home/bush/Projects/Data-Science-Major-Project/sim_vision/data/vision_eval_extended_10800/images/N6_3_0015.jpg) | **Che khuất đồng trục sâu ($Z$-Axis Occlusion)**: 3 người thẳng hàng đâm vào trục camera; người trước che $>85\%$ người sau; các thuật toán NMS triệt tiêu nhầm hoặc gộp chung 3 người thành 1 khối mờ đục không xác định. |
+| **C30** | Thân người bị cắt mép phải khung hình | [C30_Edge_Right_Truncated.jpg](file:///home/bush/Projects/Data-Science-Major-Project/sim_vision/data/samples/dataset_1_baseline_48cases/C30_Edge_Right_Truncated.jpg) | [D5_0137.jpg](file:///home/bush/Projects/Data-Science-Major-Project/sim_vision/data/vision_eval_1200/images/D5_0137.jpg) | **Mất tính đối xứng giải phẫu học**: Cơ thể bị rìa phải ảnh cắt dọc $50\%$, mất hẳn một bên vai và cánh tay; ma trận tích chập bị đứt gãy tính liên tục không gian, không kích hoạt đủ receptive field. |
+| **N3.2** | Điều dưỡng sau xe đẩy monitor $1.2\text{m}$ | [N3_2_Vital_Monitor_Cart.jpg](file:///home/bush/Projects/Data-Science-Major-Project/sim_vision/data/samples/dataset_2_clinical_36cases/N3_2_Vital_Monitor_Cart.jpg) | [N3_2_0015.jpg](file:///home/bush/Projects/Data-Science-Major-Project/sim_vision/data/vision_eval_extended_10800/images/N3_2_0015.jpg) | **Che khuất hạ thân $>65\%$**: Màn hình kim loại vuông vức che kín từ ngực xuống chân; chỉ lộ đầu và vai, mạng nơ-ron nhận diện nhầm thành tĩnh vật đặt trên bàn hoặc cụm thiết bị y tế. |
+
+---
+
+### 5.2. Nhóm Bỏ Sót Hoàn Toàn Riêng Trên Intel OpenVINO (`person-retail-0013` = 0.0%)
+
+Mô hình biên **Intel OpenVINO** chỉ được huấn luyện trên dữ liệu người đứng thẳng mua sắm trong siêu thị thương mại, do đó trượt $100\%$ trước các hình thái lâm sàng biến dạng:
+
+| Mã Ca | Tình Huống Lâm Sàng | File Ảnh Mẫu (Samples) | File Gốc Trong Dataset | Tại Sao OpenVINO Bị 0.0%? |
+| :---: | :--- | :--- | :--- | :--- |
+| **C29** | Thân người bị cắt mép trái ảnh | [C29_Edge_Left_Truncated.jpg](file:///home/bush/Projects/Data-Science-Major-Project/sim_vision/data/samples/dataset_1_baseline_48cases/C29_Edge_Left_Truncated.jpg) | [D5_0112.jpg](file:///home/bush/Projects/Data-Science-Major-Project/sim_vision/data/vision_eval_1200/images/D5_0112.jpg) | Viền trái cắt mất $50\%$ cơ thể; mạng OpenVINO SSD không có cơ chế anchor đa kích thước như YOLO để bù trừ rìa ảnh. |
+| **N1.4** | Cụ ông lưng còng gập $35^\circ$ (Elder M03) | [N1_4_Elderly_Male_M03_Kyphosis.jpg](file:///home/bush/Projects/Data-Science-Major-Project/sim_vision/data/samples/dataset_2_clinical_36cases/N1_4_Elderly_Male_M03_Kyphosis.jpg) | [N1_4_0015.jpg](file:///home/bush/Projects/Data-Science-Major-Project/sim_vision/data/vision_eval_extended_10800/images/N1_4_0015.jpg) | Cột sống gù gập $35^\circ$, sải chân ngắn, làm méo mó nghiêm trọng tỷ lệ khung đứng của người bình thường. |
+| **N2.1** | Bệnh nhân ngồi ghế băng dài tựa lưng | [N2_1_Waiting_Bench_Seated.jpg](file:///home/bush/Projects/Data-Science-Major-Project/sim_vision/data/samples/dataset_2_clinical_36cases/N2_1_Waiting_Bench_Seated.jpg) | [N2_1_0015.jpg](file:///home/bush/Projects/Data-Science-Major-Project/sim_vision/data/vision_eval_extended_10800/images/N2_1_0015.jpg) | Dáng ngồi ghế băng nén tỷ lệ aspect ratio còn $H/W \approx 1.0$ (thay vì $2.5 \sim 3.0$); bộ phân loại rớt điểm tin cậy về 0. |
+| **N2.2** | Ngồi gập người ho khạc $45^\circ$ ôm ngực | [N2_2_Seated_Cough_45deg.jpg](file:///home/bush/Projects/Data-Science-Major-Project/sim_vision/data/samples/dataset_2_clinical_36cases/N2_2_Seated_Cough_45deg.jpg) | [N2_2_0015.jpg](file:///home/bush/Projects/Data-Science-Major-Project/sim_vision/data/vision_eval_extended_10800/images/N2_2_0015.jpg) | Thân trên gục thấp xuống gối, chiều cao tổng thể nén lại còn $0.98\text{m}$, mất hoàn toàn đặc trưng khuôn mặt và đường viền cổ. |
+| **N6.1** | Hai cụ già ngồi kề nhau (NMS Trap) | [N6_1_Two_Elderly_Seated_Bench.jpg](file:///home/bush/Projects/Data-Science-Major-Project/sim_vision/data/samples/dataset_2_clinical_36cases/N6_1_Two_Elderly_Seated_Bench.jpg) | [N6_1_0015.jpg](file:///home/bush/Projects/Data-Science-Major-Project/sim_vision/data/vision_eval_extended_10800/images/N6_1_0015.jpg) | Vừa mang hình thái người ngồi vừa kề sát vai; hai hộp bao chồng lấn cao kích hoạt NMS xóa sổ hoàn toàn cả 2 người. |
+| **N6.2** | Cặp đôi bác sĩ đứng - bệnh nhân ngồi | [N6_2_Doctor_Standing_Patient_Seated.jpg](file:///home/bush/Projects/Data-Science-Major-Project/sim_vision/data/samples/dataset_2_clinical_36cases/N6_2_Doctor_Standing_Patient_Seated.jpg) | [N6_2_0015.jpg](file:///home/bush/Projects/Data-Science-Major-Project/sim_vision/data/vision_eval_extended_10800/images/N6_2_0015.jpg) | Áo blouse trắng ngụy trang vào tường phòng khám ($\Delta E=8.4$), kết hợp chênh lệch độ cao khiến OpenVINO mù tịt. |
+
+---
+
+### 5.3. Nhóm Sai Lệch Hộp Bao Cực Đoan ($\text{IoU} = 0.00$)
+
+Ở nhóm này, mô hình phát hiện ra đối tượng nhưng **hộp bao dự đoán trượt hoàn toàn khỏi Ground Truth** do phần chân và hông bị che khuất bởi nội thất bệnh viện:
+
+| Mã Ca | Tình Huống Che Khuất | File Ảnh Mẫu (Samples) | File Gốc Trong Dataset | Phân Tích Cơ Chế Trượt Biên $\text{IoU} = 0.00$ |
+| :---: | :--- | :--- | :--- | :--- |
+| **C07** | Quầy lễ tân cao $1.1\text{m}$ | [C07_Reception_Counter.jpg](file:///home/bush/Projects/Data-Science-Major-Project/sim_vision/data/samples/dataset_1_baseline_48cases/C07_Reception_Counter.jpg) | [D2_0012.jpg](file:///home/bush/Projects/Data-Science-Major-Project/sim_vision/data/vision_eval_1200/images/D2_0012.jpg) | Quầy gỗ cao che $60\%$ thân dưới; AI chỉ bao quanh phần đầu lơ lửng, trong khi Ground Truth bao phủ toàn bộ cơ thể người đứng $\Rightarrow \text{IoU} = 0.00$. |
+| **C08** | Ngồi sau bàn khám & màn hình PC | [C08_Doctor_Desk_Screen.jpg](file:///home/bush/Projects/Data-Science-Major-Project/sim_vision/data/samples/dataset_1_baseline_48cases/C08_Doctor_Desk_Screen.jpg) | [D2_0037.jpg](file:///home/bush/Projects/Data-Science-Major-Project/sim_vision/data/vision_eval_1200/images/D2_0037.jpg) | Màn hình máy tính che ngực, mặt bàn che chân; hộp bao dự đoán bị méo lệch hoàn toàn khỏi tọa độ trọng tâm thật. |
+| **C09** | Vách rèm y tế kháng khuẩn che dọc thân | [C09_Privacy_Screen_Curtain.jpg](file:///home/bush/Projects/Data-Science-Major-Project/sim_vision/data/samples/dataset_1_baseline_48cases/C09_Privacy_Screen_Curtain.jpg) | [D2_0062.jpg](file:///home/bush/Projects/Data-Science-Major-Project/sim_vision/data/vision_eval_1200/images/D2_0062.jpg) | Rèm vải rủ cắt dọc nửa thân người, diện tích nhìn thấy chỉ $45\%$; hộp bao dự đoán bị co rút sang mép ngoài rèm. |
+| **C10** | Xe tiêm inox 2 tầng chắn ngang | [C10_Medical_Trolley_Inox.jpg](file:///home/bush/Projects/Data-Science-Major-Project/sim_vision/data/samples/dataset_1_baseline_48cases/C10_Medical_Trolley_Inox.jpg) | [D2_0087.jpg](file:///home/bush/Projects/Data-Science-Major-Project/sim_vision/data/vision_eval_1200/images/D2_0087.jpg) | Khung kim loại nằm ngang chia cắt cơ thể thành 2 khối rời rạc; anchor box không khớp được toàn thân, $\text{IoU}=0.00$. |
+| **C16** | Người già còng lưng chống gậy | [C16_Elderly_Cane_Kyphosis.jpg](file:///home/bush/Projects/Data-Science-Major-Project/sim_vision/data/samples/dataset_1_baseline_48cases/C16_Elderly_Cane_Kyphosis.jpg) | [D3_0087.jpg](file:///home/bush/Projects/Data-Science-Major-Project/sim_vision/data/vision_eval_1200/images/D3_0087.jpg) | Cụ già gù gập về trước tạo góc xiên chéo, gậy chống gây nhiễu biên; tâm hình học $(c_x, c_y)$ bị lệch hoàn toàn ra ngoài. |
+| **N3.3** | Bệnh nhân bấm Kiosk tự phục vụ $1.55\text{m}$ | [N3_3_Queue_Kiosk_Frontal.jpg](file:///home/bush/Projects/Data-Science-Major-Project/sim_vision/data/samples/dataset_2_clinical_36cases/N3_3_Queue_Kiosk_Frontal.jpg) | [N3_3_0015.jpg](file:///home/bush/Projects/Data-Science-Major-Project/sim_vision/data/vision_eval_extended_10800/images/N3_3_0015.jpg) | Khối Kiosk kim loại to bản che $70\%$ hạ thân; AI chỉ nhận diện chỏm tóc và lưng áo phía trên, không chạm tới chân. |
+| **C15** | Xe lăn nhìn ngang hông $90^\circ$ | [C15_Wheelchair_Side_90.jpg](file:///home/bush/Projects/Data-Science-Major-Project/sim_vision/data/samples/dataset_1_baseline_48cases/C15_Wheelchair_Side_90.jpg) | [D3_0062.jpg](file:///home/bush/Projects/Data-Science-Major-Project/sim_vision/data/vision_eval_1200/images/D3_0062.jpg) | Bánh xe kim loại lớn che khuất toàn bộ cẳng chân người ngồi; trên OpenVINO đạt $\text{IoU} = 0.00$ (YOLO đạt $\text{IoU}=0.28$). |
+| **N1.1** | Bác sĩ blouse trắng tiệp màu tường | [N1_1_Doctor_White_Blouse_Wall.jpg](file:///home/bush/Projects/Data-Science-Major-Project/sim_vision/data/samples/dataset_2_clinical_36cases/N1_1_Doctor_White_Blouse_Wall.jpg) | [N1_1_0015.jpg](file:///home/bush/Projects/Data-Science-Major-Project/sim_vision/data/vision_eval_extended_10800/images/N1_1_0015.jpg) | Độ tương phản màu $\Delta E = 8.4$ quá thấp, viền cơ thể bị hòa lẫn vào sơn tường, OpenVINO lệch biên $\text{IoU} = 0.00$. |
+
+---
+
+## 💡 6. Kết Luận Kỹ Thuật & Khuyến Nghị Trực Quan Hóa
 
 1. **Hiệu Quả Trực Quan Hóa Cột Ngang**:
    - Biểu đồ cột ngang `ax.barh` đã giúp hiển thị đầy đủ, không bị chồng chéo nhãn chữ tiếng Việt cho cả 83 ca kịch bản và 14 phân nhóm không gian.

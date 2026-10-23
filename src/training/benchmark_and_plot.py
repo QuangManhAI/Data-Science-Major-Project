@@ -215,13 +215,27 @@ def generate_plots_and_report(
 
 
 def main() -> None:
-    run_dir = RunLogger.resolve_latest_run_dir("PPOHospital-25ep", experiments_root="experiments")
-    if run_dir is None:
-        raise FileNotFoundError("Could not find latest run dir for PPOHospital-25ep.")
+    import argparse
+    parser = argparse.ArgumentParser(description="Benchmark and plot hospital PPO policy.")
+    parser.add_argument("--run-name", type=str, default="PPOHospital-doorway-curriculum", help="Run name prefix to evaluate")
+    args = parser.parse_args()
 
-    best_ckpt = run_dir / "checkpoints" / "PPOHospital-25ep_best.pt"
+    run_dir = RunLogger.resolve_latest_run_dir(args.run_name, experiments_root="experiments")
+    if run_dir is None:
+        # Fallback to 25ep if doorway-curriculum not found
+        run_dir = RunLogger.resolve_latest_run_dir("PPOHospital-25ep", experiments_root="experiments")
+    if run_dir is None:
+        raise FileNotFoundError(f"Could not find latest run dir for {args.run_name}.")
+
+    run_prefix = run_dir.name.split("_", 2)[-1]
+    best_ckpt = run_dir / "checkpoints" / f"{run_prefix}_best.pt"
     if not best_ckpt.exists():
-        raise FileNotFoundError(f"Best checkpoint not found: {best_ckpt}")
+        # Check any *_best.pt in checkpoints
+        ckpts = list((run_dir / "checkpoints").glob("*_best.pt"))
+        if ckpts:
+            best_ckpt = ckpts[0]
+        else:
+            raise FileNotFoundError(f"Best checkpoint not found in: {run_dir / 'checkpoints'}")
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Loading checkpoint {best_ckpt} on device {device}...")

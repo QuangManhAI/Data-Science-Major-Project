@@ -1,6 +1,6 @@
 # Hospital Helper Robot — PPO Training & 10-Shift Benchmark Report
 
-- **Run Name**: `20261023_130646_PPOHospital-25ep`
+- **Run Name**: `20261023_155855_PPOHospital-doorway-curriculum`
 - **Algorithm**: Proximal Policy Optimization (PPO Actor-Critic, 31-D observation $\to$ continuous 2-D differential drive)
 - **Environment**: 24m $\times$ 18m Floor-1 Hospital Environment ([`room.tscn`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/sim_vision/godot/scenes/room.tscn))
 - **Sensor**: 17-ray horizontal 2D LiDAR fan (`200°` FOV, `6.0 m` range) + YOLO person box
@@ -14,21 +14,21 @@
 | Metric | Stage 1 (Lobby & Corridor) | Stage 2 (Full 6-Room Hospital) |
 | :--- | :---: | :---: |
 | **Number of Evaluation Shifts** | 10 shifts (180 s each) | 10 shifts (180 s each) |
-| **Mean Shared Team Reward ($R_{\text{team}}$)** | **21.00 $\pm$ 24.35** | **41.60 $\pm$ 27.08** |
-| **Mean Patients Helped / Shift** | **0.80 $\pm$ 0.75** | **1.60 $\pm$ 1.02** |
-| **Mean Collisions / Shift** | 633.00 | 407.30 |
-| **Elderly Tether Compliance ($0.9\text{ m} - 2.5\text{ m}$)** | **86.7%** | **71.6%** |
+| **Mean Shared Team Reward ($R_{\text{team}}$)** | **23.20 $\pm$ 29.33** | **50.80 $\pm$ 35.45** |
+| **Mean Patients Helped / Shift** | **1.00 $\pm$ 1.26** | **2.10 $\pm$ 1.45** |
+| **Mean Collisions / Shift** | 554.80 | 290.70 |
+| **Elderly Tether Compliance ($0.9\text{ m} - 2.5\text{ m}$)** | **73.4%** | **86.4%** |
 
 ### Task Breakdown Across 10 Shifts
 
 - **Stage 1 Total Resolved**:
-  - Verbal Answers (`+10`): `2`
+  - Verbal Answers (`+10`): `4`
   - Medical Staff Summons (`+20`): `1`
   - Patient Escorts (`+30`): `5`
 - **Stage 2 Total Resolved**:
-  - Verbal Answers (`+10`): `4`
-  - Medical Staff Summons (`+20`): `1`
-  - Patient Escorts (`+30`): `11`
+  - Verbal Answers (`+10`): `8`
+  - Medical Staff Summons (`+20`): `0`
+  - Patient Escorts (`+30`): `13`
 
 ---
 

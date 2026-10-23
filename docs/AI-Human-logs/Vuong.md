@@ -364,3 +364,18 @@
 - **Why:** Resolves washed-out and dark-on-dark invisible numbers in Gradio's dark theme, delivering maximum legibility for all telemetry values, sliders, and charts.
 - **Touches:** `src/ui/rl_dashboard.py`, `tests/test_dashboard.py`, `docs/AI-Human-logs/Vuong.md`
 - **Evidence:** 5/5 pytest tests in `tests/test_dashboard.py` pass cleanly with 0 warnings; all 9/9 repo tests pass.
+
+
+### D-027 — Fix Subprocess Pipe Buffer Deadlock and Dynamic Run Dropdown Refresh
+- **Status:** accepted
+- **When:** 2026-10-23T20:36:00+07:00
+- **Decided by:** AI-pair (Manh + Antigravity)
+- **Trigger:** "i order for 120 epoch, why it stop at 16? I can not even find it in the continuation list experiments\runs\20261023_193057_PPOHospital-interactive"
+- **Decision:**
+  1. Root cause 1: `start_training` spawned `rl_hospital_train.py` with `stdout=subprocess.PIPE` without draining the OS pipe buffer in Python. After 16 epochs of stdout text, Windows kernel pipe buffer (4–64 KB) filled up and blocked `sys.stdout.write(...)` in kernel `NtWriteFile` (Thread WaitReason: Executive). Fixed by introducing asynchronous daemon reader thread `_drain_stdout` continuously draining lines into `collections.deque(maxlen=300)`.
+  2. Root cause 2: `on_mode_change` in `rl_dashboard.py` previously only toggled visibility without re-scanning runs. Fixed by dynamically calling `find_existing_runs()` and updating `run_dropdown` choices, default selection, and auto-invoking `inspect_run` to immediately load charts, KPIs, and checkpoints when switching to "Continue from Previous Run".
+  3. Support explicit `--resume-from <dir>` CLI flag in `src/training/rl_hospital_train.py` and pass exact run folder from dashboard.
+  4. Updated `find_existing_runs()` to compute peak validation reward across all epochs rather than just the final epoch.
+- **Why:** Prevents multi-epoch training deadlocks and ensures all active and past runs are immediately selectable and visible in the continuation UI without requiring server restarts.
+- **Touches:** `src/ui/rl_dashboard.py`, `src/training/rl_hospital_train.py`, `tests/test_dashboard.py`, `docs/AI-Human-logs/Vuong.md`
+- **Evidence:** Verified clean resume of `20261023_193057_PPOHospital-interactive` from epoch 16 to 17; 9/9 pytest tests pass; verified `find_existing_runs` dynamically lists `20261023_193057_PPOHospital-interactive (Ep 16 | Peak R: 53.0 | Help: 0.5)`.

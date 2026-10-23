@@ -10,11 +10,13 @@ Features:
 from __future__ import annotations
 
 import argparse
+import collections
 import json
 import os
 import signal
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -38,6 +40,25 @@ CURRENT_RUN_DIR: Optional[Path] = None
 CURRENT_RUN_NAME: str = ""
 CURRENT_LOG_PATH: Optional[Path] = None
 CURRENT_METRICS_PATH: Optional[Path] = None
+LOG_STREAM_BUFFER: collections.deque[str] = collections.deque(maxlen=300)
+
+
+def _drain_stdout(proc: subprocess.Popen) -> None:
+    """Continuously drain process stdout lines to prevent OS pipe buffer deadlocks."""
+    if proc.stdout is None:
+        return
+    try:
+        for line in iter(proc.stdout.readline, ""):
+            if not line:
+                break
+            LOG_STREAM_BUFFER.append(line.rstrip())
+    except Exception:
+        pass
+    finally:
+        try:
+            proc.stdout.close()
+        except Exception:
+            pass
 
 
 def find_existing_runs() -> List[Tuple[str, str]]:
@@ -62,11 +83,12 @@ def find_existing_runs() -> List[Tuple[str, str]]:
             try:
                 lines = hist_files[0].read_text(encoding="utf-8").strip().splitlines()
                 if lines:
-                    last_rec = json.loads(lines[-1])
-                    ep = last_rec.get("epoch", len(lines))
-                    best_r = last_rec.get("val_r_team", 0.0)
-                    helped = last_rec.get("val_patients_helped", 0.0)
-                    label = f"{entry.name} (Ep {ep} | R_team: {best_r:.1f} | Help: {helped:.1f})"
+                    records = [json.loads(l) for l in lines if l.strip()]
+                    if records:
+                        ep = records[-1].get("epoch", len(records))
+                        peak_r = max(float(r.get("val_r_team", 0.0)) for r in records)
+                        helped = float(records[-1].get("val_patients_helped", 0.0))
+                        label = f"{entry.name} (Ep {ep} | Peak R: {peak_r:.1f} | Help: {helped:.1f})"
             except Exception:
                 pass
         runs.append((mtime, label, str(entry.resolve())))
@@ -280,7 +302,7 @@ def start_training(
             return "❌ Please select a previous run to continue from!", False, ""
         prev_p = Path(selected_prev_run)
         run_tag = prev_p.name.split("_", 2)[-1]
-        cmd.extend(["--run-name", run_tag])
+        cmd.extend(["--run-name", run_tag, "--resume-from", str(prev_p.resolve())])
         if force_resume:
             cmd.append("--force-resume")
         else:
@@ -293,7 +315,8 @@ def start_training(
         CURRENT_RUN_NAME = name_clean
         CURRENT_RUN_DIR = None
 
-    # Launch subprocess
+    # Launch subprocess with pipe draining thread to prevent deadlocks
+    LOG_STREAM_BUFFER.clear()
     try:
         CURRENT_PROCESS = subprocess.Popen(
             cmd,
@@ -303,6 +326,8 @@ def start_training(
             text=True,
             bufsize=1,
         )
+        drain_t = threading.Thread(target=_drain_stdout, args=(CURRENT_PROCESS,), daemon=True)
+        drain_t.start()
     except Exception as e:
         return f"❌ Failed to launch training process: {e}", False, ""
 
@@ -366,17 +391,20 @@ def poll_status_and_metrics(selected_prev_run: str) -> Tuple[Any, Any, Any, Any,
                 best_ep = r.get("epoch", 0)
         latest_helped = float(records[-1].get("val_patients_helped", 0.0))
 
-    # Read latest lines from log file
-    log_tail = ""
-    logs_dir = target_dir / "logs"
-    if logs_dir.is_dir():
-        log_files = list(logs_dir.glob("*.log"))
-        if log_files:
-            try:
-                lines = log_files[0].read_text(encoding="utf-8").splitlines()
-                log_tail = "\n".join(lines[-35:])
-            except Exception:
-                pass
+    # Read latest lines from memory stream buffer or fall back to log file
+    if LOG_STREAM_BUFFER:
+        log_tail = "\n".join(list(LOG_STREAM_BUFFER)[-35:])
+    else:
+        log_tail = ""
+        logs_dir = target_dir / "logs"
+        if logs_dir.is_dir():
+            log_files = list(logs_dir.glob("*.log"))
+            if log_files:
+                try:
+                    lines = log_files[0].read_text(encoding="utf-8").splitlines()
+                    log_tail = "\n".join(lines[-35:])
+                except Exception:
+                    pass
 
     ep_card = f"**{total_eps}**"
     r_card = f"**{best_r:.1f}** (Ep {best_ep})" if best_r > 0 else "**0.0**"
@@ -589,16 +617,35 @@ def build_dashboard() -> gr.Blocks:
         # Mode toggle interactions
         def on_mode_change(m: str):
             is_continue = m == "Continue from Previous Run"
-            return (
-                gr.update(visible=is_continue),
-                gr.update(visible=not is_continue),
-                gr.update(visible=is_continue),
-            )
+            if is_continue:
+                runs = find_existing_runs()
+                d_run = runs[0][1] if runs else ""
+                fig1, fig2, fig3, fig4, ep, r, help_cnt, eta, status, ckpt_upd = inspect_run(d_run)
+                return (
+                    gr.update(choices=[(l, p) for l, p in runs], value=d_run, visible=True),
+                    gr.update(visible=False),
+                    gr.update(visible=True),
+                    fig1, fig2, fig3, fig4, ep, r, help_cnt, eta, status, ckpt_upd,
+                )
+            else:
+                return (
+                    gr.update(visible=False),
+                    gr.update(visible=True),
+                    gr.update(visible=False),
+                    gr.update(), gr.update(), gr.update(), gr.update(),
+                    gr.update(), gr.update(), gr.update(), gr.update(),
+                    gr.update(), gr.update(),
+                )
 
         mode_radio.change(
             on_mode_change,
             inputs=[mode_radio],
-            outputs=[run_dropdown, run_name_input, force_resume_cb],
+            outputs=[
+                run_dropdown, run_name_input, force_resume_cb,
+                plot_reward, plot_loss, plot_prod, plot_safety,
+                kpi_epoch, kpi_r, kpi_help, kpi_eta,
+                action_output, ckpt_dropdown,
+            ],
         )
 
         # Inspect selected run

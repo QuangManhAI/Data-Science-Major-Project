@@ -543,6 +543,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="Rewind to <run_name>_best.pt and continue with fresh early-stopping budget",
     )
+    parser.add_argument(
+        "--resume-from",
+        type=str,
+        default=None,
+        help="Explicit directory path of previous run to resume from",
+    )
     parser.add_argument("--device", type=str, default="auto", choices=["auto", "cuda", "cpu"], help="Hardware device")
     parser.add_argument("--tb", action="store_true", help="Enable TensorBoard logging")
     parser.add_argument("--smoke", action="store_true", help="Fast smoke test run")
@@ -561,6 +567,7 @@ def main(argv: list[str] | None = None) -> None:
         stage_override=args.stage,
         resume=args.resume,
         force_resume=args.force_resume,
+        resume_from=args.resume_from,
         device_choice=args.device,
         enable_tb=args.tb,
         smoke=args.smoke,

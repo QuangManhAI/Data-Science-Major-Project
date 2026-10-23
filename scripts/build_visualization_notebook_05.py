@@ -192,11 +192,11 @@ DATASET_1_CASES = [
     ("C16", "D3", 87, "Elderly_Cane_Kyphosis", "C16: Người Già Còng Lưng Chống Gậy"),
     ("C17", "D3", 112, "Bed_Patient_Recumbent", "C17: Bệnh Nhân Nằm Giường Cấp Cứu"),
     ("C18", "D3", 137, "Bent_Over_90deg", "C18: Cúi Gập 90° Nhặt Sổ Khám"),
+    # D4: Đám Đông & NMS (Ca C20 dán nhãn sai bệnh nhi đã được loại bỏ triệt để)
     ("C19", "D4", 12, "Wheelchair_Pushed_Rear", "C19: Đẩy Xe Lăn Sát Sau (NMS Trap)"),
-    ("C20", "D4", 37, "Parent_Child_Holding", "C20: Phụ Huynh Dắt Bệnh Nhi"),
-    ("C21", "D4", 62, "Queue_3_Axial_Sequence", "C21: Hàng Dọc 3 Người Nối Đuôi"),
-    ("C22", "D4", 87, "Cross_Walk_Intersect", "C22: Cắt Mặt Ngược Chiều 2.5m"),
-    ("C23", "D4", 112, "Crowd_Signboard_Cluster", "C23: Cụm 4 Người Trước Bảng Chỉ Dẫn"),
+    ("C21", "D4", 102, "Queue_3_Axial_Sequence", "C21: Hàng Dọc Nối Đuôi"),
+    ("C22", "D4", 122, "Cross_Walk_Intersect", "C22: Cắt Mặt Ngược Chiều 3.6m"),
+    ("C23", "D4", 112, "Crowd_Signboard_Cluster", "C23: Cụm Người Trước Bảng Chỉ Dẫn"),
     ("C24", "D4", 137, "Guiding_Limping_Couple", "C24: Dìu Người Bệnh Đi Khập Khiễng"),
     ("C25", "D5", 12, "Extreme_Close_0.6m", "C25: Cận Cảnh Cực Đoan (0.6m)"),
     ("C26", "D5", 37, "Close_Safety_0.9m", "C26: Cận Cảnh Vùng An Toàn (0.9m)"),
@@ -509,15 +509,14 @@ for cid, rate_str, cause in cluster4_cases:
 ## 👥 Cụm 5: Đám Đông Kề Sát & Bẫy Triệt Tiêu Greedy NMS (Tỷ Lệ Nhận Diện $35\% \to 62\%$)
 
 > [!IMPORTANT]
-> **Hiện Tượng Một Người "Bốc Hơi" Khỏi Tầm Mắt Robot**: Khi hai người đi sát nhau (người đẩy xe lăn `C19`, phụ huynh dắt con `C20`, hoặc cụ già ngồi kề nhau `N6.1`), hai bounding box lồng ghép có $\text{IoU} > 0.45$. Thuật toán Greedy NMS truyền thống trên `YOLOv8n` tự động xóa mất hộp bao thứ hai!
+> **Hiện Tượng Một Người "Bốc Hơi" Khỏi Tầm Mắt Robot**: Khi hai người đi sát nhau (người đẩy xe lăn `C19` hoặc cụ già ngồi kề nhau `N6.1`), hai bounding box lồng ghép có $\text{IoU} > 0.45$. Thuật toán Greedy NMS truyền thống trên `YOLOv8n` tự động xóa mất hộp bao thứ hai! *(Lưu ý: Ca C20 phụ huynh dắt bệnh nhi đã được loại bỏ triệt để do dán nhãn sai)*.
 """))
 
     cells.append(nbf.v4.new_code_cell(r"""# Khảo sát các ca trong Cụm 5
 cluster5_cases = [
     ("N6.1", "35.1% (Trượt/Xóa 65%)", "Hai cụ già ngồi liền kề ghế băng; Greedy NMS xóa mất 1 cụ già, OpenVINO trượt hoàn toàn cả 2"),
     ("C19", "45.0% (Trượt/Xóa 55%)", "Người nhà đẩy sát sau xe lăn; 2 hộp bao lồng vào nhau 85% bị gộp chung thành một đối tượng"),
-    ("C20", "45.0% (Trượt/Xóa 55%)", "Phụ huynh dắt bệnh nhi; chênh lệch quy mô scale quá lớn làm mạng nơ-ron bỏ quên trẻ nhỏ"),
-    ("C23", "45.0% (Trượt/Xóa 55%)", "Cụm 4 người hội chẩn trước bảng chỉ dẫn; NMS triệt tiêu 2 người, chỉ phát hiện được 1-2/4"),
+    ("C23", "45.0% (Trượt/Xóa 55%)", "Cụm người hội chẩn trước bảng chỉ dẫn; NMS triệt tiêu bớt người, chỉ phát hiện được 1 phần"),
     ("N6.5", "58.0% (Lệch hộp bao)", "Người nhà dìu bệnh nhân cao tuổi đi chậm khập khiễng; hai cơ thể hòa vào nhau thành một khối")
 ]
 

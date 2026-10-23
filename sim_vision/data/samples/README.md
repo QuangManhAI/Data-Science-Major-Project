@@ -1,6 +1,6 @@
 # 📸 THƯ VIỆN ẢNH ĐẠI DIỆN TOÀN BỘ CÁC CA TRONG HỆ SINH THÁI DATASET (SAMPLES)
 
-Thư mục này được tổ chức chuẩn mực nhằm cung cấp các khung hình trực quan tổng quát nhất cho **TOÀN BỘ 84 CA KIỂM THỬ** độc lập trong cả 2 bộ dữ liệu mô phỏng bệnh viện Godot 4.
+Thư mục này được tổ chức chuẩn mực nhằm cung cấp các khung hình trực quan tổng quát nhất cho **TOÀN BỘ 83 CA KIỂM THỬ** độc lập trong cả 2 bộ dữ liệu mô phỏng bệnh viện Godot 4 (đã loại bỏ C20 lỗi dán nhãn).
 
 ---
 
@@ -26,13 +26,13 @@ sim_vision/data/samples/
 
 ---
 
-## 📋 Danh Mục Tra Cứu Toàn Bộ 84 Ca Kiểm Thử
+## 📋 Danh Mục Tra Cứu Toàn Bộ 83 Ca Kiểm Thử
 
-### Phân Hệ 1: Dataset Baseline (vision_eval_1200 — 48 Kịch Bản C01 đến C48)
+### Phân Hệ 1: Dataset Baseline (vision_eval_1200 — 47 Kịch Bản C01 đến C48, Bỏ C20 Lỗi Dán Nhãn)
 - **Trục D1 (Kiến trúc)**: C01 (Góc ngoặt T), C02 (Cắt dọc cửa), C03 (Khe cửa trượt 35%), C04 (Hốc thang máy), C05 (Nấp sau trụ cột), C06 (Cửa mở hé 45°).
 - **Trục D2 (Nội thất y tế)**: C07 (Quầy lễ tân 1.1m), C08 (Bàn khám & màn hình), C09 (Vách rèm y tế), C10 (Xe tiêm 2 tầng), C11 (Cọc truyền che ngực), C12 (Sau ghế chờ inox).
 - **Trục D3 (Tư thế lâm sàng)**: C13 (Xe lăn 0°), C14 (Xe lăn 45°), C15 (Xe lăn 90°), C16 (Cụ già gù chống gậy), C17 (Nằm giường cấp cứu), C18 (Cúi gập 90° nhặt sổ).
-- **Trục D4 (Đám đông & NMS)**: C19 (Đẩy xe lăn sau - NMS trap), C20 (Dắt tay trẻ em), C21 (Hàng 3 người), C22 (Cắt mặt 2.5m), C23 (Cụm 4 người), C24 (Dìu bước khập khiễng).
+- **Trục D4 (Đám đông & NMS)**: C19 (Đẩy xe lăn sau - NMS trap), C21 (Hàng 3 người), C22 (Cắt mặt 2.5m), C23 (Cụm 4 người), C24 (Dìu bước khập khiễng). *(Ca C20 dán nhãn sai bệnh nhi đã được loại bỏ triệt để)*.
 - **Trục D5 (Cự ly & Mép ảnh)**: C25 (Cực cận 0.6m), C26 (0.9m), C27 (2.5m), C28 (Xa 6.0m), C29 (Cắt mép trái), C30 (Cắt mép phải).
 - **Trục D6 (Động học)**: C31 (Quay lưng 180°), C32 (Chéo lưng 135°), C33 (Xoay 90°), C34 (Đi lùi), C35 (Đi nhanh 1.5m/s), C36 (Đứng yên nói chuyện).
 - **Trục D7 (Ánh sáng PBR)**: C37 (Ngược sáng sảnh), C38 (Phản chiếu sàn gạch bóng), C39 (Bóng đổ dài), C40 (Dư sáng huỳnh quang), C41 (Đèn trực đêm tối), C42 (Ánh sáng chớp tắt).

@@ -90,7 +90,7 @@ sim_vision/data/vision_eval_1200/
 | | C17 | Bệnh nhân nằm trên giường bệnh | Nằm ngửa trên `hospital_bed`, chăn đắp ngang bụng ($w/h \ge 2.5$). |
 | | C18 | Cúi gập người $90^\circ$ nhặt sổ khám rơi | Đầu chúc ngang đầu gối; mất mốc giải phẫu thẳng đứng. |
 | **D4: Đám đông** | C19 | Người nhà đẩy xe lăn phía sau | 1 người ngồi trước + 1 người đứng đẩy sát sau trùng trục camera (bẫy Greedy NMS). |
-| | C20 | Phụ huynh dắt tay bệnh nhi | Người lớn $1.7\text{m}$ dắt tay trẻ em $1.0\text{m}$ đứng sát nhau. |
+| | ~~C20~~ | *(Đã loại bỏ)* | Phụ huynh dắt tay bệnh nhi (loại bỏ triệt để do dán nhãn sai không có trẻ em). |
 | | C21 | Hàng dọc 3 bệnh nhân nối đuôi | 3 người xếp hàng trước quầy thuốc; người trước che $60\%$ người sau. |
 | | C22 | Cắt mặt ngược chiều | 2 NPC đi giao cắt nhau ở cự ly $2.5\text{m}$. |
 | | C23 | Cụm 4 người trước bảng chỉ dẫn | Đám đông đứng tản mác trước `hospital_sign`. |

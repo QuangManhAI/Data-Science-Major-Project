@@ -52,23 +52,23 @@ def create_all_cases_gallery_notebook():
     # ==========================================================================
     # CELL 0: TITLE & OVERVIEW
     # ==========================================================================
-    cells.append(nbf.v4.new_markdown_cell(r"""# 🏥 Sổ Tay 03: Thư Viện Trực Quan Hóa Phát Hiện Toàn Bộ 84 Ca Kiểm Thử (All-Case Visual Detection Gallery)
-## Comprehensive Visual Inspection of Ground Truth vs AI Detection across ALL 84 Scenarios (48 Baseline + 36 Clinical Scenarios)
+    cells.append(nbf.v4.new_markdown_cell(r"""# 🏥 Sổ Tay 03: Thư Viện Trực Quan Hóa Phát Hiện Toàn Bộ 83 Ca Kiểm Thử (All-Case Visual Detection Gallery)
+## Comprehensive Visual Inspection of Ground Truth vs AI Detection across ALL 83 Scenarios (47 Baseline + 36 Clinical Scenarios)
 *(Nền tảng mô phỏng Godot 4 Forward+ Vulkan & Backend Suy Luận Đa Mô Hình Thời Gian Thực)*
 
 ---
 
 ### 🎯 Mục Tiêu Của Sổ Tay Nghiên Cứu
 Khác với **Notebook 01** (phân tích chỉ số vĩ mô 50 hạng mục) và **Notebook 02** (phân tầng nhân khẩu học và hồi quy lâm sàng 65 hạng mục), **Notebook 03 là Thư Viện Thị Giác Thực Nghiệm Tối Thượng**:
-- Trực quan hóa **100% toàn bộ 84 ca kiểm thử độc lập** trong hệ sinh thái dữ liệu mô phỏng bệnh viện số hóa:
-  - **Dataset 1 (`vision_eval_1200`)**: Toàn bộ **48 kịch bản baseline** ($C_{01} \to C_{48}$) trên 8 trục không gian ($D_1 \to D_8$).
+- Trực quan hóa **100% toàn bộ 83 ca kiểm thử độc lập** trong hệ sinh thái dữ liệu mô phỏng bệnh viện số hóa:
+  - **Dataset 1 (`vision_eval_1200`)**: Toàn bộ **47 kịch bản baseline** ($C_{01} \to C_{48}$, đã loại bỏ triệt để ca $C_{20}$ do lỗi dán nhãn bệnh nhi) trên 8 trục không gian ($D_1 \to D_8$).
   - **Dataset 2 (`vision_eval_extended_10800`)**: Toàn bộ **36 ca lâm sàng khắc nghiệt** ($N_{1.1} \to N_{6.5}$) trên 6 nhóm kịch bản ($N_1 \to N_6$).
 - Soi thấu từng khung hình: Đối sánh trực quan **Ground Truth (Vết thực tế 3D/2D)** đối chiếu với **AI Prediction Bounding Boxes** của 4 mô hình:
   1. `yolov8n.pt` (Baseline — TaskAligned DFL, Greedy NMS)
   2. `yolo11n.pt` (C3k2 Block, Spatial Attention C2PSA)
   3. `yolo26n.pt` (End-to-End NMS-Free Dual-label Assignment)
   4. `intel/person-retail-0013` (OpenVINO IR MobileNetV2-SSD Clustered Anchors)
-- Kết xuất **Master Scorecard Heatmap 84 Ca $\times$ 4 Mô Hình**, thư viện so sánh đối đầu đa mô hình (Head-to-Head), và hệ thống đo xa Telemetry HUD phục vụ kiểm chứng firmware điều khiển robot bệnh viện.
+- Kết xuất **Master Scorecard Heatmap 83 Ca $\times$ 4 Mô Hình**, thư viện so sánh đối đầu đa mô hình (Head-to-Head), và hệ thống đo xa Telemetry HUD phục vụ kiểm chứng firmware điều khiển robot bệnh viện.
 
 ---
 
@@ -198,10 +198,9 @@ D1_DEFINITIONS = [
     ("C18", "D3", 137, "Bent_Over_90deg", "Cui gap 90 deg nhat so", "D3_AtypicalPoses", False),
 
     ("C19", "D4", 12, "Wheelchair_Pushed_Rear", "Day xe lan sau (NMS Trap)", "D4_CrowdDensity", False),
-    ("C20", "D4", 37, "Parent_Child_Holding", "Phu huynh dat benh nhi", "D4_CrowdDensity", False),
-    ("C21", "D4", 62, "Queue_3_Axial_Sequence", "Hang doc 3 nguoi noi duoi", "D4_CrowdDensity", False),
-    ("C22", "D4", 87, "Cross_Walk_Intersect", "Cat mat nguoc chieu 2.5m", "D4_CrowdDensity", False),
-    ("C23", "D4", 112, "Crowd_Signboard_Cluster", "Cum 4 nguoi truoc bien bao", "D4_CrowdDensity", False),
+    ("C21", "D4", 102, "Queue_3_Axial_Sequence", "Hang doc nguoi noi duoi", "D4_CrowdDensity", False),
+    ("C22", "D4", 122, "Cross_Walk_Intersect", "Cat mat nguoc chieu 3.6m", "D4_CrowdDensity", False),
+    ("C23", "D4", 112, "Crowd_Signboard_Cluster", "Cum nguoi truoc bien bao", "D4_CrowdDensity", False),
     ("C24", "D4", 137, "Guiding_Limping_Couple", "Diu nguoi benh di khap khieng", "D4_CrowdDensity", False),
 
     ("C25", "D5", 12, "Extreme_Close_0.6m", "Can canh cuc doan (0.6m)", "D5_DistanceTruncation", False),
@@ -459,15 +458,15 @@ plt.show()
 """))
 
     # ==========================================================================
-    # CELL 5: DATASET 1 — D3 & D4 (12 CASES)
+    # CELL 5: DATASET 1 — D3 & D4 (11 CASES, BỎ C20 LỖI DÁN NHÃN)
     # ==========================================================================
-    cells.append(nbf.v4.new_markdown_cell(r"""### Trục D3 (Tư Thế Lâm Sàng: $C_{13} \to C_{18}$) & Trục D4 (Đám Đông & Mật Độ NMS: $C_{19} \to C_{24}$)
+    cells.append(nbf.v4.new_markdown_cell(r"""### Trục D3 (Tư Thế Lâm Sàng: $C_{13} \to C_{18}$) & Trục D4 (Đám Đông & Mật Độ NMS: $C_{19} \to C_{24}$, Bỏ $C_{20}$)
 - **Thách thức thị giác D3**: Dáng ngồi xe lăn các góc ($0^\circ, 45^\circ, 90^\circ$), Cụ già gù lưng chống gậy, Bệnh nhân nằm giường cấp cứu (trục cơ thể xoay ngang $90^\circ$), Cúi gập người nhặt sổ.
-- **Thách thức thị giác D4**: Người nhà đẩy sát sau xe lăn (Bẫy NMS dính chập), Phụ huynh dắt con nhỏ, Hàng dọc 3 người, Cắt mặt ở cự ly gần.
+- **Thách thức thị giác D4**: Người nhà đẩy sát sau xe lăn (Bẫy NMS dính chập), Hàng dọc nối đuôi, Cắt mặt ở cự ly gần, Cụm người trước biển báo, Dìu người bệnh. *(Ca $C_{20}$ dán nhãn sai bệnh nhi đã được loại bỏ triệt để)*.
 """))
 
-    cells.append(nbf.v4.new_code_cell(r"""# Trực quan hóa 12 Ca D3 & D4 (C13 -> C24)
-cases_to_show = ALL_84_CASES[12:24]
+    cells.append(nbf.v4.new_code_cell(r"""# Trực quan hóa 11 Ca D3 & D4 (C13 -> C24, bỏ C20)
+cases_to_show = ALL_84_CASES[12:23]
 fig, axes = plt.subplots(4, 3, figsize=(18, 16))
 
 for idx, case in enumerate(cases_to_show):
@@ -485,6 +484,7 @@ for idx, case in enumerate(cases_to_show):
     ax.set_title(f"{case['case_id']}: {case['title']}\n[{status_str} | {lat_ms:.1f}ms]", fontsize=9, fontweight='bold', color=color)
     ax.axis('off')
 
+axes[3, 2].axis('off') # Ẩn ô thứ 12 do C20 đã bị loại bỏ
 plt.suptitle("Trực Quan Hóa Trục D3 (Tư Thế Lâm Sàng) & D4 (Đám Đông / NMS Trap) — YOLO26n Detection HUD", fontsize=14, fontweight='bold', y=0.995)
 plt.tight_layout()
 plt.show()
@@ -499,7 +499,7 @@ plt.show()
 """))
 
     cells.append(nbf.v4.new_code_cell(r"""# Trực quan hóa 12 Ca D5 & D6 (C25 -> C36)
-cases_to_show = ALL_84_CASES[24:36]
+cases_to_show = ALL_84_CASES[23:35]
 fig, axes = plt.subplots(4, 3, figsize=(18, 16))
 
 for idx, case in enumerate(cases_to_show):
@@ -531,7 +531,7 @@ plt.show()
 """))
 
     cells.append(nbf.v4.new_code_cell(r"""# Trực quan hóa 12 Ca D7 & D8 (C37 -> C48)
-cases_to_show = ALL_84_CASES[36:48]
+cases_to_show = ALL_84_CASES[35:47]
 fig, axes = plt.subplots(4, 3, figsize=(18, 16))
 
 for idx, case in enumerate(cases_to_show):
@@ -566,7 +566,7 @@ plt.show()
 """))
 
     cells.append(nbf.v4.new_code_cell(r"""# Trực quan hóa 12 Ca N1 & N2 (N1.1 -> N2.5)
-cases_to_show = ALL_84_CASES[48:60]
+cases_to_show = ALL_84_CASES[47:59]
 fig, axes = plt.subplots(4, 3, figsize=(18, 16))
 
 for idx, case in enumerate(cases_to_show):
@@ -598,7 +598,7 @@ plt.show()
 """))
 
     cells.append(nbf.v4.new_code_cell(r"""# Trực quan hóa 15 Ca N3 & N4 (N3.1 -> N4.8)
-cases_to_show = ALL_84_CASES[60:75]
+cases_to_show = ALL_84_CASES[59:74]
 fig, axes = plt.subplots(5, 3, figsize=(18, 19))
 
 for idx, case in enumerate(cases_to_show):
@@ -630,7 +630,7 @@ plt.show()
 """))
 
     cells.append(nbf.v4.new_code_cell(r"""# Trực quan hóa 9 Ca N5 & N6 (N5.1 -> N6.5)
-cases_to_show = ALL_84_CASES[75:84]
+cases_to_show = ALL_84_CASES[74:83]
 fig, axes = plt.subplots(3, 3, figsize=(18, 12))
 
 for idx, case in enumerate(cases_to_show):
@@ -701,16 +701,16 @@ for case in critical_cases:
     # CELL 12: MASTER SCORECARD HEATMAP (84 CASES x 4 MODELS)
     # ==========================================================================
     cells.append(nbf.v4.new_markdown_cell(r"""---
-## 📊 Phần 4: Ma Trận Phát Hiện Toàn Bộ 84 Ca $\times$ 4 Mô Hình (Master Scorecard Heatmap)
+## 📊 Phần 4: Ma Trận Phát Hiện Toàn Bộ 83 Ca $\times$ 4 Mô Hình (Master Scorecard Heatmap)
 
-Chấm điểm tự động và trực quan hóa bản đồ nhiệt kết quả kiểm thử trên toàn bộ 84 ca:
+Chấm điểm tự động và trực quan hóa bản đồ nhiệt kết quả kiểm thử trên toàn bộ 83 ca:
 - 🟩 **Pass (True Positive hoặc True Negative Chuẩn)**: Bắt đúng đối tượng người (IoU $\ge 0.35$) hoặc hoàn toàn im lặng trước bẫy rỗng (0 FP).
 - 🟨 **Marginal**: Bắt được người nhưng số lượng box thừa hoặc IoU thấp.
 - 🟥 **Fail (False Negative - Bỏ Sót)**: Không phát hiện được người thật.
 - 🟪 **False Alarm (Báo Động Giả - FP Trap)**: Bắt nhầm đạo cụ rỗng / poster thành người.
 """))
 
-    cells.append(nbf.v4.new_code_cell(r"""# Đánh giá toàn diện 84 Ca x 4 Models
+    cells.append(nbf.v4.new_code_cell(r"""# Đánh giá toàn diện 83 Ca x 4 Models
 score_matrix = []
 labels_y = []
 
@@ -743,13 +743,13 @@ for case in ALL_84_CASES:
                 row_scores.append(1) # Marginal (Thừa hoặc thiếu 1 phần)
     score_matrix.append(row_scores)
 
-score_arr = np.array(score_matrix) # shape (84, 4)
+score_arr = np.array(score_matrix) # shape (83, 4)
 
 # Vẽ Master Heatmap
 fig = plt.figure(figsize=(16, 22))
 gs = GridSpec(1, 2, figure=fig, width_ratios=[3.5, 1.2], wspace=0.25)
 
-# Bảng Heatmap 84 ca
+# Bảng Heatmap 83 ca
 ax_heat = fig.add_subplot(gs[0, 0])
 cmap = mpl.colors.ListedColormap(['#9b59b6', '#e74c3c', '#f39c12', '#2ecc71'])
 bounds = [-1.5, -0.5, 0.5, 1.5, 2.5]
@@ -760,7 +760,7 @@ ax_heat.set_xticks(range(len(model_names)))
 ax_heat.set_xticklabels(model_names, fontsize=11, fontweight='bold')
 ax_heat.set_yticks(range(len(labels_y)))
 ax_heat.set_yticklabels(labels_y, fontsize=7.5)
-ax_heat.set_title("Master Scorecard Heatmap: Toàn Bộ 84 Ca Kiểm Thử x 4 Mô Hình AI", fontsize=13, fontweight='bold', pad=15)
+ax_heat.set_title("Master Scorecard Heatmap: Toàn Bộ 83 Ca Kiểm Thử x 4 Mô Hình AI", fontsize=13, fontweight='bold', pad=15)
 
 # Thước đo chú giải
 cbar = plt.colorbar(im, ax=ax_heat, orientation='horizontal', fraction=0.03, pad=0.04)
@@ -773,7 +773,7 @@ pass_rates = [np.mean(score_arr[:, j] == 2) * 100 for j in range(len(model_names
 bars = ax_bar.barh(model_names, pass_rates, color=['#3498db', '#e67e22', '#2ecc71', '#95a5a6'], height=0.55)
 ax_bar.set_xlim(0, 100)
 ax_bar.set_xlabel("Tỷ Lệ Đạt Tuyệt Đối - Pass Rate (%)", fontsize=10, fontweight='bold')
-ax_bar.set_title("Tổng Kết Hiệu Năng 84 Ca", fontsize=12, fontweight='bold', pad=15)
+ax_bar.set_title("Tổng Kết Hiệu Năng 83 Ca", fontsize=12, fontweight='bold', pad=15)
 
 for bar in bars:
     w = bar.get_width()

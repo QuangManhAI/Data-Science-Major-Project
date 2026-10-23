@@ -4,28 +4,28 @@
 
 ## Executive Summary: Báo Cáo Kiểm Định Vĩ Mô
 
-Qua quá trình chạy đối chứng thực nghiệm đồng thời **CẢ 4 MÔ HÌNH THỊ GIÁC AI** (`YOLOv8n`, `YOLO11n`, `YOLO26n`, `Intel OpenVINO`) trên **TOÀN BỘ 84 CA KIỂM THỬ** thuộc cả hai bộ dữ liệu mô phỏng bệnh viện (Dataset 1: 48 ca baseline $C_{01} \to C_{48}$; Dataset 2: 36 ca lâm sàng $N_{1.1} \to N_{6.5}$):
+Qua quá trình chạy đối chứng thực nghiệm đồng thời **CẢ 4 MÔ HÌNH THỊ GIÁC AI** (`YOLOv8n`, `YOLO11n`, `YOLO26n`, `Intel OpenVINO`) trên **TOÀN BỘ 83 CA KIỂM THỬ** thuộc cả hai bộ dữ liệu mô phỏng bệnh viện (Dataset 1: 47 ca baseline $C_{01} \to C_{48}$, loại bỏ C20 lỗi dán nhãn; Dataset 2: 36 ca lâm sàng $N_{1.1} \to N_{6.5}$):
 
-- **Tổng số ca kiểm thử**: **84 ca**.
-- **Số ca hoàn hảo trên cả 4 mô hình**: **39 ca** ($46.4\%$).
-- **Số ca xuất hiện ít nhất một lỗi nghiêm trọng hoặc suy giảm độ chính xác trên ít nhất 1 mô hình**: **45 ca** ($53.6\%$).
-- **Phân bố 141 lượt lỗi ghi nhận**:
+- **Tổng số ca kiểm thử**: **83 ca**.
+- **Số ca hoàn hảo trên cả 4 mô hình**: **39 ca** ($47.0\%$).
+- **Số ca xuất hiện ít nhất một lỗi nghiêm trọng hoặc suy giảm độ chính xác trên ít nhất 1 mô hình**: **44 ca** ($53.0\%$).
+- **Phân bố 138 lượt lỗi ghi nhận**:
   - 🟥 **`FN_TOTAL_MISS` (Bỏ sót hoàn toàn người thật)**: **26 lượt** — Nguy cơ va chạm trực tiếp cấp 1 (*Tier 1 Direct Collision Risk*).
   - 🟪 **`FP_HALLUCINATION` (Báo động giả trên bẫy rỗng/poster)**: **38 lượt** — Nguy cơ phanh khẩn cấp vô cớ (*Phantom Braking / Tier 2 Hazard*).
-  - 🟧 **`FN_PARTIAL_NMS` (Xóa mất người trong đám đông dính chập)**: **6 lượt** — Triệt tiêu người ngồi xe lăn hoặc người đứng sau.
-  - 🟨 **`LOW_IOU_DRIFT` (Sai lệch biên hộp bao $\text{IoU} < 0.40$)**: **71 lượt** — Biến dạng kích thước, teo tóp hộp bao, sai lệch đo xa 3D.
+  - 🟧 **`FN_PARTIAL_NMS` (Xóa mất người trong đám đông dính chập)**: **5 lượt** — Triệt tiêu người ngồi xe lăn hoặc người đứng sau.
+  - 🟨 **`LOW_IOU_DRIFT` (Sai lệch biên hộp bao $\text{IoU} < 0.40$)**: **69 lượt** — Biến dạng kích thước, teo tóp hộp bao, sai lệch đo xa 3D.
 - **Xếp hạng độ bền vững của 4 mô hình**:
-  1. 🥇 **YOLO26n (NMS-Free)**: **33 ca lỗi** (Khắc phục triệt để lỗi triệt tiêu NMS đám đông, phản ứng nhanh $11\text{ms}$).
-  2. 🥈 **YOLOv8n (Greedy NMS)**: **33 ca lỗi** (Bền bỉ nhưng dính lỗi xóa người ở đám đông dính chập).
-  3. 🥉 **YOLO11n (C2PSA Attention)**: **35 ca lỗi** (Chú ý không gian tốt nhưng nhạy cảm với bẫy rỗng).
-  4. ⚠️ **Intel OpenVINO (MobileNetV2-SSD)**: **40 ca lỗi** (Kém nhất, bỏ sót hàng loạt tư thế ngồi, rèm che và ngụy trang).
+  1. 🥇 **YOLO26n (NMS-Free)**: **32 ca lỗi** (Khắc phục triệt để lỗi triệt tiêu NMS đám đông, phản ứng nhanh $11\text{ms}$).
+  2. 🥈 **YOLOv8n (Greedy NMS)**: **32 ca lỗi** (Bền bỉ nhưng dính lỗi xóa người ở đám đông dính chập).
+  3. 🥉 **YOLO11n (C2PSA Attention)**: **34 ca lỗi** (Chú ý không gian tốt nhưng nhạy cảm với bẫy rỗng).
+  4. ⚠️ **Intel OpenVINO (MobileNetV2-SSD)**: **39 ca lỗi** (Kém nhất, bỏ sót hàng loạt tư thế ngồi, rèm che và ngụy trang).
 
 ---
 
-## 📑 Bảng Tra Cứu Toàn Bộ 45 Ca Kiểm Thử Bị Lỗi (Exhaustive 45-Case Audit Table)
+## 📑 Bảng Tra Cứu Toàn Bộ 44 Ca Kiểm Thử Bị Lỗi (Exhaustive 44-Case Audit Table)
 
 > [!IMPORTANT]
-> Dưới đây là danh mục chi tiết **toàn bộ 45 ca** gặp lỗi phát hiện, sắp xếp theo mã ca kiểm thử, kèm mô hình bị lỗi, thông số đo đạc thực nghiệm và cấp độ rủi ro an toàn theo tiêu chuẩn **ISO 3691-4**.
+> Dưới đây là danh mục chi tiết **toàn bộ 44 ca** gặp lỗi phát hiện (đã loại bỏ C20 lỗi dán nhãn bệnh nhi), sắp xếp theo mã ca kiểm thử, kèm mô hình bị lỗi, thông số đo đạc thực nghiệm và cấp độ rủi ro an toàn theo tiêu chuẩn **ISO 3691-4**.
 
 | Mã Ca | Tên Ca Kiểm Thử | Thuộc Dataset & Phân Nhóm | Mô Hình Gặp Lỗi | Phân Loại Lỗi & Chi Tiết Thực Nghiệm | Cấp Độc Rủi Ro An Toàn (ISO 3691-4) |
 | :---: | :--- | :--- | :--- | :--- | :---: |
@@ -38,7 +38,6 @@ Qua quá trình chạy đối chứng thực nghiệm đồng thời **CẢ 4 M�
 | **C15** | Xe Lăn Nhìn Ngang Hông ($90^\circ$) | Dataset 1: D3 Tư thế | Cả 4 models | `LOW_IOU_DRIFT`: Mất đối xứng 2 chân, OpenVINO $\text{IoU}=0.00$, YOLO $\text{IoU}=0.28$ | **Tier 1** (Nguy cơ va chạm bánh xe) |
 | **C16** | Người Già Còng Lưng Chống Gậy | Dataset 1: D3 Tư thế | Cả 4 models | `LOW_IOU_DRIFT`: Trục cơ thể nghiêng $35^\circ$, hộp bao lệch tâm $\text{IoU}=0.00$ | **Tier 1** (Va quẹt người cao tuổi) |
 | **C19** | Đẩy Xe Lăn Sát Sau (NMS Trap) | Dataset 1: D4 Đám đông | Cả 4 models | `LOW_IOU_DRIFT`: 2 hộp bao lồng vào nhau $85\%$, $\text{IoU}=0.24 \to 0.40$ | **Tier 1** (Mất dấu bệnh nhân xe lăn) |
-| **C20** | Phụ Huynh Dắt Bệnh Nhi | Dataset 1: D4 Đám đông | v8, v11, v26 | YOLO26n: `FN_PARTIAL` (bỏ sót trẻ em); v8/v11: `LOW_IOU` ($\text{IoU}=0.16$) | **Tier 1** (Nguy cơ đâm vào bệnh nhi) |
 | **C23** | Cụm 4 Người Trước Bảng Chỉ Dẫn | Dataset 1: D4 Đám đông | Cả 4 models | `FN_PARTIAL_NMS`: Cả 4 mô hình chỉ nhận diện được 1-2 người trên tổng số 4 người | **Tier 1** (Xóa đối tượng trong đám đông) |
 | **C25** | Cận Cảnh Cực Đoan ($0.6\text{m}$) | Dataset 1: D5 Cự ly | Intel OpenVINO | `LOW_IOU_DRIFT`: Vượt FOV camera, mất đầu và chân, OpenVINO $\text{IoU}=0.25$ | **Tier 1** (Vùng chết cảm biến cận) |
 | **C26** | Cận Cảnh Vùng An Toàn ($0.9\text{m}$) | Dataset 1: D5 Cự ly | Intel OpenVINO | `LOW_IOU_DRIFT`: Mất phần bắp chân, OpenVINO $\text{IoU}=0.35$ | **Tier 3** (Lệch hộp bao) |
@@ -92,7 +91,7 @@ Qua quá trình chạy đối chứng thực nghiệm đồng thời **CẢ 4 M�
 
 ### 3. Nhóm Triệt Tiêu Đối Tượng Dính Chập (`FN_PARTIAL_NMS` — 6 Lượt)
 - **Bản chất vật lý**:
-  - **Greedy Non-Maximum Suppression (YOLOv8n / YOLO11n trên Ca C23, N6.1, C20)**: Thuật toán NMS cổ điển sắp xếp các bounding box theo confidence score và tính $\text{IoU}$ giữa các hộp lân cận. Khi hai người ngồi sát nhau hoặc phụ huynh ôm/dắt con, $\text{IoU}$ hình học giữa 2 box vượt quá ngưỡng $\text{IoU}_{\text{threshold}} = 0.45$. Hộp bao có điểm thấp hơn bị triệt tiêu thẳng tay, dẫn đến việc robot "tưởng" chỉ có một người và đâm vào người thứ hai.
+  - **Greedy Non-Maximum Suppression (YOLOv8n / YOLO11n trên Ca C23, N6.1)**: Thuật toán NMS cổ điển sắp xếp các bounding box theo confidence score và tính $\text{IoU}$ giữa các hộp lân cận. Khi hai người ngồi sát nhau hoặc người đứng sát kề, $\text{IoU}$ hình học giữa 2 box vượt quá ngưỡng $\text{IoU}_{\text{threshold}} = 0.45$. Hộp bao có điểm thấp hơn bị triệt tiêu thẳng tay, dẫn đến việc robot "tưởng" chỉ có một người và đâm vào người thứ hai.
   - **YOLO26n NMS-Free**: Giải quyết xuất sắc ca N6.1 (giữ trọn vẹn cả 2 cụ già) nhờ kiến trúc phân bổ nhãn đối sánh kép (Dual-label assignment) thay thế hoàn toàn bước hậu xử lý NMS.
 
 ### 4. Nhóm Sai Lệch Biên Hộp Bao (`LOW_IOU_DRIFT` — 71 Lượt)

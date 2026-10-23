@@ -55,20 +55,20 @@ def create_failure_cases_notebook():
     # ==========================================================================
     # CELL 0: TITLE & EXECUTIVE SUMMARY
     # ==========================================================================
-    cells.append(nbf.v4.new_markdown_cell(r"""# 🔬 Sổ Tay 04: Khảo Sát Chuyên Sâu & Trực Quan Hóa TOÀN BỘ 45 CA PHÁT HIỆN LỖI (Failure Cases Deep Dive)
-## Comprehensive Visual Diagnostics of All 45 Bad Detection Scenarios across 4 AI Vision Models
-*(Triển khai trực tiếp từ bản quy hoạch kỹ thuật `plan_bad_detection_cases_deep_dive.md`)*
+    cells.append(nbf.v4.new_markdown_cell(r"""# 🔬 Sổ Tay 04: Khảo Sát Chuyên Sâu & Trực Quan Hóa TOÀN BỘ 44 CA PHÁT HIỆN LỖI (Failure Cases Deep Dive)
+## Comprehensive Visual Diagnostics of All 44 Bad Detection Scenarios across 4 AI Vision Models
+*(Triển khai trực tiếp từ bản quy hoạch kỹ thuật `plan_bad_detection_cases_deep_dive.md` — Đã loại bỏ C20 lỗi dán nhãn)*
 
 ---
 
 ### 🎯 Mục Tiêu Nghiên Cứu Chuyên Sâu Của Sổ Tay 04
-Trong khi **Notebook 03** đóng vai trò là thư viện tổng quát cho toàn bộ 84 ca, **Notebook 04 là "Kính Hiển Vi Pháp Y Kỹ Thuật"**:
-- Tập trung đào sâu trực quan vào **chính xác 45 ca kiểm thử xuất hiện lỗi hoặc suy giảm chất lượng nghiêm trọng** ($53.6\%$ tổng số ca).
+Trong khi **Notebook 03** đóng vai trò là thư viện tổng quát cho toàn bộ 83 ca, **Notebook 04 là "Kính Hiển Vi Pháp Y Kỹ Thuật"**:
+- Tập trung đào sâu trực quan vào **chính xác 44 ca kiểm thử xuất hiện lỗi hoặc suy giảm chất lượng nghiêm trọng** ($53.0\%$ tổng số ca).
 - Mổ xẻ từng điểm mù thị giác của 4 mô hình (`YOLOv8n`, `YOLO11n`, `YOLO26n`, `Intel OpenVINO`) theo 4 nhóm bệnh lý thị giác First Principles:
   1. 🟥 **`FN_TOTAL_MISS` (Bỏ sót hoàn toàn người thật — 26 lượt)**: Nguy cơ đâm va trực tiếp cấp độ 1 (*Tier 1 Direct Collision Risk* theo ISO 3691-4).
   2. 🟪 **`FP_HALLUCINATION` (Báo động giả trên bẫy rỗng & poster — 38 lượt)**: Nguy cơ phanh khẩn cấp vô cớ (*Phantom Braking / Tier 2 Hazard*).
-  3. 🟧 **`FN_PARTIAL_NMS` (Xóa mất người trong đám đông dính chập — 6 lượt)**: Bẫy triệt tiêu phi cực đại Greedy NMS.
-  4. 🟨 **`LOW_IOU_DRIFT` (Sai lệch biên hộp bao $\text{IoU} < 0.40$ — 71 lượt)**: Teo tóp hộp bao, lệch tâm do che khuất và dáng ngồi/gù.
+  3. 🟧 **`FN_PARTIAL_NMS` (Xóa mất người trong đám đông dính chập — 5 lượt)**: Bẫy triệt tiêu phi cực đại Greedy NMS.
+  4. 🟨 **`LOW_IOU_DRIFT` (Sai lệch biên hộp bao $\text{IoU} < 0.40$ — 69 lượt)**: Teo tóp hộp bao, lệch tâm do che khuất và dáng ngồi/gù.
 - Khảo nghiệm trực tiếp **3 Thuật Toán Khắc Phục Kỹ Thuật** (Depth-Variance Filter, Amodal Completion, Temporal EKF) nhằm hoàn thiện firmware an toàn cho robot bệnh viện.
 """))
 
@@ -371,13 +371,14 @@ for cid in fp_cases:
 > **Khuyết tật cố hữu của thuật toán Greedy Non-Maximum Suppression (NMS)**: Khi hai người đứng/ngồi sát nhau, hai bounding box dự đoán có diện tích giao nhau lớn ($\text{IoU} > 0.45$). Thuật toán NMS truyền thống (trên `YOLOv8n` và `YOLO11n`) sẽ tự động triệt tiêu hộp có confidence thấp hơn, làm "bốc hơi" một con người trong mắt robot!
 
 ### Danh Sách Các Ca Kiểm Thử Thuộc Nhóm Này:
-1. **Ca C20**: Phụ huynh dắt tay bệnh nhi (Chênh lệch quy mô kích thước — Scale Mismatch làm mất trẻ nhỏ).
-2. **Ca C23**: Cụm 4 người hội chẩn trước bảng chỉ dẫn (NMS xóa mất 2 người, chỉ phát hiện $1-2/4$ người).
+1. **Ca C23**: Cụm 4 người hội chẩn trước bảng chỉ dẫn (NMS xóa mất 2 người, chỉ phát hiện $1-2/4$ người).
+2. **Ca N6.1**: Hai cụ già ngồi liền kề trên ghế băng dài (Greedy NMS triệt tiêu 1 cụ già).
 3. **Ca N6.4**: Thảo luận đối mặt $180^\circ$ lưng vs $0^\circ$ mặt (Intel OpenVINO xóa mất 1 người).
+*(Lưu ý: Ca C20 phụ huynh dắt bệnh nhi đã được loại bỏ triệt để do dán nhãn sai)*.
 """))
 
     cells.append(nbf.v4.new_code_cell(r"""# Khảo nghiệm trực quan 3 Ca FN_PARTIAL_NMS
-nms_cases = ["C20", "C23", "N6.4"]
+nms_cases = ["C23", "N6.1", "N6.4"]
 
 for cid in nms_cases:
     draw_hud_4models_comparison(cid)
@@ -429,15 +430,15 @@ for cid in pose_cases:
 """))
 
     # ==========================================================================
-    # CELL 7: QUANTITATIVE ANALYTICS ACROSS ALL 45 BAD CASES
+    # CELL 7: QUANTITATIVE ANALYTICS ACROSS ALL 44 BAD CASES
     # ==========================================================================
     cells.append(nbf.v4.new_markdown_cell(r"""---
-## 📊 Chuyên Đề 5: Phân Tích Định Lượng Ma Trận 45 Ca Lỗi
+## 📊 Chuyên Đề 5: Phân Tích Định Lượng Ma Trận 44 Ca Lỗi
 
-Tổng hợp và đối sánh số liệu thống kê giữa 4 mô hình AI trên toàn bộ 45 ca kiểm thử có vấn đề.
+Tổng hợp và đối sánh số liệu thống kê giữa 4 mô hình AI trên toàn bộ 44 ca kiểm thử có vấn đề (đã loại bỏ C20).
 """))
 
-    cells.append(nbf.v4.new_code_cell(r"""# Thống kê và vẽ ma trận lỗi 45 ca
+    cells.append(nbf.v4.new_code_cell(r"""# Thống kê và vẽ ma trận lỗi 44 ca
 fig = plt.figure(figsize=(18, 10))
 gs = GridSpec(2, 2, figure=fig, hspace=0.35, wspace=0.25)
 
@@ -465,11 +466,11 @@ ax1.legend(loc='upper right', fontsize=8.5)
 
 # 2. Phân bố rủi ro theo tiêu chuẩn an toàn ISO 3691-4
 ax2 = fig.add_subplot(gs[0, 1])
-tier_counts = {"Tier 1 (Nguy Cơ Va Chạm Trực Tiếp)": 18, "Tier 2 (Phanh Khẩn Cấp Vô Cớ)": 10, "Tier 3 (Sai Lệch Hộp Bao Đo Xa)": 17}
+tier_counts = {"Tier 1 (Nguy Cơ Va Chạm Trực Tiếp)": 17, "Tier 2 (Phanh Khẩn Cấp Vô Cớ)": 10, "Tier 3 (Sai Lệch Hộp Bao Đo Xa)": 17}
 ax2.pie(tier_counts.values(), labels=tier_counts.keys(), autopct='%1.1f%%',
         colors=['#e74c3c', '#9b59b6', '#f39c12'], startangle=140,
         wedgeprops=dict(width=0.55, edgecolor='black'))
-ax2.set_title("Phân Bố 45 Ca Lỗi Theo Cấp Độ Rủi Ro ISO 3691-4", fontsize=11, fontweight='bold')
+ax2.set_title("Phân Bố 44 Ca Lỗi Theo Cấp Độ Rủi Ro ISO 3691-4", fontsize=11, fontweight='bold')
 
 # 3. Phân bố số ca lỗi theo phân nhóm kiểm thử
 ax3 = fig.add_subplot(gs[1, :])
@@ -594,7 +595,7 @@ plt.show()
     cells.append(nbf.v4.new_markdown_cell(r"""---
 ## 🎯 Tiêu Chuẩn Nghiệm Thu Firmware & Khuyến Nghị Kiến Trúc Cuối Cùng
 
-Từ việc mổ xẻ chi tiết **toàn bộ 45 ca kiểm thử bị lỗi**, nhóm nghiên cứu đưa ra 4 khuyến nghị then chốt để nghiệm thu hệ thống thị giác robot bệnh viện:
+Từ việc mổ xẻ chi tiết **toàn bộ 44 ca kiểm thử bị lỗi**, nhóm nghiên cứu đưa ra 4 khuyến nghị then chốt để nghiệm thu hệ thống thị giác robot bệnh viện:
 
 1. **Chuẩn Hóa Bộ Não Suy Luận Thị Giác (Vision AI Backbone)**:
    - **Chính thức lựa chọn `YOLO26n` (NMS-Free End-to-End)** làm mô hình suy luận RGB trung tâm.

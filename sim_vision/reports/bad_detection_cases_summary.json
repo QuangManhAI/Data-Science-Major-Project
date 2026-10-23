@@ -223,28 +223,6 @@
   },
   {
     "dataset": "Dataset 1 (Baseline)",
-    "cid": "C20",
-    "title": "C20: Phụ Huynh Dắt Bệnh Nhi",
-    "group": "D4_Baseline",
-    "is_empty": false,
-    "gts_count": 2,
-    "failures": {
-      "YOLOv8n": {
-        "type": "LOW_IOU_DRIFT",
-        "details": "Sai lệch biên hộp bao (IoU=0.16 < 0.40)"
-      },
-      "YOLO11n": {
-        "type": "LOW_IOU_DRIFT",
-        "details": "Sai lệch biên hộp bao (IoU=0.22 < 0.40)"
-      },
-      "YOLO26n": {
-        "type": "FN_PARTIAL_NMS",
-        "details": "Bỏ sót 1 người (1/2 detected)"
-      }
-    }
-  },
-  {
-    "dataset": "Dataset 1 (Baseline)",
     "cid": "C23",
     "title": "C23: Cụm 4 Người Trước Bảng Chỉ Dẫn",
     "group": "D4_Baseline",

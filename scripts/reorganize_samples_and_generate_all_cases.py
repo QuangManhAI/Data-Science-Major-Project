@@ -70,12 +70,11 @@ DATASET_1_CASES = [
     ("C16", "D3", 87, "Elderly_Cane_Kyphosis", "C16: Người Già Còng Lưng Chống Gậy"),
     ("C17", "D3", 112, "Bed_Patient_Recumbent", "C17: Bệnh Nhân Nằm Giường Cấp Cứu"),
     ("C18", "D3", 137, "Bent_Over_90deg", "C18: Cúi Gập 90° Nhặt Sổ Khám"),
-    # D4: Đám Đông & NMS
+    # D4: Đám Đông & NMS (Ca C20 dán nhãn sai bệnh nhi đã được loại bỏ triệt để)
     ("C19", "D4", 12, "Wheelchair_Pushed_Rear", "C19: Đẩy Xe Lăn Sát Sau (NMS Trap)"),
-    ("C20", "D4", 37, "Parent_Child_Holding", "C20: Phụ Huynh Dắt Bệnh Nhi"),
-    ("C21", "D4", 62, "Queue_3_Axial_Sequence", "C21: Hàng Dọc 3 Người Nối Đuôi"),
-    ("C22", "D4", 87, "Cross_Walk_Intersect", "C22: Cắt Mặt Ngược Chiều 2.5m"),
-    ("C23", "D4", 112, "Crowd_Signboard_Cluster", "C23: Cụm 4 Người Trước Bảng Chỉ Dẫn"),
+    ("C21", "D4", 102, "Queue_3_Axial_Sequence", "C21: Hàng Dọc Nối Đuôi"),
+    ("C22", "D4", 122, "Cross_Walk_Intersect", "C22: Cắt Mặt Ngược Chiều 3.6m"),
+    ("C23", "D4", 112, "Crowd_Signboard_Cluster", "C23: Cụm Người Trước Bảng Chỉ Dẫn"),
     ("C24", "D4", 137, "Guiding_Limping_Couple", "C24: Dìu Người Bệnh Đi Khập Khiễng"),
     # D5: Cự Ly & Cắt Biên
     ("C25", "D5", 12, "Extreme_Close_0.6m", "C25: Cận Cảnh Cực Đoan (0.6m)"),
@@ -172,7 +171,7 @@ for cid, axis, frame_idx, slug, title in DATASET_1_CASES:
     else:
         print(f"⚠️ Thiếu file: {src_p}")
 
-print(f"✅ Đã trích xuất đủ {len(d1_images)}/48 ca Dataset 1.")
+print(f"✅ Đã trích xuất đủ {len(d1_images)}/47 ca Dataset 1 (loại bỏ C20 lỗi dán nhãn).")
 
 print("3. Trích xuất toàn bộ 36 ca Dataset 2 vào dataset_2_clinical_36cases/...")
 d2_images = []
@@ -193,7 +192,7 @@ print(f"✅ Đã trích xuất đủ {len(d2_images)}/36 ca Dataset 2.")
 # ==============================================================================
 # BƯỚC 3: KẾT XUẤT 3 MASTER POSTERS SIÊU ĐẸP
 # ==============================================================================
-print("4. Đang tạo Poster 1: Toàn bộ 48 ca Dataset 1 (6 hàng x 8 cột)...")
+print("4. Đang tạo Poster 1: Toàn bộ 47 ca Dataset 1 (6 hàng x 8 cột)...")
 fig, axes = plt.subplots(6, 8, figsize=(26, 18))
 axes = axes.flatten()
 
@@ -206,10 +205,14 @@ for idx, (img_path, title) in enumerate(d1_images):
     ax.set_title(title, fontsize=8, weight="bold", pad=3, color="#1e293b")
     ax.axis("off")
 
-plt.suptitle("🏥 BỘ DATASET 01: TOÀN BỘ 48 CA KỊCH BẢN BASELINE (C01 - C48 | vision_eval_1200)", fontsize=16, weight="bold", y=0.99)
+for idx in range(len(d1_images), len(axes)):
+    axes[idx].axis("off")
+
+plt.suptitle("🏥 BỘ DATASET 01: TOÀN BỘ 47 CA KỊCH BẢN BASELINE (C01 - C48, BỎ C20 LỖI | vision_eval_1200)", fontsize=16, weight="bold", y=0.99)
 plt.tight_layout()
 poster1_path = DIR_POSTERS / "01_dataset_1_all_48_cases_poster.png"
 plt.savefig(poster1_path, dpi=160, bbox_inches="tight")
+shutil.copyfile(poster1_path, DIR_POSTERS / "01_dataset_1_all_47_cases_poster.png")
 plt.close()
 print(f"✅ Đã lưu Poster 1: {poster1_path}")
 
@@ -236,12 +239,12 @@ plt.savefig(poster2_path, dpi=160, bbox_inches="tight")
 plt.close()
 print(f"✅ Đã lưu Poster 2: {poster2_path}")
 
-print("6. Đang tạo Master Poster 3: Hợp nhất toàn bộ 84 ca của CẢ 2 DATASETS (7 hàng x 12 cột)...")
+print("6. Đang tạo Master Poster 3: Hợp nhất toàn bộ 83 ca của CẢ 2 DATASETS (7 hàng x 12 cột)...")
 fig, axes = plt.subplots(7, 12, figsize=(36, 20))
 axes = axes.flatten()
 
-all_84_cases = d1_images + d2_images
-for idx, (img_path, title) in enumerate(all_84_cases):
+all_83_cases = d1_images + d2_images
+for idx, (img_path, title) in enumerate(all_83_cases):
     ax = axes[idx]
     im = cv2.imread(str(img_path))
     if im is not None:
@@ -250,10 +253,16 @@ for idx, (img_path, title) in enumerate(all_84_cases):
     ax.set_title(title, fontsize=6.8, weight="bold", pad=2)
     ax.axis("off")
 
-plt.suptitle("🏥 MASTER POSTER: HỢP NHẤT TOÀN BỘ 84 CA KIỂM THỬ THỊ GIÁC (DATASET 1: 48 CASES + DATASET 2: 36 CASES)", fontsize=18, weight="bold", y=0.995)
+for idx in range(len(all_83_cases), len(axes)):
+    axes[idx].axis("off")
+
+plt.suptitle("🏥 MASTER POSTER: HỢP NHẤT TOÀN BỘ 83 CA KIỂM THỬ THỊ GIÁC (DATASET 1: 47 CASES + DATASET 2: 36 CASES)", fontsize=18, weight="bold", y=0.995)
 plt.tight_layout()
 poster3_path = DIR_POSTERS / "03_master_unified_84_cases_poster.png"
 plt.savefig(poster3_path, dpi=140, bbox_inches="tight")
+shutil.copyfile(poster3_path, DIR_POSTERS / "03_master_unified_83_cases_poster.png")
+plt.close()
+print(f"✅ Đã lưu Master Poster 3: {poster3_path}")
 plt.close()
 print(f"✅ Đã lưu Master Poster 3: {poster3_path}")
 
@@ -262,7 +271,7 @@ print(f"✅ Đã lưu Master Poster 3: {poster3_path}")
 # ==============================================================================
 readme_content = f"""# 📸 THƯ VIỆN ẢNH ĐẠI DIỆN TOÀN BỘ CÁC CA TRONG HỆ SINH THÁI DATASET (SAMPLES)
 
-Thư mục này được tổ chức chuẩn mực nhằm cung cấp các khung hình trực quan tổng quát nhất cho **TOÀN BỘ 84 CA KIỂM THỬ** độc lập trong cả 2 bộ dữ liệu mô phỏng bệnh viện Godot 4.
+Thư mục này được tổ chức chuẩn mực nhằm cung cấp các khung hình trực quan tổng quát nhất cho **TOÀN BỘ 83 CA KIỂM THỬ** độc lập trong cả 2 bộ dữ liệu mô phỏng bệnh viện Godot 4 (đã loại bỏ C20 lỗi dán nhãn).
 
 ---
 
@@ -288,13 +297,13 @@ sim_vision/data/samples/
 
 ---
 
-## 📋 Danh Mục Tra Cứu Toàn Bộ 84 Ca Kiểm Thử
+## 📋 Danh Mục Tra Cứu Toàn Bộ 83 Ca Kiểm Thử
 
-### Phân Hệ 1: Dataset Baseline (vision_eval_1200 — 48 Kịch Bản C01 đến C48)
+### Phân Hệ 1: Dataset Baseline (vision_eval_1200 — 47 Kịch Bản C01 đến C48, Bỏ C20 Lỗi Dán Nhãn)
 - **Trục D1 (Kiến trúc)**: C01 (Góc ngoặt T), C02 (Cắt dọc cửa), C03 (Khe cửa trượt 35%), C04 (Hốc thang máy), C05 (Nấp sau trụ cột), C06 (Cửa mở hé 45°).
 - **Trục D2 (Nội thất y tế)**: C07 (Quầy lễ tân 1.1m), C08 (Bàn khám & màn hình), C09 (Vách rèm y tế), C10 (Xe tiêm 2 tầng), C11 (Cọc truyền che ngực), C12 (Sau ghế chờ inox).
 - **Trục D3 (Tư thế lâm sàng)**: C13 (Xe lăn 0°), C14 (Xe lăn 45°), C15 (Xe lăn 90°), C16 (Cụ già gù chống gậy), C17 (Nằm giường cấp cứu), C18 (Cúi gập 90° nhặt sổ).
-- **Trục D4 (Đám đông & NMS)**: C19 (Đẩy xe lăn sau - NMS trap), C20 (Dắt tay trẻ em), C21 (Hàng 3 người), C22 (Cắt mặt 2.5m), C23 (Cụm 4 người), C24 (Dìu bước khập khiễng).
+- **Trục D4 (Đám đông & NMS)**: C19 (Đẩy xe lăn sau - NMS trap), C21 (Hàng 3 người), C22 (Cắt mặt 2.5m), C23 (Cụm 4 người), C24 (Dìu bước khập khiễng). *(Ca C20 dán nhãn sai bệnh nhi đã được loại bỏ triệt để)*.
 - **Trục D5 (Cự ly & Mép ảnh)**: C25 (Cực cận 0.6m), C26 (0.9m), C27 (2.5m), C28 (Xa 6.0m), C29 (Cắt mép trái), C30 (Cắt mép phải).
 - **Trục D6 (Động học)**: C31 (Quay lưng 180°), C32 (Chéo lưng 135°), C33 (Xoay 90°), C34 (Đi lùi), C35 (Đi nhanh 1.5m/s), C36 (Đứng yên nói chuyện).
 - **Trục D7 (Ánh sáng PBR)**: C37 (Ngược sáng sảnh), C38 (Phản chiếu sàn gạch bóng), C39 (Bóng đổ dài), C40 (Dư sáng huỳnh quang), C41 (Đèn trực đêm tối), C42 (Ánh sáng chớp tắt).
@@ -315,5 +324,3 @@ with open(SAMPLES_ROOT / "README.md", "w", encoding="utf-8") as f:
     f.write(readme_content)
 
 print(f"✅ Đã tạo sim_vision/data/samples/README.md.")
-"""
-"""

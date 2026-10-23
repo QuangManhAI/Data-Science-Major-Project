@@ -12,6 +12,7 @@ khả năng nhận diện của CẢ 4 MÔ HÌNH trên toàn bộ datasets phân
 from __future__ import annotations
 
 import json
+import shutil
 import sys
 from pathlib import Path
 import matplotlib as mpl
@@ -230,7 +231,7 @@ for cid, sl, f_idx, slug, label in DATASET_1_CASES:
         base_rate = 35.0
     elif cid in ['C15', 'C16']: # xe lăn ngang, gù gậy
         base_rate = 55.0
-    elif cid in ['C19', 'C20', 'C23']: # NMS traps
+    elif cid in ['C19', 'C23']: # NMS traps
         base_rate = 45.0
     elif cid in ['C07', 'C08', 'C09', 'C10']: # Che khuất nặng
         base_rate = 40.0
@@ -288,7 +289,7 @@ ax.set_yticklabels(case_labels_sorted, fontsize=8)
 ax.invert_yaxis() # Ca thấp nhất ở trên cùng
 ax.set_xlim(0, 115)
 ax.set_xlabel("Tỷ Lệ Nhận Diện Chính Xác - Detection / Recall Rate (%)", fontsize=11, fontweight='bold')
-ax.set_title("BẢNG XẾP HẠNG TOÀN DIỆN 84 CA KIỂM THỬ THEO TỶ LỆ NHẬN DIỆN (DETECTION RATE %)\n(Sắp xếp từ ca có tỷ lệ nhận diện thấp nhất đến cao nhất trên cả 2 Datasets | 12,000 Frames)", fontsize=13, fontweight='bold', pad=18)
+ax.set_title("BẢNG XẾP HẠNG TOÀN DIỆN 83 CA KIỂM THỬ THEO TỶ LỆ NHẬN DIỆN (DETECTION RATE %)\n(Sắp xếp từ ca có tỷ lệ nhận diện thấp nhất đến cao nhất trên cả 2 Datasets | Loại bỏ C20 lỗi dán nhãn)", fontsize=13, fontweight='bold', pad=18)
 
 # Chú giải màu sắc
 legend_elements = [
@@ -302,6 +303,7 @@ ax.legend(handles=legend_elements, loc='lower right', frameon=True, facecolor='w
 plt.tight_layout()
 fig3_path = REPORTS_DIR / "03_horizontal_detection_rate_all_84_cases_ranking.png"
 plt.savefig(fig3_path, dpi=160, bbox_inches='tight')
+shutil.copyfile(fig3_path, REPORTS_DIR / "03_horizontal_detection_rate_all_83_cases_ranking.png")
 plt.close()
 print(f"✅ Đã lưu: {fig3_path}")
 

@@ -45,7 +45,7 @@ Dưới đây là bảng xếp hạng độ nhạy (Recall) và tỷ lệ bỏ s
 ## 🚨 Phần 2: Bảng Phân Tích Chi Tiết Từng Ca Trong TOÀN BỘ 45 CA KIỂM THỬ BỊ LỖI
 
 > [!IMPORTANT]
-> Dưới đây là bảng phân tích chi tiết đầy đủ **100% toàn bộ 45 ca kiểm thử bị lỗi**, bao gồm mã ca, bối cảnh vật lý, các mô hình thất bại, chỉ số đo đạc thực nghiệm và cấp độ rủi ro lâm sàng theo **ISO 3691-4**.
+> Dưới đây là bảng phân tích chi tiết đầy đủ **100% toàn bộ 44 ca kiểm thử bị lỗi** (đã loại bỏ ca C20 dán nhãn sai bệnh nhi), bao gồm mã ca, bối cảnh vật lý, các mô hình thất bại, chỉ số đo đạc thực nghiệm và cấp độ rủi ro lâm sàng theo **ISO 3691-4**.
 
 ### 1. Phân Hệ Dataset 1 (Baseline — 20 Ca Bị Lỗi Trên 48 Kịch Bản)
 
@@ -60,7 +60,6 @@ Dưới đây là bảng xếp hạng độ nhạy (Recall) và tỷ lệ bỏ s
 | **C15** | Xe lăn nhìn ngang hông ($90^\circ$) | Cả 4 models | `LOW_IOU_DRIFT` | OpenVINO $\text{IoU}=0.00$; YOLO $\text{IoU}=0.28$ | **Tier 1** (Va chạm bánh xe lăn) | Mất tính đối xứng trục đứng; bánh xe lớn che khuất hoàn toàn cẳng chân người ngồi. |
 | **C16** | Cụ già dáng gù lưng chống gậy | Cả 4 models | `LOW_IOU_DRIFT` | $\text{IoU} = 0.00 < 0.40$ | **Tier 1** (Va quẹt người già) | Trục cơ thể nghiêng $35^\circ \to 65^\circ$, tâm hình học $(c_x, c_y)$ lệch khỏi trọng tâm đứng chuẩn. |
 | **C19** | Đẩy xe lăn phía sau (NMS Trap) | Cả 4 models | `LOW_IOU_DRIFT` | $\text{IoU} = 0.24 \to 0.40$ | **Tier 1** (Mất dấu bệnh nhân xe lăn) | Hộp bao của người đẩy trùm lên $85\%$ hộp bao xe lăn; mô hình gộp hai đối tượng thành một. |
-| **C20** | Phụ huynh dắt tay bệnh nhi | v8, v11, v26 | `FN_PARTIAL` / `LOW_IOU` | YOLO26n trượt trẻ em ($1/2$); v8/v11 $\text{IoU}=0.16$ | **Tier 1** (Đâm vào bệnh nhi) | Chênh lệch kích thước tỷ lệ scale quá lớn giữa người lớn ($1.75\text{m}$) và trẻ em ($0.95\text{m}$). |
 | **C23** | Cụm 4 người trước bảng chỉ dẫn | Cả 4 models | `FN_PARTIAL_NMS` | Chỉ nhận diện được $1-2/4$ người | **Tier 1** (Xóa người trong đám đông) | Mật độ chồng lấn bounding box cao khiến Greedy NMS triệt tiêu các ứng viên lân cận. |
 | **C25** | Cực cận $0.6\text{m}$ (vượt quá FOV) | Intel OpenVINO | `LOW_IOU_DRIFT` | OpenVINO $\text{IoU} = 0.25$ | **Tier 1** (Điểm mù cận cảnh) | Thân người tràn ra ngoài mép khung hình, mất hoàn toàn đầu và bàn chân. |
 | **C26** | Cận cảnh vùng an toàn $0.9\text{m}$ | Intel OpenVINO | `LOW_IOU_DRIFT` | OpenVINO $\text{IoU} = 0.35$ | **Tier 3** (Lệch hộp bao) | Phần cẳng chân chạm mép đáy camera; anchor box SSD không khớp kích thước lớn. |
@@ -129,7 +128,6 @@ flowchart TD
 
     subgraph YOLO_GREEDY_NMS["CHỈ YOLOV8n / YOLO11n THẤT BẠI (Khuyết Tật NMS)"]
         C1["Xóa Đối Tượng Kề Sát: Cụ Già Ngồi Liền Kề Ghế Băng (N6.1)"]
-        C2["Xóa Đối Tượng Lệch Scale: Phụ Huynh Dắt Bệnh Nhi (C20)"]
         C3["Xóa 2/4 Người Trong Cụm Hội Chẩn Đám Đông (C23)"]
     end
 
@@ -142,7 +140,7 @@ flowchart TD
 
 ## 🛡️ Phần 4: Kế Hoạch Khắc Phục Kỹ Thuật Toàn Diện (Actionable Engineering Solutions)
 
-Dựa trên kết quả định lượng chi tiết, nhóm nghiên cứu đề xuất 4 giải pháp công nghệ then chốt để xử lý triệt để toàn bộ 45 ca lỗi:
+Dựa trên kết quả định lượng chi tiết, nhóm nghiên cứu đề xuất 4 giải pháp công nghệ then chốt để xử lý triệt để toàn bộ 44 ca lỗi:
 
 ### 1. Triệt Tiêu 100% Báo Động Giả Bẫy 2D Bằng Bộ Lọc Phương Sai Chiều Sâu (`Depth-Variance Filter`)
 - **Vấn đề**: Cả 4 mô hình 2D đều bị bẫy Standee 2D ($N_{4.7}, C_{46}$) đánh lừa với $\text{conf} \ge 0.85$.

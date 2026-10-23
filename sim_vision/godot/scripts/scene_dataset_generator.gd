@@ -201,20 +201,20 @@ func _generate_d4_crowd_dynamics(abs_img_dir: String) -> void:
 	var wc_actor: Node3D = _get_actor("wheelchair_patient")
 	var male: Node3D = _get_actor("standing_male")
 	var female: Node3D = _get_actor("standing_female")
-	var child: Node3D = _get_actor("child_patient")
 	var elderly: Node3D = _get_actor("elderly_stooped_cane")
 
 	var distances: Array[float] = [1.8, 2.6, 3.6, 4.8, 6.0]
 	var lateral_shifts: Array[float] = [-0.3, -0.15, 0.0, 0.15, 0.3]
 	var cam_yaw_offsets: Array[float] = [-8.0, 8.0]
 
-	var idx: int = 0
-	for formation in range(3):
+	var seq_idx: int = 0
+	for formation in [0, 2]: # Formation 1 (phụ huynh dắt trẻ em) đã bị loại bỏ do lỗi dán nhãn mô hình
 		for dist in distances:
 			for lat_shift in lateral_shifts:
 				for cam_off in cam_yaw_offsets:
-					idx += 1
-					var frame_id: String = "D4_%04d" % idx
+					seq_idx += 1
+					var frame_num: int = seq_idx if formation == 0 else (seq_idx + 50)
+					var frame_id: String = "D4_%04d" % frame_num
 					_hide_all_entities()
 					var active_actors: Array = []
 					var active_subcats: Array = []
@@ -227,14 +227,6 @@ func _generate_d4_crowd_dynamics(abs_img_dir: String) -> void:
 							male.global_position = corridor_anchor + Vector3(lat_shift, 0.0, -0.75)
 							active_actors = [wc_actor, male]
 							active_subcats = ["wheelchair", "standing"]
-					elif formation == 1:
-						# Mẹ dắt tay trẻ em
-						if female and child:
-							female.visible = true; child.visible = true
-							female.global_position = corridor_anchor + Vector3(-0.3, 0.0, 0.0)
-							child.global_position = corridor_anchor + Vector3(0.3 + lat_shift * 0.5, 0.0, 0.0)
-							active_actors = [female, child]
-							active_subcats = ["standing", "standing"]
 					else:
 						# Hàng 3 người xếp hàng
 						if female and elderly and male:

@@ -27,9 +27,6 @@ near = 0.05
 
 [node name="standing_female" parent="ActorsPool" instance=ExtResource("3")]
 
-[node name="child_patient" parent="ActorsPool" instance=ExtResource("3")]
-transform = Transform3D(0.65, 0, 0, 0, 0.65, 0, 0, 0, 0.65, 0, 0, 0)
-
 [node name="wheelchair_patient" type="Node3D" parent="ActorsPool"]
 
 [node name="PatientBody" parent="ActorsPool/wheelchair_patient" instance=ExtResource("10")]

@@ -167,11 +167,32 @@ def generate_metric_plots(records: List[Dict[str, Any]]) -> Tuple[plt.Figure, pl
     return fig_r, fig_l, fig_p, fig_s
 
 
-def inspect_run(run_dir_str: str) -> Tuple[Any, Any, Any, Any, str, str, str, str, str]:
+def find_checkpoints_for_run(run_dir_str: str) -> List[Tuple[str, str]]:
+    """Scan checkpoints/ in run directory and return (label, path) pairs."""
+    if not run_dir_str or not Path(run_dir_str).is_dir():
+        return []
+    ckpts_dir = Path(run_dir_str) / "checkpoints"
+    if not ckpts_dir.is_dir():
+        return []
+    pt_files = sorted(list(ckpts_dir.glob("*.pt")), key=lambda p: p.stat().st_mtime, reverse=True)
+    choices: List[Tuple[str, str]] = []
+    for f in pt_files:
+        name_lower = f.name.lower()
+        if "best" in name_lower:
+            lbl = f"⭐ {f.name} (Best Validation Performance)"
+        elif "last" in name_lower:
+            lbl = f"🏁 {f.name} (Latest Epoch Save)"
+        else:
+            lbl = f"💾 {f.name}"
+        choices.append((lbl, str(f.resolve())))
+    return choices
+
+
+def inspect_run(run_dir_str: str) -> Tuple[Any, Any, Any, Any, str, str, str, str, str, Any]:
     """Inspect and load all metrics, figures, and status for a selected run directory."""
     if not run_dir_str or not Path(run_dir_str).is_dir():
         fig1, fig2, fig3, fig4 = generate_metric_plots([])
-        return fig1, fig2, fig3, fig4, "-", "-", "-", "-", "Select a run to view details."
+        return fig1, fig2, fig3, fig4, "-", "-", "-", "-", "Select a run to view details.", gr.update(choices=[], value="")
 
     p = Path(run_dir_str)
     records = load_history_records(run_dir_str)
@@ -190,18 +211,19 @@ def inspect_run(run_dir_str: str) -> Tuple[Any, Any, Any, Any, str, str, str, st
                 best_ep = r.get("epoch", 0)
         latest_helped = float(records[-1].get("val_patients_helped", 0.0))
 
-    # Check for best checkpoint
-    ckpts_dir = p / "checkpoints"
-    ckpt_files = list(ckpts_dir.glob("*_best.pt")) if ckpts_dir.is_dir() else []
-    best_ckpt_str = str(ckpt_files[0]) if ckpt_files else "None found"
+    # Check for available checkpoints
+    ckpts = find_checkpoints_for_run(run_dir_str)
+    default_ckpt = ckpts[0][1] if ckpts else ""
+    ckpt_update = gr.update(choices=[(l, p) for l, p in ckpts], value=default_ckpt)
 
-    status_txt = f"Loaded {p.name}\nTotal Epochs Logged: {total_eps} | Best R_team: {best_r:.2f} (Epoch {best_ep})\nCheckpoint: {best_ckpt_str}"
+    best_ckpt_str = Path(default_ckpt).name if default_ckpt else "None found"
+    status_txt = f"Loaded {p.name}\nTotal Epochs Logged: {total_eps} | Best R_team: {best_r:.2f} (Epoch {best_ep})\nDefault Checkpoint: {best_ckpt_str}"
     ep_card = f"{total_eps}"
     r_card = f"{best_r:.1f} (Ep {best_ep})"
     help_card = f"{latest_helped:.1f}"
     eta_card = "COMPLETED / IDLE"
 
-    return fig1, fig2, fig3, fig4, ep_card, r_card, help_card, eta_card, status_txt
+    return fig1, fig2, fig3, fig4, ep_card, r_card, help_card, eta_card, status_txt, ckpt_update
 
 
 def start_training(
@@ -359,25 +381,24 @@ def poll_status_and_metrics(selected_prev_run: str) -> Tuple[Any, Any, Any, Any,
     return fig1, fig2, fig3, fig4, ep_card, r_card, help_card, eta_card, log_tail, is_running
 
 
-def launch_simulation(selected_prev_run: str) -> str:
-    """Launch the interactive Godot 3D simulation with the selected checkpoint."""
-    target_dir = CURRENT_RUN_DIR
-    if target_dir is None and selected_prev_run:
-        target_dir = Path(selected_prev_run)
+def launch_simulation(selected_ckpt: str, selected_prev_run: str) -> str:
+    """Launch the interactive Godot 3D simulation with the chosen checkpoint."""
+    ckpt_path: Optional[Path] = None
+    if selected_ckpt and Path(selected_ckpt).is_file():
+        ckpt_path = Path(selected_ckpt)
+    else:
+        target_dir = CURRENT_RUN_DIR
+        if target_dir is None and selected_prev_run:
+            target_dir = Path(selected_prev_run)
+        if target_dir is not None and target_dir.is_dir():
+            ckpts = find_checkpoints_for_run(str(target_dir))
+            if ckpts:
+                ckpt_path = Path(ckpts[0][1])
 
-    if target_dir is None or not target_dir.is_dir():
-        return "❌ Please select or complete a run with a valid checkpoint first."
+    if ckpt_path is None or not ckpt_path.is_file():
+        return "❌ Please select a valid checkpoint (.pt) file to launch."
 
-    ckpts_dir = target_dir / "checkpoints"
-    ckpts = list(ckpts_dir.glob("*_best.pt")) if ckpts_dir.is_dir() else []
-    if not ckpts:
-        ckpts = list(ckpts_dir.glob("*_last.pt")) if ckpts_dir.is_dir() else []
-    if not ckpts:
-        return f"❌ No checkpoint (.pt) found in {ckpts_dir}."
-
-    ckpt_path = ckpts[0]
     launcher_py = REPO_ROOT / "run_simulation.py"
-
     cmd = [
         str(PYTHON_EXE),
         str(launcher_py),
@@ -387,7 +408,7 @@ def launch_simulation(selected_prev_run: str) -> str:
 
     try:
         subprocess.Popen(cmd, cwd=str(REPO_ROOT))
-        return f"🎮 Launching Godot 3D Simulation with checkpoint:\n{ckpt_path.name}"
+        return f"🎮 Launching Godot 3D Simulation with save:\n{ckpt_path.name}\nPath: {ckpt_path}"
     except Exception as e:
         return f"❌ Failed to launch simulation: {e}"
 
@@ -396,6 +417,8 @@ def build_dashboard() -> gr.Blocks:
     """Construct the Gradio Dashboard interface."""
     initial_runs = find_existing_runs()
     default_run = initial_runs[0][1] if initial_runs else ""
+    initial_ckpts = find_checkpoints_for_run(default_run) if default_run else []
+    default_ckpt = initial_ckpts[0][1] if initial_ckpts else ""
 
     custom_css = """
     .kpi-box { text-align: center; background: #f8fafc; border-radius: 8px; padding: 12px; border: 1px solid #e2e8f0; }
@@ -467,7 +490,15 @@ def build_dashboard() -> gr.Blocks:
 
                 with gr.Row():
                     refresh_runs_btn = gr.Button("🔄 Refresh Runs", variant="secondary")
-                    launch_sim_btn = gr.Button("🎮 Launch 3D Simulation", variant="secondary")
+
+                gr.Markdown("#### 🎮 Godot 3D Inference with Chosen Save")
+                ckpt_dropdown = gr.Dropdown(
+                    choices=[(l, p) for l, p in initial_ckpts],
+                    value=default_ckpt,
+                    label="🎯 Select Save / Checkpoint for Godot Inference",
+                    interactive=True,
+                )
+                launch_sim_btn = gr.Button("🎮 Launch 3D Simulation with Selected Save", variant="secondary")
 
                 action_output = gr.Textbox(label="Action & Process Status", interactive=False, max_lines=4)
 
@@ -522,7 +553,7 @@ def build_dashboard() -> gr.Blocks:
         run_dropdown.change(
             inspect_run,
             inputs=[run_dropdown],
-            outputs=[plot_reward, plot_loss, plot_prod, plot_safety, kpi_epoch, kpi_r, kpi_help, kpi_eta, action_output],
+            outputs=[plot_reward, plot_loss, plot_prod, plot_safety, kpi_epoch, kpi_r, kpi_help, kpi_eta, action_output, ckpt_dropdown],
         )
 
         # Start button
@@ -547,7 +578,7 @@ def build_dashboard() -> gr.Blocks:
         # Launch simulation button
         launch_sim_btn.click(
             launch_simulation,
-            inputs=[run_dropdown],
+            inputs=[ckpt_dropdown, run_dropdown],
             outputs=[action_output],
         )
 
@@ -555,12 +586,14 @@ def build_dashboard() -> gr.Blocks:
         def on_refresh_runs():
             runs = find_existing_runs()
             val = runs[0][1] if runs else ""
-            return gr.update(choices=[(l, p) for l, p in runs], value=val)
+            ckpts = find_checkpoints_for_run(val) if val else []
+            d_ckpt = ckpts[0][1] if ckpts else ""
+            return gr.update(choices=[(l, p) for l, p in runs], value=val), gr.update(choices=[(l, p) for l, p in ckpts], value=d_ckpt)
 
         refresh_runs_btn.click(
             on_refresh_runs,
             inputs=[],
-            outputs=[run_dropdown],
+            outputs=[run_dropdown, ckpt_dropdown],
         )
 
         # Periodic timer poll

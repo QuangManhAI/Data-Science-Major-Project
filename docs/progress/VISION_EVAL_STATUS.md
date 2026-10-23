@@ -34,8 +34,11 @@
 - **2026-10-23T09:28:00+07:00**: Tiếp thu yêu cầu mở rộng từ User: Khảo sát tư duy toàn diện các trường hợp che khuất kiến trúc, nội thất y tế, đám đông và bẫy phản xạ quang học.
 - **2026-10-23T09:30:00+07:00**: Soạn thảo đặc tả 48 kịch bản (8 Trục kiểm thử không gian) tại [`EXP_VISION_48CASES_1200_BENCHMARK.md`](../experiments/EXP_VISION_48CASES_1200_BENCHMARK.md).
 - **2026-10-23T09:30:30+07:00**: Nâng cấp `scene_dataset_generator.gd` hỗ trợ 8 Trục không gian (D1-D8) và kích hoạt GPU Vulkan kết xuất dataset `sim_vision/data/vision_eval_1200/`.
-- **2026-10-23T09:39:39+07:00**: Kết xuất hoàn tất 855 frames (D1: 75, D2: 75, D3: 150, D4: 150, D5: 150, D6: 90, D7: 75, D8: 90) trong $545.3\text{s}$.
-- **2026-10-23T09:40:45+07:00**: Chạy benchmark đối chứng 4 models trên bộ 48 kịch bản. Xuất báo cáo tại [`sim_vision/reports/vision_48cases_benchmark.md`](../../sim_vision/reports/vision_48cases_benchmark.md).
+- **2026-10-23T09:39:39+07:00**: Kết xuất hoàn tất 855 frames sơ bộ đợt 2 trong $545.3\text{s}$.
+- **2026-10-23T10:09:00+07:00**: Tinh chỉnh toàn bộ grid parameters trong Godot để đạt chuẩn chính xác **150 frames/trục** (tổng cộng đủ **1,200 frames**).
+- **2026-10-23T10:24:18+07:00**: Kết xuất hoàn tất đúng **1,200 frames** (D1-D8 mỗi trục đúng 150 frames).
+- **2026-10-23T10:25:25+07:00**: Chạy benchmark đối chứng chính thức 4 models (`yolov8n`, `yolo11n`, `yolo26n`, `intel/person-retail-0013`) trên 1,200 frames. Xuất báo cáo tại [`sim_vision/reports/vision_48cases_benchmark.md`](../../sim_vision/reports/vision_48cases_benchmark.md).
+- **2026-10-23T10:27:15+07:00**: Hoàn thành Jupyter Notebook chuyên sâu [`notebooks/01_vision_model_benchmark_visualization.ipynb`](../../notebooks/01_vision_model_benchmark_visualization.ipynb) (11 MB) bao gồm 2D Spatial Heatmap, Thư viện 16 ảnh 3D, Radar Chart, Degeneracy Curves, và Live Inference Side-by-Side trên 6 ca biên thất bại nghiêm trọng nhất của CẢ 4 MODEL.
 
 ---
 

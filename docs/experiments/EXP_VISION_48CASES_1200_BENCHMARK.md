@@ -178,39 +178,39 @@ python sim_vision/python/eval_vision_models.py --dataset-dir sim_vision/data/vis
 
 Thực nghiệm hoàn tất trên 855 frames bao phủ trọn vẹn 8 trục kiểm thử không gian (D1 đến D8).
 
-### 7.1 Bảng Tổng Hợp Chỉ Số Cốt Lõi
+### 7.1 Bảng Tổng Hợp Chỉ Số Cốt Lõi (1,200 Frames)
 
-| Model | Precision | Recall (Toàn bộ) | Recall (Xe lăn / Người già) | Recall (Che khuất < 65%) | FP trên Đạo cụ rỗng | Sai số góc lái $\Delta\theta$ | Latency P95 (ms) |
+| Model | Precision | Recall (Toàn bộ) | Recall (Xe lăn / Người già) | Recall (Che khuất < 65%) | FP trên Đạo cụ rỗng (D8) | Sai số góc lái $\Delta\theta$ | Latency P95 (ms) |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **`yolov8n.pt` (Baseline)** | 88.95% | 81.64% | 54.21% | 46.32% | **0 FP (0.0%)** | **0.17°** | **8.6 ms** |
-| **`yolo11n.pt` (C2PSA Attention)** | 88.89% | **82.13%** | 55.26% | 47.37% | **0 FP (0.0%)** | 0.19° | 9.8 ms |
-| **`yolo26n.pt` (NMS-Free)** | **92.13%** | 82.00% | 55.26% | 45.26% | **0 FP (0.0%)** | 0.19° | 11.3 ms |
-| **`intel/person-retail-0013` (OpenVINO)** | 93.27% | 76.93% | **68.95%** | **64.21%** | 5 FP (5.6%) | 0.18° | 9.8 ms |
+| **`yolov8n.pt` (Baseline)** | 88.66% | 85.32% | 55.26% | 50.88% | **0 FP (0.0%)** | **0.17°** | **8.6 ms** |
+| **`yolo11n.pt` (C2PSA Attention)** | 88.95% | **85.61%** | 54.21% | **53.51%** | **0 FP (0.0%)** | 0.18° | 9.9 ms |
+| **`yolo26n.pt` (NMS-Free)** | **92.10%** | 85.51% | 55.79% | 50.00% | **0 FP (0.0%)** | 0.18° | 11.2 ms |
+| **`intel/person-retail-0013` (OpenVINO)** | 92.54% | 82.88% | **64.74%** | **68.42%** | 14 FP (9.3%) | **0.17°** | 10.2 ms |
 
-### 7.2 Bảng Ma Trận Recall Theo 8 Trục Không Gian
+### 7.2 Bảng Ma Trận Recall Theo 8 Trục Không Gian (150 frames/trục)
 
 | Trục Kiểm Thử | Chi Tiết Kịch Bản | YOLOv8n | YOLO11n | YOLO26n | Intel OpenVINO |
 | :--- | :--- | :---: | :---: | :---: | :---: |
-| `D1_Architecture` | Vật cản kiến trúc (Mép tường, cửa trượt, thang máy) | **100.0%** | **100.0%** | **100.0%** | 96.0% |
-| `D2_Furniture` | Quầy tiếp đón $1.1\text{m}$, rèm y tế, xe đẩy thuốc | 84.0% | 84.0% | 88.0% | **100.0%** |
-| `D3_Clinical_Poses` | Dị biệt dáng đi (Xe lăn, gậy, cáng nằm, khom lưng) | 67.3% | 69.3% | 70.0% | **76.7%** |
-| `D4_Crowd_Dyn` | Động học đám đông (Đi song song, che lấp, xếp hàng) | 65.6% | 66.0% | 64.9% | **73.3%** |
-| `D5_Distances` | Cự ly cực cận $0.6\text{m}$ đến viễn $10\text{m}$, mép ảnh | **100.0%** | **100.0%** | **100.0%** | 56.8% (Tụt nặng) |
-| `D6_Kinematics` | Quay lưng $180^\circ$, xoay ngang $90^\circ$, đi lùi | **100.0%** | **100.0%** | **100.0%** | 81.1% |
-| `D7_Lighting` | Nhiễu sáng PBR (Ngược sáng, chói lóa, đèn sự cố) | **100.0%** | **100.0%** | **100.0%** | 93.3% |
-| `D8_Hard_Negatives` | Bẫy âm tính giả (Xe lăn rỗng, giường rỗng, kiosk, poster) | **0 FP** | **0 FP** | **0 FP** | 5 FP (Bắt nhầm) |
+| `D1_Architecture` | Vật cản kiến trúc (Mép tường, cửa trượt, thang máy) | **100.0%** | **100.0%** | **100.0%** | **100.0%** |
+| `D2_Furniture` | Quầy tiếp đón $1.1\text{m}$, rèm y tế, xe đẩy thuốc | 84.0% | **88.0%** | 84.0% | **100.0%** |
+| `D3_Clinical_Poses` | Dị biệt dáng đi (Xe lăn, gậy, cáng nằm, khom lưng) | 68.7% | 68.0% | 70.7% | **76.0%** |
+| `D4_Crowd_Dyn` | Động học đám đông (Đi song song, che lấp, xếp hàng) | 64.9% | 65.6% | 64.6% | **70.5%** |
+| `D5_Distances` | Cự ly cực cận $0.6\text{m}$ đến viễn $10\text{m}$, mép ảnh | **100.0%** | **100.0%** | **100.0%** | 56.0% (Tụt nặng ❌) |
+| `D6_Kinematics` | Quay lưng $180^\circ$, xoay ngang $90^\circ$, đi lùi | **100.0%** | **100.0%** | **100.0%** | 96.0% |
+| `D7_Lighting` | Nhiễu sáng PBR (Ngược sáng, chói lóa, đèn sự cố) | **100.0%** | **100.0%** | **100.0%** | **100.0%** |
+| `D8_Hard_Negatives` | Bẫy âm tính giả (Xe lăn rỗng, giường rỗng, kiosk, poster) | **0 FP (Chuẩn)** | **0 FP (Chuẩn)** | **0 FP (Chuẩn)** | 14 FP (Báo động giả ❌) |
 
 ### 7.3 Phân Tích Chuyên Sâu & Giải Thích First Principles
 
-1. **Vì sao Intel OpenVINO bị tụt dốc ở Trục D5 ($56.8\%$)**:
+1. **Vì sao Intel OpenVINO bị tụt dốc ở Trục D5 ($56.0\%$)**:
    - `intel/person-retail-0013` dựa trên MobileNetV2-SSD với tập prior anchors cố định được tiền định nghĩa cho người đi bộ chuẩn ở khoảng cách trung bình trong siêu thị bán lẻ (retail).
    - Khi Robot tiến sát đối tượng ở cự ly $0.6\text{m} - 0.85\text{m}$ (vùng nghe nói chuyện STT), thân người phóng to vượt quá tỷ lệ kích thước anchor tối đa của SSD $\rightarrow$ SSD hoàn toàn không sinh ra bounding box.
    - Ngược lại, kiến trúc Anchor-Free của dòng YOLO (v8n, 11n, 26n) dự đoán trực tiếp khoảng cách từ tâm cell tới 4 cạnh box thông qua DFL (Distribution Focal Loss), nhờ đó giữ vững $100\%$ Recall trên mọi cự ly từ $0.6\text{m}$ tới $10\text{m}$.
 2. **Hiện tượng Bẫy Đạo Cụ Rỗng (Trục D8)**:
-   - Cả 3 biến thể YOLO Nano (v8n, 11n, 26n) đều đạt **miễn nhiễm tuyệt đối (0 False Positive)** trên 90 frames bẫy đạo cụ rỗng (xe lăn trống, giường bệnh trống, poster bác sĩ 2D, cây truyền dịch, kiosk cảm ứng).
-   - Trong khi đó, Intel OpenVINO tiếp tục bắt nhầm xe lăn trống và kiosk là người với 5 lần báo động giả ($5.6\%$). Điều này sẽ khiến Robot bị "ma ám", tự động tiến lại gần xe lăn rỗng để chào hỏi.
+   - Cả 3 biến thể YOLO Nano (v8n, 11n, 26n) đều đạt **miễn nhiễm tuyệt đối (0 False Positive)** trên toàn bộ 150 frames bẫy đạo cụ rỗng (xe lăn trống, giường bệnh trống, poster bác sĩ 2D, cây truyền dịch, kiosk cảm ứng).
+   - Trong khi đó, Intel OpenVINO tiếp tục bắt nhầm xe lăn trống và kiosk là người với 14 lần báo động giả ($9.3\%$). Điều này sẽ khiến Robot bị "ma ám", tự động tiến lại gần xe lăn rỗng để chào hỏi.
 3. **Ưu thế của YOLO26n (NMS-Free)**:
-   - Đạt **Precision cao nhất ($92.13\%$)**, giảm thiểu tối đa các dự đoán dư thừa ở Trục D2 và D3 nhờ cơ chế gán nhãn One-to-One Head thay vì One-to-Many + Greedy NMS truyền thống.
+   - Đạt **Precision cao nhất ($92.10\%$)**, giảm thiểu tối đa các dự đoán dư thừa ở Trục D2 và D3 nhờ cơ chế gán nhãn One-to-One Head thay vì One-to-Many + Greedy NMS truyền thống.
 
 ---
 
@@ -219,3 +219,4 @@ Thực nghiệm hoàn tất trên 855 frames bao phủ trọn vẹn 8 trục ki�
 - Kế hoạch Giai đoạn: [`docs/phases/PHASE_VISION_EVAL_BENCHMARK.md`](../phases/PHASE_VISION_EVAL_BENCHMARK.md)
 - Nhật ký Tiến độ: [`docs/progress/VISION_EVAL_STATUS.md`](../progress/VISION_EVAL_STATUS.md)
 - Báo cáo Kết quả Thực nghiệm: [`sim_vision/reports/vision_48cases_benchmark.md`](../../sim_vision/reports/vision_48cases_benchmark.md)
+- Notebook Trực quan hóa Chuyên sâu: [`notebooks/01_vision_model_benchmark_visualization.ipynb`](../../notebooks/01_vision_model_benchmark_visualization.ipynb)

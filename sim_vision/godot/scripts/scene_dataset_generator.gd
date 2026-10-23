@@ -94,7 +94,7 @@ func _generate_d1_architecture(abs_img_dir: String) -> void:
 	var actor: Node3D = _get_actor("standing_male")
 	var shifts: Array[float] = [-0.6, -0.3, 0.0, 0.3, 0.6] # Mức độ thò ra khỏi mép tường
 	var distances: Array[float] = [1.8, 2.5, 3.5, 4.5, 6.0]
-	var cam_yaw_offsets: Array[float] = [-12.0, 0.0, 12.0]
+	var cam_yaw_offsets: Array[float] = [-15.0, -9.0, -3.0, 3.0, 9.0, 15.0] # 6 góc nhìn: 5x5x6 = 150 frames
 
 	var idx: int = 0
 	# C01 & C02: Mép cửa phòng khám 110 & mép tường
@@ -127,42 +127,42 @@ func _generate_d2_furniture(abs_img_dir: String) -> void:
 		{"mode": "screen", "look_h": 0.95},
 		{"mode": "trolley", "look_h": 0.95}
 	]
-	var cam_yaw_offsets: Array[float] = [-15.0, 0.0, 15.0]
+	var cam_yaw_pairs: Array[float] = [-12.0, 12.0] # 2 góc cam: 3 x 5 x 5 x 2 = 150 frames
 
 	var idx: int = 0
 	for cfg in configs:
 		for dist in distances:
 			for shift_step in range(5):
 				var lat_shift: float = (shift_step - 2) * 0.25
-				var yaw_off: float = cam_yaw_offsets[shift_step % 3]
-				idx += 1
-				var frame_id: String = "D2_%04d" % idx
-				_hide_all_entities()
-				if actor:
-					actor.visible = true
-					if cfg["mode"] == "counter":
-						# Đứng sau quầy lễ tân (y = 7.8m trong room.tscn)
-						actor.global_position = Vector3(lat_shift, 0.0, 8.4)
-						_position_camera_spherical(Vector3(lat_shift, 0.0, 7.8), dist, 180.0, yaw_off, cfg["look_h"])
-					elif cfg["mode"] == "screen":
-						# Đứng sau rèm che riêng tư
-						if screen:
-							screen.visible = true
-							screen.global_position = corridor_anchor + Vector3(0.0, 0.0, 0.5)
-						actor.global_position = corridor_anchor + Vector3(lat_shift, 0.0, 0.0)
-						_position_camera_spherical(corridor_anchor, dist, 0.0, yaw_off, cfg["look_h"])
-					else:
-						# Đứng sau xe đẩy thuốc
-						if trolley:
-							trolley.visible = true
-							trolley.global_position = corridor_anchor + Vector3(0.0, 0.0, 0.6)
-						actor.global_position = corridor_anchor + Vector3(lat_shift, 0.0, 0.0)
-						_position_camera_spherical(corridor_anchor, dist, 0.0, yaw_off, cfg["look_h"])
+				for yaw_off in cam_yaw_pairs:
+					idx += 1
+					var frame_id: String = "D2_%04d" % idx
+					_hide_all_entities()
+					if actor:
+						actor.visible = true
+						if cfg["mode"] == "counter":
+							# Đứng sau quầy lễ tân (y = 7.8m trong room.tscn)
+							actor.global_position = Vector3(lat_shift, 0.0, 8.4)
+							_position_camera_spherical(Vector3(lat_shift, 0.0, 7.8), dist, 180.0, yaw_off, cfg["look_h"])
+						elif cfg["mode"] == "screen":
+							# Đứng sau rèm che riêng tư
+							if screen:
+								screen.visible = true
+								screen.global_position = corridor_anchor + Vector3(0.0, 0.0, 0.5)
+							actor.global_position = corridor_anchor + Vector3(lat_shift, 0.0, 0.0)
+							_position_camera_spherical(corridor_anchor, dist, 0.0, yaw_off, cfg["look_h"])
+						else:
+							# Đứng sau xe đẩy thuốc
+							if trolley:
+								trolley.visible = true
+								trolley.global_position = corridor_anchor + Vector3(0.0, 0.0, 0.6)
+							actor.global_position = corridor_anchor + Vector3(lat_shift, 0.0, 0.0)
+							_position_camera_spherical(corridor_anchor, dist, 0.0, yaw_off, cfg["look_h"])
 
-				await _capture_and_record_frame(
-					abs_img_dir, frame_id, "D2_Furniture", "hospital_furniture",
-					"fluorescent_normal", [actor] if actor else [], ["standing"]
-				)
+					await _capture_and_record_frame(
+						abs_img_dir, frame_id, "D2_Furniture", "hospital_furniture",
+						"fluorescent_normal", [actor] if actor else [], ["standing"]
+					)
 
 
 ## TRỤC 3: Dị Biệt Dáng Đi & Bệnh Lý Lâm Sàng (150 frames: C13-C18)
@@ -278,13 +278,14 @@ func _generate_d5_distances(abs_img_dir: String) -> void:
 ## TRỤC 6: Hướng Chuyển Động & Động Học (150 frames: C31-C36)
 func _generate_d6_kinematics(abs_img_dir: String) -> void:
 	var actor: Node3D = _get_actor("standing_female")
-	var yaws: Array[float] = [0.0, 45.0, 90.0, 135.0, 180.0, 270.0] # Đủ các hướng xoay
-	var distances: Array[float] = [1.2, 2.2, 3.5, 5.0, 7.0]
+	var yaws: Array[float] = [0.0, 45.0, 90.0, 135.0, 180.0, 270.0] # 6 hướng xoay
+	var distances: Array[float] = [1.2, 2.2, 3.5, 5.0, 7.0] # 5 cự ly
+	var cam_yaws: Array[float] = [-16.0, -8.0, 0.0, 8.0, 16.0] # 5 góc nhìn cam: 6x5x5 = 150 frames
 
 	var idx: int = 0
 	for yaw in yaws:
 		for dist in distances:
-			for cam_yaw in [-10.0, 0.0, 10.0]:
+			for cam_yaw in cam_yaws:
 				idx += 1
 				var frame_id: String = "D6_%04d" % idx
 				_hide_all_entities()
@@ -302,10 +303,10 @@ func _generate_d7_lighting(abs_img_dir: String) -> void:
 	var profiles: Array[String] = [
 		"backlit_glare", "dim_emergency_light", "overexposed_fluorescent",
 		"fluorescent_normal", "dim_emergency_light"
-	]
+	] # 5 profile
 	var actor: Node3D = _get_actor("standing_male")
-	var distances: Array[float] = [1.2, 2.2, 3.5, 5.0, 6.5]
-	var cam_yaw_offsets: Array[float] = [-12.0, 0.0, 12.0]
+	var distances: Array[float] = [1.2, 2.2, 3.5, 5.0, 6.5] # 5 cự ly
+	var cam_yaw_offsets: Array[float] = [-15.0, -9.0, -3.0, 3.0, 9.0, 15.0] # 6 góc nhìn: 5x5x6 = 150 frames
 
 	var idx: int = 0
 	for p_idx in range(profiles.size()):
@@ -336,9 +337,9 @@ func _generate_d8_hard_negatives(abs_img_dir: String) -> void:
 		"self_service_kiosk",
 		"wall_doctor_poster",
 		"medical_privacy_screen_empty"
-	]
-	var distances: Array[float] = [1.2, 2.0, 3.0, 4.2, 5.5]
-	var cam_offsets: Array[float] = [-15.0, 0.0, 15.0]
+	] # 6 loại đạo cụ rỗng
+	var distances: Array[float] = [1.2, 2.0, 3.0, 4.2, 5.5] # 5 cự ly
+	var cam_offsets: Array[float] = [-16.0, -8.0, 0.0, 8.0, 16.0] # 5 góc nhìn cam: 6x5x5 = 150 frames
 
 	var idx: int = 0
 	for p_name in prop_names:

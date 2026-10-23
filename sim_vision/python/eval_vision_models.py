@@ -76,9 +76,9 @@ def evaluate_model(
         "slice_metrics": {},
     }
 
-    # Khởi tạo thống kê theo từng slice
-    all_slices = ["S1_Baseline", "S2_Vulnerable", "S3_Crowd_Occ", "S4_Photometric", "S5_Hard_Neg"]
-    for s in all_slices:
+    # Khởi tạo thống kê theo từng slice động từ dữ liệu
+    unique_slices = sorted(list({rec.get("slice", "unknown") for rec in records}))
+    for s in unique_slices:
         stats["slice_metrics"][s] = {"tp": 0, "fn": 0, "fp": 0, "frames": 0}
 
     for rec in records:
@@ -112,8 +112,8 @@ def evaluate_model(
 
         gts = [g for g in rec.get("ground_truths", []) if not g.get("ignore_eval", False)]
 
-        # Lát cắt S5 (Hard Negatives): Không có người thật
-        if slice_name == "S5_Hard_Neg" or len(gts) == 0:
+        # Lát cắt Hard Negatives (không có người thật)
+        if slice_name in ("S5_Hard_Neg", "D8_Hard_Neg", "D8_Hard_Negatives") or len(gts) == 0:
             stats["total_hard_neg_frames"] += 1
             if len(preds_px) > 0:
                 stats["fp_hard_neg_frames"] += 1
@@ -285,18 +285,50 @@ def main() -> None:
             )
 
         f.write("\n## 2. Đánh Giá Phân Tầng Theo Từng Lát Cắt Kịch Bản (Stratified Slices)\n\n")
+
+        desc_map = {
+            "S1_Baseline": "Hành lang chuẩn (1-2 người đi bộ)",
+            "S2_Vulnerable": "Bệnh nhân xe lăn & người già khom lưng",
+            "S3_Crowd_Occ": "Quầy tiếp đón đông người & chồng lấp",
+            "S4_Photometric": "Nhiễu ánh sáng (ngược sáng / tối / chói)",
+            "S5_Hard_Neg": "Bẫy đạo cụ y tế rỗng (xe lăn, kiosk)",
+            "D1_Architecture": "D1: Vật cản kiến trúc cố định (Mép cửa phòng khám 110, mép tường, trụ)",
+            "D1_Static_Occ": "D1: Vật cản kiến trúc cố định (Trụ bê tông, vách kính, rèm y tế)",
+            "D2_Furniture": "D2: Đạo cụ & nội thất che khuất (Quầy lễ tân, rèm che, xe tiêm)",
+            "D2_Med_Props": "D2: Đạo cụ y tế che khuất động (Xe tiêm, cọc truyền, giường cấp cứu)",
+            "D3_Clinical_Poses": "D3: Dị biệt dáng đi & lâm sàng (Xe lăn, nạng/gậy, cáng nằm, khom lưng)",
+            "D3_Vulnerable": "D3: Tư thế bệnh nhân yếu thế (Xe lăn, nạng/gậy, nằm cáng, trẻ em)",
+            "D4_Crowd_Dyn": "D4: Động học đám đông (Đi song song, che lấp lẫn nhau, xếp hàng)",
+            "D5_Distances": "D5: Biến dạng cự ly & Cắt biên ảnh (0.6m đến 10m, mép FOV)",
+            "D6_Kinematics": "D6: Góc quay cơ thể & Động học (0°, 45°, 90°, 135°, 180°, 270°)",
+            "D7_Lighting": "D7: Nhiễu ánh sáng & Hiệu ứng PBR (Ngược sáng, chói lóa, đèn sự cố)",
+            "D8_Hard_Negatives": "D8: Bẫy âm tính giả (Xe lăn rỗng, giường rỗng, poster y tế, kiosk)",
+            "D8_Hard_Neg": "D8: Bẫy âm tính giả (Đạo cụ y tế rỗng, poster, kiosk tiếp đón)",
+        }
+
+        # Bảng ma trận đối chứng trực diện giữa các models
+        f.write("### Bảng Ma Trận Đối Chứng Độ Nhạy (Recall / FP) Theo Từng Trục Kịch Bản\n\n")
+        f.write("| Trục kiểm thử | Chi tiết kịch bản | " + " | ".join([f"**{r['model_name']}**" for r in results]) + " |\n")
+        f.write("| :--- | :--- | " + " | ".join([":---:" for _ in results]) + " |\n")
+        if results:
+            first_metrics = results[0]["slice_metrics"]
+            for s in first_metrics.keys():
+                row_items = [f"`{s}`", desc_map.get(s, s)]
+                for r in results:
+                    d = r["slice_metrics"].get(s, {})
+                    tot_gt = d.get("tp", 0) + d.get("fn", 0)
+                    if tot_gt > 0:
+                        row_items.append(f"{d['tp'] / tot_gt:.1%}")
+                    else:
+                        row_items.append(f"{d.get('fp', 0)} FP")
+                f.write("| " + " | ".join(row_items) + " |\n")
+        f.write("\n")
+
         for r in results:
-            f.write(f"### {r['model_name']}\n\n")
+            f.write(f"### Chi tiết: {r['model_name']}\n\n")
             f.write("| Slice | Mô tả | Số frame | TP | FP | FN | Recall |\n")
             f.write("| :--- | :--- | :---: | :---: | :---: | :---: | :---: |\n")
             sm = r["slice_metrics"]
-            desc_map = {
-                "S1_Baseline": "Hành lang chuẩn (1-2 người đi bộ)",
-                "S2_Vulnerable": "Bệnh nhân xe lăn & người già khom lưng",
-                "S3_Crowd_Occ": "Quầy tiếp đón đông người & chồng lấp",
-                "S4_Photometric": "Nhiễu ánh sáng (ngược sáng / tối / chói)",
-                "S5_Hard_Neg": "Bẫy đạo cụ y tế rỗng (xe lăn, kiosk)",
-            }
             for s, d in sm.items():
                 tot_gt = d["tp"] + d["fn"]
                 rec_str = f"{d['tp'] / max(1, tot_gt):.2%}" if tot_gt > 0 else "N/A (0 GT)"

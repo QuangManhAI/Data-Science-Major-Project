@@ -6,14 +6,16 @@
 - **Detailed Plan**: §1 Status Overview; §2 Chronological Activity Log; §3 Active Blockers & Decisions; §4 Immediate Next Steps.
 - **References**: [`agents/rules/MD_CONVENTION.md`](../../agents/rules/MD_CONVENTION.md), [`docs/phases/PHASE_VISION_EVAL_BENCHMARK.md`](../phases/PHASE_VISION_EVAL_BENCHMARK.md).
 - **Created**: 2026-10-23T09:05:00+07:00
-- **Last Updated**: 2026-10-23T09:25:00+07:00
+- **Last Updated**: 2026-10-23T09:42:00+07:00
 
 ---
 
 ## Status Overview
 
 - **Governing Phase**: [`docs/phases/PHASE_VISION_EVAL_BENCHMARK.md`](../phases/PHASE_VISION_EVAL_BENCHMARK.md)
-- **Governing Experiment**: [`docs/experiments/EXP_VISION_MODEL_BENCHMARK.md`](../experiments/EXP_VISION_MODEL_BENCHMARK.md)
+- **Governing Experiments**:
+  - Đợt 1 (600 frames): [`docs/experiments/EXP_VISION_MODEL_BENCHMARK.md`](../experiments/EXP_VISION_MODEL_BENCHMARK.md)
+  - Đợt 2 (48 Kịch bản, 8 Trục không gian): [`docs/experiments/EXP_VISION_48CASES_1200_BENCHMARK.md`](../experiments/EXP_VISION_48CASES_1200_BENCHMARK.md)
 - **Current Lifecycle State**: `[STATUS: COMPLETED]`
 - **Active Git Branch**: `feat/vision-eval-benchmark`
 - **Primary Assignee**: Pair Programming AI Agent & User
@@ -29,15 +31,28 @@
 - **2026-10-23T09:16:00+07:00**: Hoàn thiện kịch bản Godot `scene_dataset_generator.gd`, cấu hình scene `hospital_vision_bench.tscn`, và engine benchmark `eval_vision_models.py`.
 - **2026-10-23T09:22:48+07:00**: Chạy tự động sinh đủ 600 frames JPEG ($640 \times 480$) kèm nhãn Ground Truth hình học chính xác cao tại `sim_vision/data/vision_eval_600/`.
 - **2026-10-23T09:23:32+07:00**: Chạy benchmark đối chứng 4 models (`yolov8n.pt`, `yolo11n.pt`, `yolo26n.pt`, `intel/person-retail-0013`) và xuất báo cáo hoàn chỉnh tại `sim_vision/reports/vision_model_benchmark.md`.
+- **2026-10-23T09:28:00+07:00**: Tiếp thu yêu cầu mở rộng từ User: Khảo sát tư duy toàn diện các trường hợp che khuất kiến trúc, nội thất y tế, đám đông và bẫy phản xạ quang học.
+- **2026-10-23T09:30:00+07:00**: Soạn thảo đặc tả 48 kịch bản (8 Trục kiểm thử không gian) tại [`EXP_VISION_48CASES_1200_BENCHMARK.md`](../experiments/EXP_VISION_48CASES_1200_BENCHMARK.md).
+- **2026-10-23T09:30:30+07:00**: Nâng cấp `scene_dataset_generator.gd` hỗ trợ 8 Trục không gian (D1-D8) và kích hoạt GPU Vulkan kết xuất dataset `sim_vision/data/vision_eval_1200/`.
+- **2026-10-23T09:39:39+07:00**: Kết xuất hoàn tất 855 frames (D1: 75, D2: 75, D3: 150, D4: 150, D5: 150, D6: 90, D7: 75, D8: 90) trong $545.3\text{s}$.
+- **2026-10-23T09:40:45+07:00**: Chạy benchmark đối chứng 4 models trên bộ 48 kịch bản. Xuất báo cáo tại [`sim_vision/reports/vision_48cases_benchmark.md`](../../sim_vision/reports/vision_48cases_benchmark.md).
 
 ---
 
 ## 2. Active Blockers & Decisions Needed
 
 - **Decision Finalized (Chốt Model Thị giác)**:
-  - Tiếp tục giữ **`yolov8n.pt`** làm detector chính cho Robot trợ lý do đạt độ chính xác $89.04\%$, latency thấp nhất ($8.1\text{ ms}$ P95), và quan trọng nhất là **$FPR_{\text{empty}} = 0.00\%$** (hoàn toàn không nhận nhầm xe lăn trống hay poster thành người).
-  - Không sử dụng `intel/person` (SSD) làm model chính do tỷ lệ báo động giả trên đạo cụ rỗng lên tới **$6.60\%$** (nhận nhầm 18 lần trên 60 frames không có người).
-  - Đề xuất sẵn `yolo11n.pt` làm phương án dự phòng khi cần tăng cường độ nhạy trong môi trường ánh sáng phức tạp ($Recall = 80.00\%$ trên Slice S4).
+  - Tiếp tục chốt **`yolov8n.pt`** làm detector chính cho Robot trợ lý bệnh viện:
+    - **$FPR_{\text{empty}} = 0.00\%$ (0 FP)** trên toàn bộ 90 frames bẫy đạo cụ y tế rỗng (xe lăn, giường, kiosk, poster).
+    - **$100.00\%$ Recall** trên các kịch bản kiến trúc che khuất (D1), biến dạng cự ly cực đoan $0.6\text{m} - 10\text{m}$ (D5), góc quay lưng cơ thể (D6), và nhiễu sáng PBR ngược sáng/chói huỳnh quang (D7).
+    - Độ trễ tối ưu nhất: **$8.6\text{ ms}$ P95** (đáp ứng tốc độ điều khiển thời gian thực $> 100\text{ FPS}$).
+    - Sai số góc lái $\Delta\theta = 0.17^\circ$ cực nhỏ, đảm bảo bám mục tiêu trơn tru không giật góc quay.
+  - **Loại bỏ `intel/person` (OpenVINO MobileNetV2-SSD)** khỏi vị trí detector chính vì:
+    - Tụt Recall nghiêm trọng tại cự ly cực cận / cực viễn ($56.80\%$ ở D5) do giới hạn anchor grid cố định.
+    - Tỷ lệ báo động giả trên đạo cụ rỗng cao ($5\text{ FP}$ trên Trục D8), khiến robot nhầm xe lăn trống thành bệnh nhân.
+  - **Khuyến nghị nâng cấp tương lai (`yolo26n.pt` / `yolo11n.pt`)**:
+    - `yolo26n.pt` đạt **Precision cao nhất ($92.13\%$)** nhờ kiến trúc NMS-Free (One-to-One Head), triệt tiêu các box trùng lặp khi người đứng sau quầy tiếp đón.
+    - `yolo11n.pt` đạt **Recall cao nhất ($82.13\%$)** nhờ khối Spatial Attention C2PSA.
 
 ---
 
@@ -46,5 +61,7 @@
 - [x] Tạo branch `feat/vision-eval-benchmark`.
 - [x] So sánh phân tích nguyên lý `yolov8n` vs `intel/person`.
 - [x] Xây dựng Scene Generator và bộ dataset 600 ảnh trong Godot 4.
-- [x] Chạy benchmark và xuất báo cáo khoa học 5W1H.
-- [ ] Push commit lên Git remote repository khi có thông tin chứng thực (credentials).
+- [x] Mở rộng ma trận 48 kịch bản (8 Trục không gian) và sinh dataset tại `sim_vision/data/vision_eval_1200/`.
+- [x] Chạy benchmark đối chứng 4 models trên 48 kịch bản và xuất báo cáo khoa học 5W1H.
+- [x] Cập nhật toàn bộ tài liệu đặc tả và nhật ký tiến độ.
+- [ ] Push commit lên Git remote repository (`git push origin feat/vision-eval-benchmark`).

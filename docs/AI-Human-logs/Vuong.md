@@ -336,3 +336,31 @@
 - **Rejected:** Native Tkinter GUI (limited modern web-grade charting, desktop-only) or custom full-stack React app (unnecessary engineering overhead when Gradio 6.30 is already installed in root `.venv`).
 - **Touches:** `src/ui/rl_dashboard.py`, `run_dashboard.py`, `tests/test_dashboard.py`, `README.md`, `docs/AI-Human-logs/Vuong.md`
 - **Evidence:** 4/4 automated tests in `tests/test_dashboard.py` passed; `run_dashboard.py --help` verified; all 151 Godot GUT tests pass; verified loading of 80-epoch converged run (`PPOHospital-converged-80ep-full`) with peak $R_{\text{team}} = 103.0$ and 4.0 patients helped/shift.
+
+
+### D-025 — Fix Godot Vision-Client Inference Error (`robot.v` / `robot.omega` Access)
+- **Status:** accepted
+- **When:** 2026-10-23T17:00:00+07:00
+- **Decided by:** AI-pair (Manh + Antigravity)
+- **Trigger:** SCRIPT ERROR during YOLO vision inference in Godot: `Invalid access to property or key 'v' on a base object of type 'CharacterBody3D (Robot)'. at: Main._on_detections (res://scripts/main.gd:359)`
+- **Decision:**
+  1. Add GDScript property getters and setters for `v` and `omega` on `Robot` in `sim_vision/godot/scripts/robot.gd` mapping cleanly to internal `_v`, `_omega` and `set_command()`.
+  2. In `sim_vision/godot/scripts/main.gd:359`, retrieve command via `robot.get_command() if robot.has_method("get_command") else Vector2(robot.v, robot.omega)` for defensive execution during RL guide/escort phase.
+- **Why:** Prevents runtime GDScript crashes during YOLO vision inference loops when logging telemetry commands.
+- **Touches:** `sim_vision/godot/scripts/robot.gd`, `sim_vision/godot/scripts/main.gd`, `docs/AI-Human-logs/Vuong.md`
+- **Evidence:** All 151 Godot GUT unit tests pass without error (13,015 asserts, 0 failures).
+
+
+### D-026 — Revamp Dashboard Dark Theme Contrast and Chart Legibility
+- **Status:** accepted
+- **When:** 2026-10-23T17:08:00+07:00
+- **Decided by:** AI-pair (Manh + Antigravity)
+- **Trigger:** "the style of the dashboard need to be make more easy to read, in dark theme i can not see the some number"
+- **Decision:**
+  1. Refactor Matplotlib styling in `generate_metric_plots` using a high-contrast dark telemetry theme (`#0f172a` figure, `#1e293b` axes, `#f8fafc` titles, `#cbd5e1` tick numbers and labels, `#334155` grid lines, glowing neon curves `#38bdf8`, `#34d399`, `#fb923c`, `#f87171`).
+  2. Replace hardcoded light CSS in `src/ui/rl_dashboard.py` with `DASHBOARD_CSS` ensuring KPI numbers are rendered in bold glowing electric cyan (`#38bdf8`) on deep slate card containers (`#0f172a` / `#1e293b`) with crisp silver titles (`#94a3b8`).
+  3. Ensure numbers in Gradio sliders, numeric inputs, and textboxes use high-contrast cyan/white fonts (`#38bdf8` / `#f8fafc`) in dark theme.
+  4. Inject `DASHBOARD_CSS` directly into the DOM tree via `gr.HTML` and `launch(css=DASHBOARD_CSS)` with 0 warnings.
+- **Why:** Resolves washed-out and dark-on-dark invisible numbers in Gradio's dark theme, delivering maximum legibility for all telemetry values, sliders, and charts.
+- **Touches:** `src/ui/rl_dashboard.py`, `tests/test_dashboard.py`, `docs/AI-Human-logs/Vuong.md`
+- **Evidence:** 5/5 pytest tests in `tests/test_dashboard.py` pass cleanly with 0 warnings; all 9/9 repo tests pass.

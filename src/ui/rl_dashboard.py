@@ -98,17 +98,31 @@ def load_history_records(run_dir_str: str) -> List[Dict[str, Any]]:
     return records
 
 
-def generate_metric_plots(records: List[Dict[str, Any]]) -> Tuple[plt.Figure, plt.Figure, plt.Figure, plt.Figure]:
-    """Generate 4 matplotlib figures for Reward, Loss, Productivity, and Safety."""
-    plt.style.use("seaborn-v0_8-darkgrid" if "seaborn-v0_8-darkgrid" in plt.style.available else "default")
+def _style_dark_ax(fig: plt.Figure, ax: plt.Axes, title: str, xlabel: str = "Epoch", ylabel: str = "") -> None:
+    """Apply high-contrast dark theme styling to a matplotlib axes."""
+    fig.patch.set_facecolor("#0f172a")
+    ax.set_facecolor("#1e293b")
+    ax.set_title(title, fontsize=11, fontweight="bold", color="#f8fafc", pad=8)
+    if xlabel:
+        ax.set_xlabel(xlabel, fontsize=9, color="#cbd5e1", fontweight="bold")
+    if ylabel:
+        ax.set_ylabel(ylabel, fontsize=9, color="#cbd5e1", fontweight="bold")
+    ax.tick_params(colors="#cbd5e1", labelsize=8.5)
+    for spine in ax.spines.values():
+        spine.set_edgecolor("#475569")
+        spine.set_linewidth(1.0)
+    ax.grid(True, linestyle="--", alpha=0.35, color="#475569")
 
+
+def generate_metric_plots(records: List[Dict[str, Any]]) -> Tuple[plt.Figure, plt.Figure, plt.Figure, plt.Figure]:
+    """Generate 4 high-contrast matplotlib figures for Reward, Loss, Productivity, and Safety."""
     if not records:
         # Return empty placeholder figures
         figs = []
         for title in ["Reward Curve (R_team)", "Optimization Losses", "Patients Helped / Shift", "Safety & Collisions"]:
-            fig, ax = plt.subplots(figsize=(6, 3.2))
-            ax.text(0.5, 0.5, "No data available yet\n(Start training or select a run)", ha="center", va="center", color="gray", fontsize=11)
-            ax.set_title(title, fontsize=12, fontweight="bold")
+            fig, ax = plt.subplots(figsize=(6, 3.2), facecolor="#0f172a")
+            _style_dark_ax(fig, ax, title, "", "")
+            ax.text(0.5, 0.5, "No data available yet\n(Start training or select a run)", ha="center", va="center", color="#94a3b8", fontsize=11, fontweight="semibold")
             ax.set_xticks([])
             ax.set_yticks([])
             fig.tight_layout()
@@ -124,44 +138,36 @@ def generate_metric_plots(records: List[Dict[str, Any]]) -> Tuple[plt.Figure, pl
     collisions = [r.get("val_collisions", 0.0) for r in records]
 
     # 1. Reward plot
-    fig_r, ax_r = plt.subplots(figsize=(6, 3.2))
-    ax_r.plot(epochs, train_r, label="Train R_team", color="#2563eb", alpha=0.5, linestyle="--", linewidth=1.5)
-    ax_r.plot(epochs, val_r, label="Val R_team", color="#1d4ed8", linewidth=2.4, marker="o", markersize=4)
+    fig_r, ax_r = plt.subplots(figsize=(6, 3.2), facecolor="#0f172a")
+    _style_dark_ax(fig_r, ax_r, "Shared Team Reward (R_team)", "Epoch", "R_team")
+    ax_r.plot(epochs, train_r, label="Train R_team", color="#60a5fa", alpha=0.6, linestyle="--", linewidth=1.5)
+    ax_r.plot(epochs, val_r, label="Val R_team", color="#38bdf8", linewidth=2.4, marker="o", markersize=4)
     if val_r:
         best_idx = int(np.argmax(val_r))
-        ax_r.scatter([epochs[best_idx]], [val_r[best_idx]], color="#dc2626", s=70, zorder=5, label=f"Peak: {val_r[best_idx]:.1f} (Ep {epochs[best_idx]})")
-    ax_r.set_title("Shared Team Reward (R_team)", fontsize=11, fontweight="bold")
-    ax_r.set_xlabel("Epoch", fontsize=9)
-    ax_r.set_ylabel("R_team", fontsize=9)
-    ax_r.legend(loc="upper left", fontsize=8)
+        ax_r.scatter([epochs[best_idx]], [val_r[best_idx]], color="#f43f5e", s=70, zorder=5, label=f"Peak: {val_r[best_idx]:.1f} (Ep {epochs[best_idx]})")
+    ax_r.legend(loc="upper left", facecolor="#0f172a", edgecolor="#475569", labelcolor="#f8fafc", fontsize=8)
     fig_r.tight_layout()
 
     # 2. Loss plot
-    fig_l, ax_l = plt.subplots(figsize=(6, 3.2))
-    ax_l.plot(epochs, train_loss, label="Train Loss", color="#ea580c", linewidth=2.0)
-    ax_l.set_title("PPO Optimization Loss", fontsize=11, fontweight="bold")
-    ax_l.set_xlabel("Epoch", fontsize=9)
-    ax_l.set_ylabel("Loss", fontsize=9)
+    fig_l, ax_l = plt.subplots(figsize=(6, 3.2), facecolor="#0f172a")
+    _style_dark_ax(fig_l, ax_l, "PPO Optimization Loss", "Epoch", "Loss")
+    ax_l.plot(epochs, train_loss, label="Train Loss", color="#fb923c", linewidth=2.0)
     ax_l.set_yscale("log" if any(v > 10.0 for v in train_loss) else "linear")
-    ax_l.legend(loc="upper right", fontsize=8)
+    ax_l.legend(loc="upper right", facecolor="#0f172a", edgecolor="#475569", labelcolor="#f8fafc", fontsize=8)
     fig_l.tight_layout()
 
     # 3. Productivity plot (Patients Helped)
-    fig_p, ax_p = plt.subplots(figsize=(6, 3.2))
-    ax_p.plot(epochs, helped, label="Patients Helped / Shift", color="#059669", linewidth=2.2, marker="s", markersize=4)
-    ax_p.set_title("Shift Productivity (Patients Helped)", fontsize=11, fontweight="bold")
-    ax_p.set_xlabel("Epoch", fontsize=9)
-    ax_p.set_ylabel("Patients / Shift", fontsize=9)
-    ax_p.legend(loc="upper left", fontsize=8)
+    fig_p, ax_p = plt.subplots(figsize=(6, 3.2), facecolor="#0f172a")
+    _style_dark_ax(fig_p, ax_p, "Shift Productivity (Patients Helped)", "Epoch", "Patients / Shift")
+    ax_p.plot(epochs, helped, label="Patients Helped / Shift", color="#34d399", linewidth=2.2, marker="s", markersize=4)
+    ax_p.legend(loc="upper left", facecolor="#0f172a", edgecolor="#475569", labelcolor="#f8fafc", fontsize=8)
     fig_p.tight_layout()
 
     # 4. Safety plot (Collisions)
-    fig_s, ax_s = plt.subplots(figsize=(6, 3.2))
-    ax_s.plot(epochs, collisions, label="Mean Collisions", color="#b91c1c", linewidth=2.0)
-    ax_s.set_title("Safety: Wall/Obstacle Grazes", fontsize=11, fontweight="bold")
-    ax_s.set_xlabel("Epoch", fontsize=9)
-    ax_s.set_ylabel("Collisions / Shift", fontsize=9)
-    ax_s.legend(loc="upper right", fontsize=8)
+    fig_s, ax_s = plt.subplots(figsize=(6, 3.2), facecolor="#0f172a")
+    _style_dark_ax(fig_s, ax_s, "Safety: Wall/Obstacle Grazes", "Epoch", "Collisions / Shift")
+    ax_s.plot(epochs, collisions, label="Mean Collisions", color="#f87171", linewidth=2.0)
+    ax_s.legend(loc="upper right", facecolor="#0f172a", edgecolor="#475569", labelcolor="#f8fafc", fontsize=8)
     fig_s.tight_layout()
 
     return fig_r, fig_l, fig_p, fig_s
@@ -218,10 +224,10 @@ def inspect_run(run_dir_str: str) -> Tuple[Any, Any, Any, Any, str, str, str, st
 
     best_ckpt_str = Path(default_ckpt).name if default_ckpt else "None found"
     status_txt = f"Loaded {p.name}\nTotal Epochs Logged: {total_eps} | Best R_team: {best_r:.2f} (Epoch {best_ep})\nDefault Checkpoint: {best_ckpt_str}"
-    ep_card = f"{total_eps}"
-    r_card = f"{best_r:.1f} (Ep {best_ep})"
-    help_card = f"{latest_helped:.1f}"
-    eta_card = "COMPLETED / IDLE"
+    ep_card = f"**{total_eps}**"
+    r_card = f"**{best_r:.1f}** (Ep {best_ep})" if best_r > 0 else "**0.0**"
+    help_card = f"**{latest_helped:.1f}**"
+    eta_card = "**COMPLETED / IDLE**"
 
     return fig1, fig2, fig3, fig4, ep_card, r_card, help_card, eta_card, status_txt, ckpt_update
 
@@ -342,7 +348,7 @@ def poll_status_and_metrics(selected_prev_run: str) -> Tuple[Any, Any, Any, Any,
     if target_dir is None or not target_dir.is_dir():
         fig1, fig2, fig3, fig4 = generate_metric_plots([])
         status = "RUNNING..." if is_running else "IDLE"
-        return fig1, fig2, fig3, fig4, "-", "-", "-", "-", status, is_running
+        return fig1, fig2, fig3, fig4, "**0**", "**0.0**", "**0.0**", f"**{status}**", status, is_running
 
     records = load_history_records(str(target_dir))
     fig1, fig2, fig3, fig4 = generate_metric_plots(records)
@@ -372,11 +378,10 @@ def poll_status_and_metrics(selected_prev_run: str) -> Tuple[Any, Any, Any, Any,
             except Exception:
                 pass
 
-    status_badge = "🔥 TRAINING IN PROGRESS" if is_running else "✅ IDLE / COMPLETED"
-    ep_card = f"{total_eps}"
-    r_card = f"{best_r:.1f} (Ep {best_ep})"
-    help_card = f"{latest_helped:.1f}"
-    eta_card = "ACTIVE" if is_running else "FINISHED"
+    ep_card = f"**{total_eps}**"
+    r_card = f"**{best_r:.1f}** (Ep {best_ep})" if best_r > 0 else "**0.0**"
+    help_card = f"**{latest_helped:.1f}**"
+    eta_card = "**ACTIVE**" if is_running else "**FINISHED / IDLE**"
 
     return fig1, fig2, fig3, fig4, ep_card, r_card, help_card, eta_card, log_tail, is_running
 
@@ -413,6 +418,58 @@ def launch_simulation(selected_ckpt: str, selected_prev_run: str) -> str:
         return f"❌ Failed to launch simulation: {e}"
 
 
+DASHBOARD_CSS = """
+/* High-Contrast Modern Dashboard Styles */
+.kpi-box {
+    text-align: center !important;
+    background: #0f172a !important;
+    border-radius: 12px !important;
+    padding: 14px 10px !important;
+    border: 1px solid #334155 !important;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.4) !important;
+}
+
+.kpi-title {
+    font-size: 11px !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.06em !important;
+    color: #94a3b8 !important;
+    font-weight: 700 !important;
+    margin-bottom: 6px !important;
+}
+
+.kpi-val, .kpi-val *, .kpi-val p, .kpi-val strong, .kpi-val span, .kpi-val div {
+    font-size: 22px !important;
+    font-weight: 800 !important;
+    color: #38bdf8 !important;
+    text-align: center !important;
+    margin: 0 !important;
+    line-height: 1.2 !important;
+}
+
+/* Ensure inputs, sliders, and numbers are crystal clear in both dark & light themes */
+input[type="number"], .gr-slider-input input, .dark input, .dark textarea, .dark select {
+    color: #38bdf8 !important;
+    background-color: #1e293b !important;
+    border-color: #475569 !important;
+    font-weight: 700 !important;
+}
+
+/* High contrast numbers for sliders */
+.gr-slider-input input {
+    color: #38bdf8 !important;
+    font-size: 15px !important;
+    font-weight: 800 !important;
+}
+
+/* Code console high contrast */
+.dark code, .dark pre, .dark .code-wrap {
+    color: #e2e8f0 !important;
+    background-color: #0b0f19 !important;
+}
+"""
+
+
 def build_dashboard() -> gr.Blocks:
     """Construct the Gradio Dashboard interface."""
     initial_runs = find_existing_runs()
@@ -420,13 +477,8 @@ def build_dashboard() -> gr.Blocks:
     initial_ckpts = find_checkpoints_for_run(default_run) if default_run else []
     default_ckpt = initial_ckpts[0][1] if initial_ckpts else ""
 
-    custom_css = """
-    .kpi-box { text-align: center; background: #f8fafc; border-radius: 8px; padding: 12px; border: 1px solid #e2e8f0; }
-    .kpi-title { font-size: 11px; text-transform: uppercase; color: #64748b; font-weight: 700; margin-bottom: 4px; }
-    .kpi-val { font-size: 20px; font-weight: 800; color: #0f172a; }
-    """
-
     with gr.Blocks(title="Hospital Robot RL Training Controller") as demo:
+        gr.HTML(f"<style>{DASHBOARD_CSS}</style>")
         gr.Markdown(
             """
             # 🏥 Hospital Helper Robot — RL Training & Telemetry Dashboard
@@ -619,12 +671,7 @@ def main():
 
     demo = build_dashboard()
     print(f"Starting Hospital RL Dashboard at http://{args.host}:{args.port}")
-    custom_css = """
-    .kpi-box { text-align: center; background: #f8fafc; border-radius: 8px; padding: 12px; border: 1px solid #e2e8f0; }
-    .kpi-title { font-size: 11px; text-transform: uppercase; color: #64748b; font-weight: 700; margin-bottom: 4px; }
-    .kpi-val { font-size: 20px; font-weight: 800; color: #0f172a; }
-    """
-    demo.launch(server_name=args.host, server_port=args.port, share=args.share, css=custom_css)
+    demo.launch(server_name=args.host, server_port=args.port, share=args.share, css=DASHBOARD_CSS)
 
 
 if __name__ == "__main__":

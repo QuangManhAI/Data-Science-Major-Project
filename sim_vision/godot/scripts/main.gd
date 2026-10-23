@@ -356,7 +356,8 @@ func _on_detections(frame_id: int, dets: Array, infer_ms: float) -> void:
 		cmd = {"state": state, "v": 0.0, "omega": 0.0, "target": {}}
 		robot.set_command(0.0, 0.0)
 	elif _rl_bridge != null and _rl_bridge.task_phase in [RLEnvBridgeScript.TaskPhase.GUIDE_ESCORT, RLEnvBridgeScript.TaskPhase.CALL_STAFF]:
-		cmd = {"state": state, "v": robot.v, "omega": robot.omega, "target": {}}
+		var cur_cmd: Vector2 = robot.get_command() if robot.has_method("get_command") else Vector2(robot.v, robot.omega)
+		cmd = {"state": state, "v": cur_cmd.x, "omega": cur_cmd.y, "target": {}}
 	else:
 		cmd = _apply(_controller.step(state, dets, _time_since_seen_s(now)))
 	overlay.show_detections(dets, Config.state_name(state), _connected)

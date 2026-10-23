@@ -13,6 +13,19 @@ var _v: float = 0.0
 var _omega: float = 0.0
 var _lidar_rays: Array[RayCast3D] = []
 
+var v: float:
+	get:
+		return _v
+	set(val):
+		set_command(val, _omega)
+
+var omega: float:
+	get:
+		return _omega
+	set(val):
+		set_command(_v, val)
+
+
 @onready var _viewport: SubViewport = $CameraViewport
 @onready var _front_ray: RayCast3D = $FrontRay
 

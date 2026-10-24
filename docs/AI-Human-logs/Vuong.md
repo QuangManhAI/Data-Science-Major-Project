@@ -43,6 +43,7 @@
 | [D-027](#d-027--fix-subprocess-pipe-buffer-deadlock-and-dynamic-run-dropdown-refresh)                         | Fix subprocess pipe buffer deadlock and dynamic run dropdown refresh                           | AI-pair (Manh + Antigravity)   | accepted |
 | [D-028](#d-028--implement-solo-patient-focus-training-environment--godot-3d-solo-mode)                        | Implement Solo Patient Focus training environment & Godot 3D solo mode                          | human                          | accepted |
 | [D-029](#d-029--1000-episode-solo-patient-ppo-training-with-45s-early-stagnation-cutoff)                     | 1000-Episode Solo Patient PPO training with 45s early stagnation cutoff                         | human                          | accepted |
+| [D-030](#d-030--expand-solo-patient-ppo-training-target-to-5000-episodes)                                    | Expand Solo Patient PPO training target to 5000 episodes                                       | human                          | accepted |
 
 ---
 
@@ -440,3 +441,18 @@
 - **Why:** Prevents wasting compute wandering when robot gets stuck or loses tether during solo patient interaction, strongly shapes the policy to act decisively to resolve tasks within 45 seconds, and provides full transparency through real-time terminal output.
 - **Touches:** `src/training/hospital_env.py`, `src/training/train_solo_1000ep.py`, `tests/test_stagnation_env.py`, `docs/AI-Human-logs/Vuong.md`
 - **Evidence:** 3/3 tests in `tests/test_stagnation_env.py` pass; all 16 repo pytest tests pass; verified 10-episode GPU smoke run and initiated 1000-episode training on RTX 4060.
+
+
+### D-030 — Expand Solo Patient PPO Training Target to 5000 Episodes
+- **Status:** accepted
+- **When:** 2026-10-24T15:07:00+07:00
+- **Decided by:** human
+- **Trigger:** "increase tje ep to 5000"
+- **Decision:**
+  1. The initial 1000-episode milestone concluded successfully at 1000 episodes (Peak $R_{team} = +234.0$, 1,036 patients helped, 28 full shifts completed).
+  2. Stabilized advantage normalization in `src/training/train_solo_1000ep.py` using whole-batch `t_adv.std(unbiased=False)` and mini-batch size guards to eliminate single-element sample variance NaN hazards.
+  3. Extended training target from 1000 to 5000 episodes (`--episodes 5000`), seamlessly resuming from checkpoint `PPOHospital-solo-1000ep_last.pt` at Episode 1001.
+  4. Dynamically scaled `CosineAnnealingLR` over the remaining 4,000 episodes ($1.0 \times 10^{-4} \to 3.0 \times 10^{-5}$) with periodic checkpoint saving every 100 episodes.
+- **Why:** Deepens policy convergence, solidifies complex multi-doorway escorting trajectories, and pushes the policy toward mastering back-to-back patient navigation with near-zero stagnation.
+- **Touches:** `src/training/train_solo_1000ep.py`, `docs/AI-Human-logs/Vuong.md`
+- **Evidence:** Clean resume from Episode 1001 running live under background task `task-3198` on RTX 4060 GPU with verified real-time logging and zero warnings.

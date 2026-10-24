@@ -206,7 +206,7 @@ def signed_angle_rad(fwd_x: float, fwd_z: float, to_x: float, to_z: float) -> fl
 
 
 class HospitalShiftEnv:
-    """Continuous 180s Hospital Shift RL Environment (Stage 1 & Stage 2 curriculum)."""
+    """Continuous 180s Hospital Shift RL Environment (Solo Patient Focus or Full Stage 1/2 Multi-NPC)."""
 
     def __init__(
         self,
@@ -214,10 +214,12 @@ class HospitalShiftEnv:
         shift_duration_s: float = 180.0,
         dt: float = 0.2,
         seed: int = 42,
+        env_mode: str = "solo",
     ) -> None:
         self.curriculum_stage = int(curriculum_stage)
         self.shift_duration_s = float(shift_duration_s)
         self.dt = float(dt)
+        self.env_mode = str(env_mode).lower().strip()
         self.max_steps = int(round(self.shift_duration_s / self.dt))
         self.rng = np.random.default_rng(seed)
 
@@ -238,7 +240,8 @@ class HospitalShiftEnv:
         self.goal_z = 0.0
         self.task_phase = TaskPhase.SEARCH_PATIENT
 
-        # Patrolling doctor in central corridor (Stage 2 dynamic obstacle with pardon behavior)
+        # Patrolling doctor in central corridor (only active in Full mode Stage 2)
+        self.doctor_active = (self.env_mode != "solo")
         self.doctor_x = -6.0
         self.doctor_z = -0.6
         self.doctor_dir = 1.0
@@ -250,6 +253,44 @@ class HospitalShiftEnv:
 
     def set_stage(self, stage: int) -> None:
         self.curriculum_stage = int(stage)
+
+    def _sample_patient_spawn_solo(self) -> tuple[float, float]:
+        """Sample free coordinates strictly in public corridors or lobby (never inside medical rooms)."""
+        for _ in range(250):
+            if self.rng.random() < 0.60:
+                # Central and connecting corridors
+                x = float(self.rng.uniform(-10.0, 10.0))
+                z = float(self.rng.uniform(-1.3, 1.3))
+            else:
+                # Main lobby waiting & reception area
+                x = float(self.rng.uniform(-3.2, 3.2))
+                z = float(self.rng.uniform(2.2, 6.5))
+            if all(not w.contains(x, z, margin=0.65) for w in HOSPITAL_WALLS):
+                return x, z
+        return 0.0, 4.0
+
+    def _sample_solo_scenario(self) -> None:
+        """Sample scenario with 70% escort, 15% question answer, 15% call doctor."""
+        r_val = float(self.rng.uniform(0.0, 1.0))
+        if r_val < 0.70:
+            # 70% Guide / Escort (to 101, 110, 112, nha_thuoc, tiep_don, thang_may, nha_ve_sinh)
+            dest_choices = [
+                ("guide", "101", 1),
+                ("guide", "110", 1),
+                ("guide", "112", 1),
+                ("guide", "nha_thuoc", 1),
+                ("guide", "tiep_don", 1),
+                ("guide", "thang_may", 2),
+                ("guide", "nha_ve_sinh", 1),
+            ]
+            idx = int(self.rng.integers(0, len(dest_choices)))
+            self.scenario_action, self.scenario_slot, self.scenario_floor = dest_choices[idx]
+        elif r_val < 0.85:
+            # 15% Answer verbal question
+            self.scenario_action, self.scenario_slot, self.scenario_floor = ("answer", "", 1)
+        else:
+            # 15% Call medical staff / doctor
+            self.scenario_action, self.scenario_slot, self.scenario_floor = ("call_staff", "", 1)
 
     def _sample_free_point(self, lobby_or_corridor_only: bool = False) -> tuple[float, float]:
         for _ in range(200):
@@ -264,6 +305,21 @@ class HospitalShiftEnv:
         return 0.0, 0.0
 
     def _spawn_next_patient(self) -> None:
+        if self.env_mode == "solo":
+            for _ in range(150):
+                px, pz = self._sample_patient_spawn_solo()
+                if math.hypot(px - self.robot_x, pz - self.robot_z) >= 3.0:
+                    self.patient_x, self.patient_z = px, pz
+                    break
+            else:
+                self.patient_x, self.patient_z = 0.0, 4.0
+            self._sample_solo_scenario()
+            self.task_phase = TaskPhase.SEARCH_PATIENT
+            self.goal_key = "patient"
+            self.goal_x = self.patient_x
+            self.goal_z = self.patient_z
+            return
+
         stage1 = self.curriculum_stage <= 1
         for _ in range(100):
             px, pz = self._sample_free_point(lobby_or_corridor_only=stage1)
@@ -301,16 +357,59 @@ class HospitalShiftEnv:
         self.patients_helped = 0
         self.collisions = 0
 
+        self.doctor_active = (self.env_mode != "solo")
+        self.doctor_x = -6.0
+        self.doctor_z = -0.6
+        self.doctor_dir = 1.0
+
+        if self.env_mode == "solo":
+            # 1. Spawn patient in corridor / lobby
+            self.patient_x, self.patient_z = self._sample_patient_spawn_solo()
+
+            # 2. Spawn robot nearby (2.0 to 3.5m) with direct line of sight
+            robot_placed = False
+            for _ in range(150):
+                dist = float(self.rng.uniform(2.0, 3.5))
+                angle = float(self.rng.uniform(-math.pi, math.pi))
+                rx = self.patient_x + dist * math.cos(angle)
+                rz = self.patient_z + dist * math.sin(angle)
+                if abs(rx) <= 10.8 and abs(rz) <= 7.2:
+                    if all(not w.contains(rx, rz, margin=0.65) for w in HOSPITAL_WALLS):
+                        ux, uz = (self.patient_x - rx) / dist, (self.patient_z - rz) / dist
+                        blocked = any(
+                            w.ray_intersect(rx, rz, ux, uz, dist) < (dist - 0.15)
+                            for w in HOSPITAL_WALLS
+                        )
+                        if not blocked:
+                            self.robot_x, self.robot_z = rx, rz
+                            robot_placed = True
+                            break
+            if not robot_placed:
+                self.robot_x = self.patient_x
+                self.robot_z = max(-1.3, min(1.3, self.patient_z + 2.2))
+
+            # Robot faces the patient with small random angle jitter
+            dx = self.patient_x - self.robot_x
+            dz = self.patient_z - self.robot_z
+            base_yaw = math.atan2(-dx, -dz)
+            self.robot_yaw = float(base_yaw + self.rng.uniform(-0.25, 0.25))
+            self.robot_v = 0.0
+            self.robot_omega = 0.0
+
+            # 3. Sample initial scenario
+            self._sample_solo_scenario()
+            self.task_phase = TaskPhase.SEARCH_PATIENT
+            self.goal_key = "patient"
+            self.goal_x = self.patient_x
+            self.goal_z = self.patient_z
+            return self._get_obs()
+
         self.robot_x, self.robot_z = self._sample_free_point(
             lobby_or_corridor_only=(self.curriculum_stage <= 1)
         )
         self.robot_yaw = float(self.rng.uniform(-math.pi, math.pi))
         self.robot_v = 0.0
         self.robot_omega = 0.0
-
-        self.doctor_x = -6.0
-        self.doctor_z = -0.6
-        self.doctor_dir = 1.0
 
         self._spawn_next_patient()
         return self._get_obs()
@@ -331,7 +430,7 @@ class HospitalShiftEnv:
                 d = w.ray_intersect(self.robot_x, self.robot_z, dx, dz, best_d)
                 if d < best_d:
                     best_d = d
-            if self.curriculum_stage >= 2:
+            if self.doctor_active and self.curriculum_stage >= 2:
                 # Check patrolling doctor cylinder (radius 0.35m)
                 oc_x = self.doctor_x - self.robot_x
                 oc_z = self.doctor_z - self.robot_z
@@ -466,7 +565,7 @@ class HospitalShiftEnv:
         self.robot_omega = omega
 
         # Step patrolling doctor in Stage 2 (with pardon behavior when robot approaches)
-        if self.curriculum_stage >= 2:
+        if self.doctor_active and self.curriculum_stage >= 2:
             if math.hypot(self.robot_x - self.doctor_x, self.robot_z - self.doctor_z) < 1.8:
                 # Doctor pardons (steps aside toward z = -1.3)
                 self.doctor_z += (-1.3 - self.doctor_z) * min(1.0, 2.0 * self.dt)

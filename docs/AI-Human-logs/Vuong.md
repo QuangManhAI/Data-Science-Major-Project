@@ -12,38 +12,39 @@
 
 ## 1. Decision Index
 
-| ID | Title | Decided by | Status |
-| :--- | :--- | :--- | :---: |
-| [D-001](#d-001--unify-python-dependencies-into-root-venv) | Unify Python dependencies into root .venv | human | accepted |
-| [D-002](#d-002--store-full-phoasr-whisper-small-model-offline) | Store full PhoASR-whisper-small model offline under models/ | human | accepted |
-| [D-003](#d-003--exclude-large-model-weights-from-git-tracking) | Exclude large model weights (>100MB) from Git tracking | human | accepted |
-| [D-004](#d-004--enable-pytorch-cuda-acceleration-on-rtx-4060) | Enable PyTorch CUDA acceleration on RTX 4060 GPU | human | accepted |
-| [D-005](#d-005--standardize-speech-audio-to-16khz-mono-pcm-wav) | Standardize speech audio to 16kHz mono PCM WAV via PyAV | agent-proposed, human-approved | accepted |
-| [D-006](#d-006--initialize-godot-project-cache-and-asset-imports-via-headless-editor) | Initialize Godot project cache and asset imports via headless editor | agent-proposed, human-approved | accepted |
-| [D-007](#d-007--cross-platform-windows-path-handling-in-godot-runlogger-tests) | Cross-platform Windows path handling in Godot RunLogger tests | agent-proposed, human-approved | accepted |
-| [D-008](#d-008--instantiate-folder-structure-rule-from-template) | Instantiate FOLDER_STRUCTURE.md constitutional rule from template | agent-proposed, human-approved | accepted |
-| [D-009](#d-009--download-and-locate-yolov8n-weights-locally) | Download and locate yolov8n.pt weights locally under models/ | agent-proposed, human-approved | accepted |
-| [D-010](#d-010--confirm-fsm-proportional-controller-as-pre-rl-baseline) | Confirm FSM proportional controller as pre-RL baseline | human | accepted |
-| [D-011](#d-011--document-godot-and-yolo-execution-manual-in-root-readmemd) | Document Godot and YOLO execution manual in root README.md | human | accepted |
-| [D-012](#d-012--unified-simulation-launcher-and-websocket-send-resilience) | Unified simulation launcher and WebSocket send resilience | human | accepted |
-| [D-013](#d-013--offline-tts-architecture-and-graceful-subtitle-fallback) | Offline TTS architecture and graceful subtitle fallback | human | accepted |
-| [D-014](#d-014--expansion-to-floor-1-vietnamese-hospital-environment) | Expansion to Floor-1 Vietnamese hospital environment (24m x 18m) | human | accepted |
-| [D-015](#d-015--hospital-room-enrichment-medical-pedal-waste-bins-and-refined-collisions) | Hospital room enrichment, medical pedal waste bins, and refined collisions | human | accepted |
-| [D-016](#d-016--camera-viewpoint-height-correction-and-automatic-ceiling-culling) | Camera viewpoint height correction and automatic ceiling culling | agent-proposed, human-approved | accepted |
-| [D-017](#d-017--vietnamese-medical-staff-npcs-waiting-patients-and-clinical-facility-props) | Vietnamese medical staff NPCs, waiting patients, and clinical facility props | human | accepted |
-| [D-018](#d-018--stt-startup-timeout-resilience-and-rocketbox-surface-material-mapping) | STT startup timeout resilience and Rocketbox surface material mapping | human | accepted |
-| [D-019](#d-019--elderly-patient-variants-and-walking-canes-for-old-patient-dominated-hospital) | Elderly patient variants and walking canes for old-patient-dominated hospital | human | accepted |
-| [D-020](#d-020--implement-phase-1-rl-training-plan-with-shared-team-reward-and-elderly-tether-pacing) | Implement Phase-1 RL training plan with shared team reward and elderly tether pacing | human | accepted |
-| [D-021](#d-021--25-epoch-ppo-training-run-on-cuda-and-10-shift-comprehensive-benchmark) | 25-Epoch PPO training run on CUDA and 10-shift comprehensive benchmark | human | accepted |
-| [D-022](#d-022--ad-camera-rotation-and-multi-npc-hospital-speech-support) | A/D camera rotation and multi-NPC hospital speech support | human | accepted |
-| [D-023](#d-023--fix-seated-patient-arrival-trigger-and-implement-two-stage-doorway-waypoint-navigation) | Fix seated patient arrival trigger and implement two-stage doorway waypoint navigation | human | accepted |
-| [D-024](#d-024--implement-gradio-web-dashboard-for-rl-training-control-live-telemetry-and-history-inspection) | Implement Gradio web dashboard for RL training control, live telemetry, and history inspection | human | accepted |
+| ID                                                                                                           | Title                                                                                          | Decided by                     |  Status  |
+| :----------------------------------------------------------------------------------------------------------- | :--------------------------------------------------------------------------------------------- | :----------------------------- | :------: |
+| [D-001](#d-001--unify-python-dependencies-into-root-venv)                                                     | Unify Python dependencies into root .venv                                                      | human                          | accepted |
+| [D-002](#d-002--store-full-phoasr-whisper-small-model-offline)                                                | Store full PhoASR-whisper-small model offline under models/                                    | human                          | accepted |
+| [D-003](#d-003--exclude-large-model-weights-from-git-tracking)                                                | Exclude large model weights (>100MB) from Git tracking                                         | human                          | accepted |
+| [D-004](#d-004--enable-pytorch-cuda-acceleration-on-rtx-4060)                                                 | Enable PyTorch CUDA acceleration on RTX 4060 GPU                                               | human                          | accepted |
+| [D-005](#d-005--standardize-speech-audio-to-16khz-mono-pcm-wav)                                               | Standardize speech audio to 16kHz mono PCM WAV via PyAV                                        | agent-proposed, human-approved | accepted |
+| [D-006](#d-006--initialize-godot-project-cache-and-asset-imports-via-headless-editor)                         | Initialize Godot project cache and asset imports via headless editor                           | agent-proposed, human-approved | accepted |
+| [D-007](#d-007--cross-platform-windows-path-handling-in-godot-runlogger-tests)                                | Cross-platform Windows path handling in Godot RunLogger tests                                  | agent-proposed, human-approved | accepted |
+| [D-008](#d-008--instantiate-folder-structure-rule-from-template)                                              | Instantiate FOLDER_STRUCTURE.md constitutional rule from template                              | agent-proposed, human-approved | accepted |
+| [D-009](#d-009--download-and-locate-yolov8n-weights-locally)                                                  | Download and locate yolov8n.pt weights locally under models/                                   | agent-proposed, human-approved | accepted |
+| [D-010](#d-010--confirm-fsm-proportional-controller-as-pre-rl-baseline)                                       | Confirm FSM proportional controller as pre-RL baseline                                         | human                          | accepted |
+| [D-011](#d-011--document-godot-and-yolo-execution-manual-in-root-readmemd)                                    | Document Godot and YOLO execution manual in root README.md                                     | human                          | accepted |
+| [D-012](#d-012--unified-simulation-launcher-and-websocket-send-resilience)                                    | Unified simulation launcher and WebSocket send resilience                                      | human                          | accepted |
+| [D-013](#d-013--offline-tts-architecture-and-graceful-subtitle-fallback)                                      | Offline TTS architecture and graceful subtitle fallback                                        | human                          | accepted |
+| [D-014](#d-014--expansion-to-floor-1-vietnamese-hospital-environment)                                         | Expansion to Floor-1 Vietnamese hospital environment (24m x 18m)                               | human                          | accepted |
+| [D-015](#d-015--hospital-room-enrichment-medical-pedal-waste-bins-and-refined-collisions)                     | Hospital room enrichment, medical pedal waste bins, and refined collisions                     | human                          | accepted |
+| [D-016](#d-016--camera-viewpoint-height-correction-and-automatic-ceiling-culling)                             | Camera viewpoint height correction and automatic ceiling culling                               | agent-proposed, human-approved | accepted |
+| [D-017](#d-017--vietnamese-medical-staff-npcs-waiting-patients-and-clinical-facility-props)                   | Vietnamese medical staff NPCs, waiting patients, and clinical facility props                   | human                          | accepted |
+| [D-018](#d-018--stt-startup-timeout-resilience-and-rocketbox-surface-material-mapping)                        | STT startup timeout resilience and Rocketbox surface material mapping                          | human                          | accepted |
+| [D-019](#d-019--elderly-patient-variants-and-walking-canes-for-old-patient-dominated-hospital)                | Elderly patient variants and walking canes for old-patient-dominated hospital                  | human                          | accepted |
+| [D-020](#d-020--implement-phase-1-rl-training-plan-with-shared-team-reward-and-elderly-tether-pacing)         | Implement Phase-1 RL training plan with shared team reward and elderly tether pacing           | human                          | accepted |
+| [D-021](#d-021--25-epoch-ppo-training-run-on-cuda-and-10-shift-comprehensive-benchmark)                       | 25-Epoch PPO training run on CUDA and 10-shift comprehensive benchmark                         | human                          | accepted |
+| [D-022](#d-022--ad-camera-rotation-and-multi-npc-hospital-speech-support)                                     | A/D camera rotation and multi-NPC hospital speech support                                      | human                          | accepted |
+| [D-023](#d-023--fix-seated-patient-arrival-trigger-and-implement-two-stage-doorway-waypoint-navigation)       | Fix seated patient arrival trigger and implement two-stage doorway waypoint navigation         | human                          | accepted |
+| [D-024](#d-024--implement-gradio-web-dashboard-for-rl-training-control-live-telemetry-and-history-inspection) | Implement Gradio web dashboard for RL training control, live telemetry, and history inspection | human                          | accepted |
 
 ---
 
 ## 2. Decision Log Entries
 
 ### D-001 — Unify Python dependencies into root .venv
+
 - **Status:** accepted
 - **When:** 2026-10-21T19:52:42+07:00
 - **Decided by:** human
@@ -55,6 +56,7 @@
 - **Evidence:** `pytest` executed from root discovers and passes all tests; `sim_vision/python/protocol.py` imports cleanly.
 
 ### D-002 — Store full PhoASR-whisper-small model offline under models/
+
 - **Status:** accepted
 - **When:** 2026-10-21T20:06:06+07:00
 - **Decided by:** human
@@ -66,6 +68,7 @@
 - **Evidence:** `python scripts/download_phoasr.py` downloaded 927.6 MB directly into `models/PhoASR-whisper-small`.
 
 ### D-003 — Exclude large model weights from Git tracking
+
 - **Status:** accepted
 - **When:** 2026-10-21T20:06:24+07:00
 - **Decided by:** human
@@ -77,6 +80,7 @@
 - **Evidence:** `git status -u` confirms `model.safetensors` is ignored while `config.json` and `tokenizer.json` remain tracked.
 
 ### D-004 — Enable PyTorch CUDA acceleration on RTX 4060 GPU
+
 - **Status:** accepted
 - **When:** 2026-10-21T20:24:18+07:00
 - **Decided by:** human
@@ -88,6 +92,7 @@
 - **Evidence:** `python scripts/evaluate_asr.py` processed 70 samples in 28.19s on `cuda` (NVIDIA GeForce RTX 4060 Laptop GPU).
 
 ### D-005 — Standardize speech audio to 16kHz mono PCM WAV via PyAV
+
 - **Status:** accepted
 - **When:** 2026-10-21T20:35:47+07:00
 - **Decided by:** agent-proposed, human-approved
@@ -99,6 +104,7 @@
 - **Evidence:** `python scripts/convert_audio.py` successfully converted all 70 `.m4a` files in 4.0s without data loss.
 
 ### D-006 — Initialize Godot project cache and asset imports via headless editor
+
 - **Status:** accepted
 - **When:** 2026-10-21T21:26:00+07:00
 - **Decided by:** agent-proposed, human-approved
@@ -110,6 +116,7 @@
 - **Evidence:** All 81 GUT tests passed after running headless editor import.
 
 ### D-007 — Cross-platform Windows path handling in Godot RunLogger tests
+
 - **Status:** accepted
 - **When:** 2026-10-21T21:32:00+07:00
 - **Decided by:** agent-proposed, human-approved
@@ -121,6 +128,7 @@
 - **Evidence:** Test passed with zero unexpected engine errors.
 
 ### D-008 — Instantiate FOLDER_STRUCTURE.md constitutional rule from template
+
 - **Status:** accepted
 - **When:** 2026-10-21T21:29:00+07:00
 - **Decided by:** agent-proposed, human-approved
@@ -132,6 +140,7 @@
 - **Evidence:** `pytest` smoke test passes (44/44 tests passed).
 
 ### D-009 — Download and locate yolov8n.pt weights locally under models/
+
 - **Status:** accepted
 - **When:** 2026-10-21T21:28:00+07:00
 - **Decided by:** agent-proposed, human-approved
@@ -143,6 +152,7 @@
 - **Evidence:** Server starts cleanly and processes frames with 165ms inference latency.
 
 ### D-010 — Confirm FSM proportional controller as pre-RL baseline
+
 - **Status:** accepted
 - **When:** 2026-10-21T21:36:00+07:00
 - **Decided by:** human
@@ -154,6 +164,7 @@
 - **Evidence:** Controller successfully navigates between `SEARCH`, `APPROACH`, and `ARRIVED` states using proportional control laws.
 
 ### D-011 — Document Godot and YOLO execution manual in root README.md
+
 - **Status:** accepted
 - **When:** 2026-10-21T21:40:00+07:00
 - **Decided by:** human
@@ -165,6 +176,7 @@
 - **Evidence:** `README.md` updated with exact commands for Windows PowerShell and Linux/macOS.
 
 ### D-012 — Unified simulation launcher and WebSocket send resilience
+
 - **Status:** accepted
 - **When:** 2026-10-22T07:50:00+07:00
 - **Decided by:** human
@@ -176,6 +188,7 @@
 - **Evidence:** `run.sh` (Linux/macOS) and `run.ps1` (Windows) boot all backend servers, verify ports via WebSocket ping, launch Godot across Windows/macOS/Linux paths, and cleanly terminate background servers on exit; 135/135 GUT tests pass.
 
 ### D-013 — Offline TTS architecture and graceful subtitle fallback
+
 - **Status:** accepted
 - **When:** 2026-10-22T07:55:00+07:00
 - **Decided by:** human
@@ -187,6 +200,7 @@
 - **Evidence:** `scripts/download_tts.py` downloaded VieNeu-TTS v3 Turbo ONNX weights & MOSS codec into `models/`; `vieneu` initialized with 25 preset Vietnamese voices; all 3 servers (YOLO 8765, STT 8766, TTS 8767) launched and connected successfully in unified launcher.
 
 ### D-014 — Expansion to Floor-1 Vietnamese hospital environment (24m x 18m)
+
 - **Status:** accepted
 - **When:** 2026-10-22T08:50:00+07:00
 - **Decided by:** human
@@ -198,6 +212,7 @@
 - **Evidence:** Dedicated branch `feat/hospital-env` verified with 141/141 passing GUT unit tests.
 
 ### D-015 — Hospital room enrichment, medical pedal waste bins, and refined collisions
+
 - **Status:** accepted
 - **When:** 2026-10-22T09:25:00+07:00
 - **Decided by:** human
@@ -209,6 +224,7 @@
 - **Evidence:** 141/141 tests pass with 10,912 assertions in Godot GUT test suite; committed as `e94381b`.
 
 ### D-016 — Camera viewpoint height correction and automatic ceiling culling
+
 - **Status:** accepted
 - **When:** 2026-10-22T09:42:00+07:00
 - **Decided by:** agent-proposed, human-approved
@@ -220,6 +236,7 @@
 - **Evidence:** All 142/142 GUT tests pass; all 3 camera modes render interior hospital environments without roof clipping.
 
 ### D-017 — Vietnamese medical staff NPCs, waiting patients, and clinical facility props
+
 - **Status:** accepted
 - **When:** 2026-10-23T08:40:00+07:00
 - **Decided by:** human
@@ -231,6 +248,7 @@
 - **Evidence:** `test_has_medical_staff_and_waiting_patients_and_new_props` in `test_room.gd` passes.
 
 ### D-018 — STT startup timeout resilience and Rocketbox surface material mapping
+
 - **Status:** accepted
 - **When:** 2026-10-23T10:15:00+07:00
 - **Decided by:** human
@@ -242,6 +260,7 @@
 - **Evidence:** Forward+ viewport renders verified clean facial, clothing, and hair rendering across all NPCs; all 3 servers start and pass health checks.
 
 ### D-019 — Elderly patient variants and walking canes for old-patient-dominated hospital
+
 - **Status:** accepted
 - **When:** 2026-10-23T10:49:00+07:00
 - **Decided by:** human
@@ -252,8 +271,8 @@
 - **Touches:** `sim_vision/godot/scripts/hospital_npc.gd`, `sim_vision/godot/scenes/room.tscn`, `sim_vision/godot/scenes/props/npc_patient_elder_m03.tscn`, `sim_vision/godot/scenes/props/npc_patient_elder_f09.tscn`, `sim_vision/godot/scenes/props/npc_patient_elder_m14.tscn`, `sim_vision/godot/scenes/props/npc_patient_f02.tscn`, `sim_vision/godot/scenes/props/npc_patient_m05.tscn`, `sim_vision/godot/scenes/props/npc_patient_f08.tscn`, `sim_vision/godot/assets/CREDITS.md`, `sim_vision/godot/tests/test_room.gd`
 - **Evidence:** `Godot_v4.7.2-stable_win64_console.exe --headless --path sim_vision/godot -s addons/gut/gut_cmdln.gd -gtest=res://tests/test_room.gd -gexit` passes 145/145 tests (12,928 asserts) across all 14 test suites.
 
-
 ### D-020 — Implement Phase-1 RL Training Plan with Shared Team Reward and Elderly Tether Pacing
+
 - **Status:** accepted
 - **When:** 2026-10-23T12:54:00+07:00
 - **Decided by:** human-approved via `/grill-me` alignment (`rl_training_plan.md`)
@@ -268,8 +287,8 @@
 - **Touches:** `sim_vision/godot/scripts/robot.gd`, `sim_vision/godot/scripts/main.gd`, `sim_vision/godot/scripts/rl_env_bridge.gd`, `sim_vision/godot/scripts/rl_controller.gd`, `sim_vision/godot/tests/test_rl_env.gd`, `src/utils/run_logger.py`, `src/utils/checkpoint_utils.py`, `src/models/ppo_agent.py`, `src/training/hospital_env.py`, `src/training/rl_hospital_train.py`, `sim_vision/python/test_rl_hospital.py`, `run_simulation.py`, `docs/RL_TRAINING_PLAN.md`
 - **Evidence:** All 5 Godot RL tests in `test_rl_env.gd` passed (81 asserts); all 11 `test_robot.gd` tests passed; all 10 `test_main.gd` tests passed; all 7 Python RL tests in `test_rl_hospital.py` passed (100%); CLI smoke training (`--smoke`), `--resume`, and `--force-resume` verified.
 
-
 ### D-021 — 25-Epoch PPO Training Run on CUDA and 10-Shift Comprehensive Benchmark
+
 - **Status:** accepted
 - **When:** 2026-10-23T13:12:00+07:00
 - **Decided by:** human-approved via `/grill-me` alignment (`rl_full_training_plan.md`)
@@ -280,8 +299,8 @@
 - **Touches:** `src/training/rl_hospital_train.py`, `src/training/benchmark_and_plot.py`, `experiments/results/rl_hospital/evaluation_report.md`, `experiments/results/README.md`, `experiments/plots/rl_training_curves.png`
 - **Evidence:** 25-epoch training completed in 250s with best validation $R_{\text{team}} = 27.50$ at Epoch 24; 10-shift benchmark completed with mean $R_{\text{team}} = 41.60 \pm 27.08$ and 11 patient escorts in Stage 2.
 
-
 ### D-022 — A/D Camera Rotation and Multi-NPC Hospital Speech Support
+
 - **Status:** accepted
 - **When:** 2026-10-23T13:42:00+07:00
 - **Decided by:** human
@@ -296,8 +315,8 @@
 - **Touches:** `sim_vision/godot/scenes/main.tscn`, `sim_vision/godot/scripts/main.gd`, `sim_vision/godot/scripts/npc.gd`, `sim_vision/godot/scripts/hospital_npc.gd`, `sim_vision/godot/scripts/dialogue_manager.gd`, `sim_vision/godot/scripts/rl_env_bridge.gd`
 - **Evidence:** `test_main.gd` passes 10/10 (328 asserts); `test_dialogue.gd` passes 21/21; `test_human.gd` passes 7/7; `test_rl_env.gd` passes 5/5; `test_room.gd` passes 12/12.
 
-
 ### D-023 — Fix Seated Patient Arrival Trigger and Implement Two-Stage Doorway Waypoint Navigation
+
 - **Status:** accepted
 - **When:** 2026-10-23T15:45:00+07:00
 - **Decided by:** human
@@ -320,8 +339,8 @@
 - **Touches:** `sim_vision/godot/scripts/main.gd`, `sim_vision/godot/scripts/hospital_npc.gd`, `sim_vision/godot/scripts/npc.gd`, `sim_vision/godot/scripts/rl_controller.gd`, `src/training/hospital_env.py`, `docs/AI-Human-logs/Vuong.md`
 - **Evidence:** 151/151 GUT unit tests passing (13,015 asserts, 0 failures); 30-epoch PPO training run (`PPOHospital-doorway-curriculum`) launched on RTX 4060 GPU with clean doorway clearance.
 
-
 ### D-024 — Implement Gradio Web Dashboard for RL Training Control, Live Telemetry, and History Inspection
+
 - **Status:** accepted
 - **When:** 2026-10-23T16:45:00+07:00
 - **Decided by:** human-approved via `/grill-me` alignment (`rl_ui_dashboard_plan.md`)
@@ -337,8 +356,8 @@
 - **Touches:** `src/ui/rl_dashboard.py`, `run_dashboard.py`, `tests/test_dashboard.py`, `README.md`, `docs/AI-Human-logs/Vuong.md`
 - **Evidence:** 4/4 automated tests in `tests/test_dashboard.py` passed; `run_dashboard.py --help` verified; all 151 Godot GUT tests pass; verified loading of 80-epoch converged run (`PPOHospital-converged-80ep-full`) with peak $R_{\text{team}} = 103.0$ and 4.0 patients helped/shift.
 
-
 ### D-025 — Fix Godot Vision-Client Inference Error (`robot.v` / `robot.omega` Access)
+
 - **Status:** accepted
 - **When:** 2026-10-23T17:00:00+07:00
 - **Decided by:** AI-pair (Manh + Antigravity)
@@ -350,8 +369,8 @@
 - **Touches:** `sim_vision/godot/scripts/robot.gd`, `sim_vision/godot/scripts/main.gd`, `docs/AI-Human-logs/Vuong.md`
 - **Evidence:** All 151 Godot GUT unit tests pass without error (13,015 asserts, 0 failures).
 
-
 ### D-026 — Revamp Dashboard Dark Theme Contrast and Chart Legibility
+
 - **Status:** accepted
 - **When:** 2026-10-23T17:08:00+07:00
 - **Decided by:** AI-pair (Manh + Antigravity)
@@ -365,8 +384,8 @@
 - **Touches:** `src/ui/rl_dashboard.py`, `tests/test_dashboard.py`, `docs/AI-Human-logs/Vuong.md`
 - **Evidence:** 5/5 pytest tests in `tests/test_dashboard.py` pass cleanly with 0 warnings; all 9/9 repo tests pass.
 
-
 ### D-027 — Fix Subprocess Pipe Buffer Deadlock and Dynamic Run Dropdown Refresh
+
 - **Status:** accepted
 - **When:** 2026-10-23T20:36:00+07:00
 - **Decided by:** AI-pair (Manh + Antigravity)
@@ -379,3 +398,23 @@
 - **Why:** Prevents multi-epoch training deadlocks and ensures all active and past runs are immediately selectable and visible in the continuation UI without requiring server restarts.
 - **Touches:** `src/ui/rl_dashboard.py`, `src/training/rl_hospital_train.py`, `tests/test_dashboard.py`, `docs/AI-Human-logs/Vuong.md`
 - **Evidence:** Verified clean resume of `20261023_193057_PPOHospital-interactive` from epoch 16 to 17; 9/9 pytest tests pass; verified `find_existing_runs` dynamically lists `20261023_193057_PPOHospital-interactive (Ep 16 | Peak R: 53.0 | Help: 0.5)`.
+
+
+### D-028 — Implement Solo Patient Focus Training Environment & Godot 3D Solo Mode
+- **Status:** accepted
+- **When:** 2026-10-24T14:12:00+07:00
+- **Decided by:** human-approved via `/grill-me` alignment (`rl_solo_patient_env_plan.md`)
+- **Trigger:** "make me a training env, in that, each times, there only 1 patient not doctor appear, the robot spawn nearby, its task is to answer patient question, guide them to a destination or call for doctor, the env is the current hospital env, each times a patient problems got resolve, apear another one at random location (that not in the medical room), traning on that, instead of the full hospital with full flesh doctor and many patient"
+- **Decision:**
+  1. In `src/training/hospital_env.py`: Added `env_mode: str = "solo"` support to `HospitalShiftEnv`. In solo mode:
+     - Patrolling doctor dynamic obstacle is completely disabled (`doctor_active = False`).
+     - Patients strictly spawn in public hallways/corridors or main lobby (`_sample_patient_spawn_solo()`), never inside medical exam rooms.
+     - On episode reset, the robot spawns in close proximity (2.0–3.5 m) facing the patient with direct line of sight.
+     - When a patient task completes, the next patient spawns in a random corridor/lobby spot while the robot maintains its current position without teleporting.
+     - Task distribution configured to escort-heavy: ~70% Guide/Escort, ~15% Question Answering, ~15% Call Staff/Doctor.
+  2. In `src/training/rl_hospital_train.py`: Added `--env-mode {solo, full}` CLI argument (defaulting to `"solo"`), wired through training and validation loops, and saved in run metadata.
+  3. In `sim_vision/godot/scripts/main.gd` & `run_simulation.py`: Added `--solo-patient` runtime flag. In solo mode, Godot disables extra scene NPCs/doctors, spawns the robot nearby the patient on reset, and respawns the patient at public waypoints without robot teleportation upon task completion.
+  4. In `src/ui/rl_dashboard.py`: Added "🏥 Environment Mode" dropdown selector defaulting to `Solo Patient Focus (1 Patient, Nearby Spawn)` and passed appropriate flags to training and 3D simulation launch commands.
+- **Why:** Eliminates multi-NPC navigation distractions during early policy learning, focuses learning capacity on core patient interaction, tethered escorting, and doorway navigation from nearby spawns.
+- **Touches:** `src/training/hospital_env.py`, `src/training/rl_hospital_train.py`, `run_simulation.py`, `sim_vision/godot/scripts/main.gd`, `src/ui/rl_dashboard.py`, `tests/test_solo_env.py`, `docs/AI-Human-logs/Vuong.md`
+- **Evidence:** 4/4 tests in `tests/test_solo_env.py` pass; all 13 repo pytest tests pass; all 151 Godot GUT unit tests pass (13,015 asserts, 0 failures); verified 1-epoch GPU smoke test on RTX 4060 with `--env-mode solo`.

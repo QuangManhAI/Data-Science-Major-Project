@@ -203,6 +203,11 @@ def main() -> None:
         default=None,
         help="Optional path to a trained RL checkpoint (.pt) loaded with weights_only=True",
     )
+    parser.add_argument(
+        "--solo-patient",
+        action="store_true",
+        help="Run simulation with exactly 1 active patient and robot spawning nearby (no doctor/crowd)",
+    )
     args = parser.parse_args()
 
     # Register exit hooks
@@ -283,6 +288,7 @@ def main() -> None:
     godot_cmd = [str(godot_exe), "--path", str(GODOT_DIR)]
     if args.scene:
         godot_cmd.append(args.scene)
+    extra_godot_args: List[str] = []
     if args.controller == "rl":
         if args.rl_checkpoint:
             from src.utils.checkpoint_utils import load_checkpoint
@@ -292,7 +298,13 @@ def main() -> None:
                 f"[Launcher] Loaded RL checkpoint: {args.rl_checkpoint} "
                 f"(epoch={ckpt.get('epoch')}, best_val_acc={ckpt.get('best_val_acc')})"
             )
-        godot_cmd.extend(["--", "--controller=rl"])
+        extra_godot_args.append("--controller=rl")
+    if args.solo_patient:
+        extra_godot_args.append("--solo-patient")
+        log("[Launcher] Solo Patient Mode active: 1 patient only, robot nearby spawn, no extra crowd.")
+    if extra_godot_args:
+        godot_cmd.append("--")
+        godot_cmd.extend(extra_godot_args)
 
     godot_proc = subprocess.Popen(godot_cmd)
     CHILD_PROCESSES.append(godot_proc)

@@ -34,6 +34,7 @@ def evaluate_policy(
     shift_duration_s: float,
     seed: int,
     device: torch.device,
+    env_mode: str = "solo",
 ) -> dict[str, float]:
     """Evaluate policy deterministically over `n_episodes` hospital shifts."""
     agent.eval()
@@ -47,6 +48,7 @@ def evaluate_policy(
             curriculum_stage=stage,
             shift_duration_s=shift_duration_s,
             seed=seed + 1000 + ep,
+            env_mode=env_mode,
         )
         obs = env.reset()
         done = False
@@ -116,6 +118,7 @@ def train_hospital_rl(
     resume: bool = False,
     force_resume: bool = False,
     resume_from: str | Path | None = None,
+    env_mode: str = "solo",
     device_choice: str = "auto",
     enable_tb: bool = False,
     smoke: bool = False,
@@ -187,6 +190,7 @@ def train_hospital_rl(
         "bc_coef_init": bc_coef_init,
         "patience": patience,
         "seed": seed,
+        "env_mode": env_mode,
         "smoke": smoke,
         "shift_duration_s": shift_duration_s,
         "5W1H": {
@@ -256,6 +260,7 @@ def train_hospital_rl(
         curriculum_stage=1,
         shift_duration_s=shift_duration_s,
         seed=seed,
+        env_mode=env_mode,
     )
 
     t0 = time.time()
@@ -387,6 +392,7 @@ def train_hospital_rl(
             shift_duration_s=shift_duration_s,
             seed=seed + epoch * 101,
             device=device,
+            env_mode=env_mode,
         )
         val_r_team = eval_metrics["val_r_team"]
         val_loss = -val_r_team
@@ -549,6 +555,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=None,
         help="Explicit directory path of previous run to resume from",
     )
+    parser.add_argument(
+        "--env-mode",
+        type=str,
+        default="solo",
+        choices=["solo", "full"],
+        help="Training environment mode: 'solo' (1 patient focus, nearby spawn) or 'full' (multi-NPC, patrolling doctor)",
+    )
     parser.add_argument("--device", type=str, default="auto", choices=["auto", "cuda", "cpu"], help="Hardware device")
     parser.add_argument("--tb", action="store_true", help="Enable TensorBoard logging")
     parser.add_argument("--smoke", action="store_true", help="Fast smoke test run")
@@ -568,6 +581,7 @@ def main(argv: list[str] | None = None) -> None:
         resume=args.resume,
         force_resume=args.force_resume,
         resume_from=args.resume_from,
+        env_mode=args.env_mode,
         device_choice=args.device,
         enable_tb=args.tb,
         smoke=args.smoke,

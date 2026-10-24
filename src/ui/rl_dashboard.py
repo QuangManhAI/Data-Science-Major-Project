@@ -264,6 +264,7 @@ def start_training(
     val_episodes: int,
     seed: int,
     stage_choice: str,
+    env_mode_choice: str,
     use_cuda: bool,
     force_resume: bool,
     enable_tb: bool,
@@ -296,6 +297,9 @@ def start_training(
         cmd.extend(["--stage", "1"])
     elif stage_choice == "Stage 2 only":
         cmd.extend(["--stage", "2"])
+
+    env_mode_val = "solo" if "solo" in str(env_mode_choice).lower() else "full"
+    cmd.extend(["--env-mode", env_mode_val])
 
     if mode == "Continue from Previous Run":
         if not selected_prev_run:
@@ -414,7 +418,7 @@ def poll_status_and_metrics(selected_prev_run: str) -> Tuple[Any, Any, Any, Any,
     return fig1, fig2, fig3, fig4, ep_card, r_card, help_card, eta_card, log_tail, is_running
 
 
-def launch_simulation(selected_ckpt: str, selected_prev_run: str) -> str:
+def launch_simulation(selected_ckpt: str, selected_prev_run: str, env_mode_choice: str = "solo") -> str:
     """Launch the interactive Godot 3D simulation with the chosen checkpoint."""
     ckpt_path: Optional[Path] = None
     if selected_ckpt and Path(selected_ckpt).is_file():
@@ -438,6 +442,8 @@ def launch_simulation(selected_ckpt: str, selected_prev_run: str) -> str:
         "--controller", "rl",
         "--rl-checkpoint", str(ckpt_path),
     ]
+    if "solo" in str(env_mode_choice).lower():
+        cmd.append("--solo-patient")
 
     try:
         subprocess.Popen(cmd, cwd=str(REPO_ROOT))
@@ -554,6 +560,14 @@ def build_dashboard() -> gr.Blocks:
                         value="Auto (Stage 1 -> Stage 2)",
                         label="Curriculum Stage",
                     )
+                    env_mode_dropdown = gr.Dropdown(
+                        choices=[
+                            "Solo Patient Focus (1 Patient, Nearby Spawn)",
+                            "Full Hospital Shift (Multi-NPC, Patrolling Doctor)",
+                        ],
+                        value="Solo Patient Focus (1 Patient, Nearby Spawn)",
+                        label="🏥 Environment Mode",
+                    )
 
                 gr.Markdown("#### 🚩 Operational Flags")
                 with gr.Row():
@@ -661,7 +675,7 @@ def build_dashboard() -> gr.Blocks:
             inputs=[
                 mode_radio, run_dropdown, run_name_input,
                 epochs_slider, steps_slider, patience_slider, val_ep_slider,
-                seed_input, stage_dropdown, use_cuda_cb, force_resume_cb,
+                seed_input, stage_dropdown, env_mode_dropdown, use_cuda_cb, force_resume_cb,
                 enable_tb_cb, smoke_cb,
             ],
             outputs=[action_output, timer, log_console],
@@ -677,7 +691,7 @@ def build_dashboard() -> gr.Blocks:
         # Launch simulation button
         launch_sim_btn.click(
             launch_simulation,
-            inputs=[ckpt_dropdown, run_dropdown],
+            inputs=[ckpt_dropdown, run_dropdown, env_mode_dropdown],
             outputs=[action_output],
         )
 

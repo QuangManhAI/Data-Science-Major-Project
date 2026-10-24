@@ -19,6 +19,7 @@ const RLControllerScript = preload("res://scripts/rl_controller.gd")
 @export var seed: int = -1              # −1 = ngẫu nhiên
 @export var controller_path: NodePath = ^"Controller"
 @export var use_rl_controller: bool = false
+var solo_patient_mode: bool = false
 
 var state: int = Config.RobotState.SEARCH
 var camera_mode: int = CameraMode.FOLLOW
@@ -53,6 +54,8 @@ func _ready() -> void:
 	for arg: String in OS.get_cmdline_user_args() + OS.get_cmdline_args():
 		if arg == "--controller=rl" or arg == "--rl":
 			use_rl_controller = true
+		elif arg == "--solo-patient":
+			solo_patient_mode = true
 	if use_rl_controller:
 		var rl_ctrl: Node = RLControllerScript.new()
 		rl_ctrl.name = "RLController"
@@ -131,7 +134,7 @@ func _physics_process(delta: float) -> void:
 			_rl_bridge.patients_helped += 1
 			_rl_bridge.task_phase = RLEnvBridgeScript.TaskPhase.SEARCH_PATIENT
 			overlay.set_status("Đã dẫn tới: %s (R_team=%.0f)" % [_rl_bridge.goal_key, _rl_bridge.cumulative_team_reward])
-			reset_positions()
+			reset_positions(true)
 			return
 		var cmd_vec: Vector2 = RLControllerScript.step_towards_goal_with_lidar(
 			robot.global_position, robot.rotation.y, _rl_bridge.goal_position, robot.get_lidar_readings(), d_tether, true
@@ -145,7 +148,7 @@ func _physics_process(delta: float) -> void:
 			_rl_bridge.patients_helped += 1
 			_rl_bridge.task_phase = RLEnvBridgeScript.TaskPhase.SEARCH_PATIENT
 			overlay.set_status("Đã báo nhân viên y tế (R_team=%.0f)" % _rl_bridge.cumulative_team_reward)
-			reset_positions()
+			reset_positions(true)
 			return
 		var cmd_vec: Vector2 = RLControllerScript.step_towards_goal_with_lidar(
 			robot.global_position, robot.rotation.y, _rl_bridge.goal_position, robot.get_lidar_readings(), 0.0, false
@@ -279,13 +282,24 @@ func _clear_wall_transparency() -> void:
 
 
 ## Đặt robot và người ở vị trí ngẫu nhiên mới, robot hướng ngẫu nhiên, về SEARCH.
-func reset_positions() -> void:
+func reset_positions(is_task_transition: bool = false) -> void:
 	_clear_wall_transparency()
-	var p: Dictionary = Main.pick_start_positions(room, _rng)
-	robot.global_position = p["robot"]
-	robot.rotation.y = p["robot_yaw"]
-	human.global_position = p["human"]
-	human.rotation.y = p["human_yaw"]
+	if solo_patient_mode and is_task_transition:
+		var human_pos: Vector3 = room.get_free_position(START_CLEARANCE, _rng)
+		human.global_position = human_pos
+		human.rotation.y = _rng.randf_range(-PI, PI)
+	elif solo_patient_mode:
+		var p: Dictionary = Main.pick_solo_start_positions(room, _rng)
+		robot.global_position = p["robot"]
+		robot.rotation.y = p["robot_yaw"]
+		human.global_position = p["human"]
+		human.rotation.y = p["human_yaw"]
+	else:
+		var p: Dictionary = Main.pick_start_positions(room, _rng)
+		robot.global_position = p["robot"]
+		robot.rotation.y = p["robot_yaw"]
+		human.global_position = p["human"]
+		human.rotation.y = p["human_yaw"]
 	robot.set_command(0.0, 0.0)
 	state = Config.RobotState.SEARCH
 	if dialogue != null:
@@ -311,9 +325,15 @@ func _setup_hospital_npcs() -> void:
 		for child: Node in furn.get_children():
 			if child is HospitalNpc:
 				var h_npc := child as HospitalNpc
-				h_npc.setup_robot(robot, func() -> int: return state)
-				if dialogue != null and h_npc.has_npc():
-					dialogue.register_npc(h_npc.get_npc())
+				if solo_patient_mode:
+					h_npc.visible = false
+					h_npc.process_mode = Node.PROCESS_MODE_DISABLED
+					for col: Node in h_npc.find_children("*", "CollisionShape3D", true, false):
+						(col as CollisionShape3D).disabled = true
+				else:
+					h_npc.setup_robot(robot, func() -> int: return state)
+					if dialogue != null and h_npc.has_npc():
+						dialogue.register_npc(h_npc.get_npc())
 
 
 func _nearest_person_distance() -> float:
@@ -434,3 +454,29 @@ static func pick_start_positions(r: Room, rng: RandomNumberGenerator) -> Diction
 		push_error("Main.pick_start_positions: no pair ≥ %.1f m apart" % MIN_START_SEPARATION)
 	return {"robot": robot_pos, "human": human_pos,
 			"robot_yaw": rng.randf_range(-PI, PI), "human_yaw": rng.randf_range(-PI, PI)}
+
+
+## Vị trí bắt đầu solo: Bệnh nhân ở hành lang/sảnh, robot ở gần (2.0–3.5m) hướng mặt vào bệnh nhân.
+static func pick_solo_start_positions(r: Room, rng: RandomNumberGenerator) -> Dictionary:
+	var human_pos := r.get_free_position(START_CLEARANCE, rng)
+	var robot_pos := human_pos
+	var ok: bool = false
+	var footprints: Array[Rect2] = r.get_obstacle_footprints()
+	for i: int in MAX_PLACEMENT_TRIES:
+		var dist: float = rng.randf_range(2.0, 3.5)
+		var angle: float = rng.randf_range(-PI, PI)
+		var cand := Vector3(human_pos.x + dist * cos(angle), 0.0, human_pos.z + dist * sin(angle))
+		if absf(cand.x) <= 10.8 and absf(cand.z) <= 7.2 and Room.is_clear(cand, footprints, START_CLEARANCE):
+			robot_pos = cand
+			ok = true
+			break
+	if not ok:
+		robot_pos = r.get_free_position(START_CLEARANCE, rng)
+	var to_h: Vector3 = human_pos - robot_pos
+	var face_yaw: float = atan2(-to_h.x, -to_h.z) + rng.randf_range(-0.25, 0.25)
+	return {
+		"robot": robot_pos,
+		"human": human_pos,
+		"robot_yaw": face_yaw,
+		"human_yaw": rng.randf_range(-PI, PI)
+	}

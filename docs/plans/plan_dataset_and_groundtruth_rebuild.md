@@ -1,261 +1,174 @@
-# 📋 KẾ HOẠCH TÁI THIẾT KẾ BỘ DATASET & BỘ GÁN NHÃN GROUND TRUTH CHUẨN XÁC CHO ROBOT BỆNH VIỆN
-## Architectural Blueprint & Technical Implementation Plan for Dataset Re-Engineering and Visibility-Aware Ground Truth Annotation in Godot 4 & Python
+# 📋 KẾ HOẠCH HỢP NHẤT & TÁI THIẾT KẾ BỘ DỮ LIỆU THỊ GIÁC CHUẨN XÁC CHO ROBOT BỆNH VIỆN
+## Architectural Blueprint for Unified, Pruned & Visibility-Aware AI Vision Benchmark Dataset (`vision_eval_unified`)
 
 - **Dự án**: Data Science Major Project — Robot Trợ Lý Dẫn Đường Bệnh Viện Tự Hành
-- **Hiện trạng**: Bộ dữ liệu 12,000 khung hình (`vision_eval_1200` và `vision_eval_extended_10800`) đang gặp lỗi nghiêm trọng về nhãn: hộp bao vẽ xuyên tường/đạo cụ, dính chùm vật cản, nhãn ảo khi người bị che khuất 100%, gây sai lệch toàn bộ chỉ số đánh giá (F1, Recall, Precision, FPR).
-- **Mục tiêu**: Nâng cấp toàn diện cơ chế sinh nhãn tự động từ **hình chiếu hình học ảo (Virtual Cylinder Projection)** sang **Lưới tia chiếu vật lý đa điểm (Multi-Raycast Physical Occlusion Grid)** và chuẩn hóa xuất đồng thời **Visible Box** và **Full Body Box**, phân tách nhãn đa lớp y tế.
-- **Tác giả quy hoạch**: Hệ Thống Điều Phối & Thị Giác Robot Bệnh Viện
+- **Định hướng chiến lược mới từ User**: 
+  1. **Hợp nhất 2-trong-1**: Gom toàn bộ kịch bản của Dataset 1 (`vision_eval_1200`) và Dataset 2 (`vision_eval_extended_10800`) thành **1 bộ dataset duy nhất chuẩn hóa**.
+  2. **Tinh gọn số lượng khung hình (Frame Pruning)**: Cắt giảm từ **12,000 frames xuống còn ~1,500 frames** (giảm 8 lần độ phình dữ liệu), chỉ giữ lại các khung hình mang tính đại diện then chốt cho từng ca kiểm thử.
+  3. **Xóa sổ 2 bộ dataset cũ**: Loại bỏ hoàn toàn 710 MB dữ liệu rác bị lỗi nhãn sau khi nghiệm thu bộ mới.
+  4. **Chuẩn hóa nhãn bằng vật lý (Physics Raycast)**: Khắc phục triệt để lỗi gán nhãn xuyên vật cản, dính chùm đạo cụ và nhãn ma khi người bị che khuất.
 
 ---
 
 ## 📑 MỤC LỤC KẾ HOẠCH
-1. [Khảo Sát & Bóc Tách 5 'Lỗ Hổng Chí Mạng' Của Bộ Nhãn Hiện Tại](#1-khảo-sát--bóc-tách-5-lỗ-hổng-chí-mạng-của-bộ-nhãn-hiện-tại)
-2. [Nguyên Lý Kỹ Thuật Đột Phá: Lưới Tia Chiếu Vật Lý Đa Điểm (Multi-Raycast Grid)](#2-nguyên-lý-kỹ-thuật-đột-phá-lưới-tia-chiếu-vật-lý-đa-điểm-multi-raycast-grid)
-3. [Quy Chuẩn Hộp Bao Kép (Visible Box vs Full Body Box) & Chuẩn COCO / CrowdHuman](#3-quy-chuẩn-hộp-bao-kép-visible-box-vs-full-body-box--chuẩn-coco--crowdhuman)
-4. [Mở Rộng Không Gian Nhãn: Phân Loại Đa Lớp Thực Thể Lâm Sàng (Multi-Class Taxonomy)](#4-mở-rộng-không-gian-nhãn-phân-loại-đa-lớp-thực-thể-lâm-sàng-multi-class-taxonomy)
-5. [Lộ Trình Triển Khai 4 Giai Đoạn (Implementation Roadmap)](#5-lộ-trình-triển-khai-4-giai-đoạn-implementation-roadmap)
-6. [Hệ Thống Hậu Kiểm Tự Động & Hàng Rào Chất Lượng (Quality Gate Pipeline)](#6-hệ-thống-hậu-kiểm-tự-động--hàng-rào-chất-lượng-quality-gate-pipeline)
-7. [Các Quyết Định Kiến Trúc Cần Thống Nhất](#7-các-quyết-định-kiến-trúc-cần-thống-nhất)
+1. [Chiến Lược Tinh Gọn Hóa & Hợp Nhất 2-trong-1 (`vision_eval_unified`)](#1-chiến-lược-tinh-gọn-hóa--hợp-nhất-2-trong-1-vision_eval_unified)
+2. [Thiết Kế Ngân Sách Khung Hình Đại Diện (Representative Frame Budgeting)](#2-thiết-kế-ngân-sách-khung-hình-đại-diện-representative-frame-budgeting)
+3. [Phân Loại 83 Ca Kiểm Thử Hợp Nhất Thành 8 Phân Hệ Lâm Sàng](#3-phân-loại-83-ca-kiểm-thử-hợp-nhất-thành-8-phân-hệ-lâm-sàng)
+4. [Công Nghệ Gán Nhãn Mới: Lưới Tia Dò Vật Lý Đa Điểm (Multi-Raycast 128 Tia)](#4-công-nghệ-gán-nhãn-mới-lưới-tia-dò-vật-lý-đa-điểm-multi-raycast-128-tia)
+5. [Quy Chuẩn Hộp Bao Kép (Visible Box cho YOLO vs Full Body cho SLAM)](#5-quy-chuẩn-hộp-bao-kép-visible-box-cho-yolo-vs-full-body-cho-slam)
+6. [Lộ Trình Triển Khai 5 Bước Kỹ Thuật](#6-lộ-trình-triển-khai-5-bước-kỹ-thuật)
+7. [Kế Hoạch Xóa Sổ (Sunset & Deprecation) 2 Bộ Dữ Liệu Cũ](#7-kế-hoạch-xóa-sổ-sunset--deprecation-2-bộ-dữ-liệu-cũ)
 
 ---
 
-## 1. KHẢO SÁT & BÓC TÁCH 5 'LỖ HỔNG CHÍ MẠNG' CỦA BỘ NHÃN HIỆN TẠI
+## 1. CHIẾN LƯỢC TINH GỌN HÓA & HỢP NHẤT 2-TRONG-1 (`vision_eval_unified`)
 
-Sau khi kiểm tra thủ công mã nguồn [extended_dataset_generator.gd](file:///home/bush/Projects/Data-Science-Major-Project/sim_vision/godot/scripts/extended_dataset_generator.gd) và [scene_dataset_generator.gd](file:///home/bush/Projects/Data-Science-Major-Project/sim_vision/godot/scripts/scene_dataset_generator.gd), 5 nguyên nhân gốc rễ gây ra tình trạng "dán nhãn fail hàng loạt" đã được làm sáng tỏ:
+Thay vì duy trì 2 bộ dữ liệu phân mảnh với số khung hình bị "lạm phát" do dịch chuyển camera từng milimet:
 
 ```mermaid
 flowchart TD
-    subgraph Current_Flawed_Pipeline["Hệ Thống Gán Nhãn Hiện Tại (Bị Lỗi)"]
-        A["Actor 3D Mesh / Cylinder"] -->|Tạo 48 điểm ảo 3D bao quanh người| B["Virtual Points Array"]
-        B -->|Chiếu thẳng lên Camera 2D bằng unproject_position| C["2D Screen Coordinates"]
-        C -->|KHÔNG KIỂM TRA VẬT CẢN CHE KHUẤT| D["Vẽ Hộp Bao Toàn Thân Ảo"]
-        D --> E["Lỗi 1: Vẽ hộp xuyên tường gạch & cửa"]
-        D --> F["Lỗi 2: Bao trọn xe đẩy / Kiosk vào nhãn người"]
-        D --> G["Lỗi 3: 3 người xếp hàng chung 1 vùng X bị gộp"]
+    subgraph Old_Fragmented_Architecture["Kiến Trúc Cũ (Phân Mảnh & Phình Dữ Liệu - 710 MB)"]
+        D1["Dataset 1: vision_eval_1200<br>(48 cases x 25 = 1,200 frames)<br>91 MB - Lỗi C20, C30, D8"]
+        D2["Dataset 2: vision_eval_extended_10800<br>(36 cases x 300 = 10,800 frames)<br>619 MB - Lỗi che khuất & dính đạo cụ"]
     end
 
-    subgraph Proposed_Physical_Pipeline["Hệ Thống Gán Nhãn Mới (Physics-Aware)"]
-        H["Actor 3D Mesh & Props"] -->|Bắn lưới 128 tia Raycast từ Camera| I["DirectPhysicsState3D Intersect Ray"]
-        I -->|Phân tích va chạm theo Collision Layer| J["Tách riêng: Điểm Thấy vs Điểm Bị Che"]
-        J -->|Chỉ lấy điểm KHÔNG BỊ CẢN| K["Visible Bounding Box (Chuẩn YOLO)"]
-        J -->|Tính tỷ lệ tia chạm người / tổng tia| L["True Visibility Ratio V"]
-        L -->|V < 0.20| M["Gán cờ ignore_eval = true"]
-        L -->|V >= 0.20| N["Nhãn Huấn Luyện & Đánh Giá Chuẩn Xác"]
+    subgraph Unified_Streamlined_Architecture["Kiến Trúc Mới (Hợp Nhất & Tinh Gọn - ~100 MB)"]
+        UNI["Bộ Dữ Liệu Hợp Nhất Chuẩn Xác:<br>sim_vision/data/vision_eval_unified/<br>83 Ca Kiểm Thử Độc Lập x 15 - 20 Frames Đại Diện<br>Tổng cộng: ~1,500 Frames Sạch<br>Dung lượng: ~95 MB (Giảm 87% dung lượng)"]
     end
 
-    style Current_Flawed_Pipeline fill:#ffebee,stroke:#c62828,stroke-width:2px
-    style Proposed_Physical_Pipeline fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px
+    D1 -->|Chắt lọc kịch bản giá trị & sửa nhãn| UNI
+    D2 -->|Loại bỏ 85% frames dư thừa & sửa nhãn| UNI
+
+    style Old_Fragmented_Architecture fill:#ffebee,stroke:#c62828,stroke-width:2px
+    style Unified_Streamlined_Architecture fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px
 ```
 
-### Chi tiết 5 lỗ hổng:
-1. **Lỗ hổng 1 — Chiếu hình học mù quang học (Blind Projection)**:
-   - Thuật toán hiện tại `_compute_actor_ground_truth` chỉ dùng `robot_camera.unproject_position(pt)`. 
-   - Nó không thực hiện bất kỳ phép thử va chạm vật lý nào. Do đó, dù người đứng hoàn toàn sau bức tường gạch 20cm hay đứng sau cánh cửa phòng khám đóng kín, tọa độ 3D vẫn được chiếu lên màn hình và tạo ra hộp bao nhãn sự thật (Ground Truth) như thể người đang hiện diện trước mắt camera!
-2. **Lỗ hổng 2 — Dính chùm đạo cụ vào thân người (Prop Bleeding / Contamination)**:
-   - Trong các ca lâm sàng nhóm $N_3$ (Xe monitor $N_{3.2}$, Kiosk $N_{3.3}$, Cây nước $N_{3.4}$, Xe cáng $N_{3.6}$), đạo cụ đặt ở cự ly tiền cảnh trước mặt người.
-   - Hộp bao Ground Truth kéo dài từ đỉnh đầu xuống tận gót chân ($y_{\text{foot}} = \text{max\_y}$). Khi vẽ lên ảnh, hộp bao màu xanh trùm kín toàn bộ chiếc xe đẩy monitor kim loại to đùng. Mắt người nhìn vào thấy hộp bao đang "gán nhãn chiếc xe là người".
-3. **Lỗ hổng 3 — Triệt tiêu đồng trục sâu Z trong hàng chờ (Z-Axis Co-linear Blindness)**:
-   - Ở ca $N_{6.3}$ (Hàng chờ 3 người), người thứ 1 đứng cự ly $0.88\text{m}$ che khuất $85\%$ người thứ 2 ($1.60\text{m}$) và che $95\%$ người thứ 3 ($2.32\text{m}$).
-   - Bộ sinh nhãn vẫn xuất 3 hộp bao đè lên nhau tại cùng một tọa độ $X$. Trên ảnh RGB thực tế chỉ có các pixel của người số 1. Mạng AI phát hiện đúng 1 người nhưng bị thuật toán đánh giá phạt 2 lỗi False Negatives!
-4. **Lỗ hổng 4 — Đơn nhãn duy nhất (Mono-Class Person-Only)**:
-   - Toàn bộ đồ vật bệnh viện nguy hiểm (xe lăn, xe cáng, máy monitor, kiosk) không có nhãn bounding box riêng.
-   - Khi mô hình AI (được huấn luyện COCO) nhìn thấy xe lăn thì dự đoán `chair`, thấy xe monitor dự đoán `tv`, thì hệ thống hiện tại coi đó là "không nhận diện được người" và bỏ qua giá trị cảnh báo an toàn của đạo cụ.
-5. **Lỗ hổng 5 — Thiếu cờ `ignore_eval` theo chuẩn quốc tế (COCO / CrowdHuman)**:
-   - Trong các benchmark uy tín, khi một đối tượng bị che khuất $>75\%$ hoặc quá mờ nhỏ, đối tượng đó được đánh dấu `ignore_eval: True`.
-   - Hệ thống hiện tại ép mô hình phải nhìn xuyên vật thể đặc, dẫn đến việc hạ thấp nhân tạo các chỉ số Recall và F1 của các mô hình AI.
+### Lợi ích vượt trội của chiến lược hợp nhất:
+1. **Triệt tiêu 85% khung hình dư thừa**: Bộ cũ có tới 300 frames/ca nhưng thực chất chỉ là lặp lại cự ly lệch nhau vài cm. Việc rút gọn xuống 15 - 20 frames/ca giữ nguyên 100% độ đa dạng hình học mà không gây lãng phí tài nguyên.
+2. **Thời gian chạy Benchmark siêu tốc**: Đánh giá 4 mô hình AI trên 1,500 frames chỉ mất **~35 giây** (thay vì hơn 6 phút trên 12,000 frames).
+3. **Dễ dàng kiểm toán thủ công 100%**: 1,500 frames chia cho 83 ca (mỗi ca ~18 ảnh) là quy mô lý tưởng để nhóm nghiên cứu hoặc hội đồng chấm đồ án có thể duyệt tay từng ca kiểm thử.
 
 ---
 
-## 2. NGUYÊN LÝ KỸ THUẬT ĐỘT PHÁ: LƯỚI TIA CHIẾU VẬT LÝ ĐA ĐIỂM (MULTI-RAYCAST GRID)
+## 2. THIẾT KẾ NGÂN SÁCH KHUNG HÌNH ĐẠI DIỆN (REPRESENTATIVE FRAME BUDGETING)
 
-Để giải quyết triệt để bài toán che khuất, bộ sinh dữ liệu sẽ chuyển từ phép chiếu hình học thuần túy sang **Hệ thống dò tia vật lý thời gian thực trong không gian 3D Godot**:
+Để đảm bảo mỗi ca kiểm thử có đủ các góc nhìn cực đoan mà không bị trùng lặp, mỗi ca sẽ được chụp chính xác **16 đến 18 khung hình** cấu hình theo ma trận 3 chiều:
 
-### 2.1. Cấu Trúc Khung Xương Nhân Trắc Học & Lưới Dò Tia (Anthropometric Raycast Mesh)
-Trên mỗi mô hình nhân vật 3D, thiết lập một lưới gồm **64 đến 128 điểm lấy mẫu bề mặt (Surface Sample Keypoints)** phủ khắp các bộ phận giải phẫu:
-- **Cụm Đầu & Cổ** (Head & Neck): 12 điểm bao quanh hộp sọ và mặt.
-- **Cụm Thân Trên & Ngực** (Chest & Torso): 24 điểm chia 4 tầng độ cao.
-- **Cụm Chi Trên** (Arms & Hands): 16 điểm dọc cánh tay và bàn tay.
-- **Cụm Thân Dưới & Chân** (Pelvis & Legs): 32 điểm dọc đùi, cẳng chân và bàn chân.
+$$\text{Số Frames/Ca} = N_{\text{Distances}} \times N_{\text{Yaws}} \times N_{\text{Heights}} = 4 \times 2 \times 2 = \mathbf{16\text{ frames}}$$
 
-### 2.2. Toán Tử Kiểm Tra Va Chạm (Physics Ray Intersect Query)
-Với mỗi điểm $P_i \in \mathbb{R}^3$ trên cơ thể nhân vật và vị trí Camera $C \in \mathbb{R}^3$:
+| Biến Số Hình Học | Các Giá Trị Thiết Lập Then Chốt | Mục Tiêu Khoa Học |
+| :--- | :--- | :--- |
+| **Cự ly quan sát ($d$)** | **4 mức**: $1.0\text{m}$ (Cận cảnh), $2.0\text{m}$ (Vùng an toàn), $3.5\text{m}$ (Tầm trung), $5.5\text{m}$ (Tầm xa) | Kiểm tra sự suy giảm độ phân giải theo khoảng cách. |
+| **Góc lệch camera ($\theta$)** | **2 mức**: $0.0^\circ$ (Trực diện) và $\pm 15.0^\circ$ (Lệch góc mép nón quan sát FOV) | Đo sai số góc phương vị (*Bearing Error*) và mép biên. |
+| **Độ cao cảm biến ($h$)** | **2 mức**: $0.85\text{m}$ (Tầm gầm robot) và $1.25\text{m}$ (Tầm thắt lưng/ngực) | Kiểm tra góc nhìn ngước lên và góc nhìn ngang. |
 
-$$\text{Ray}_i(t) = C + t \cdot \frac{P_i - C}{\|P_i - C\|}, \quad t \in [0, \|P_i - C\|]$$
+> Đối với các ca động học ($N_5, D_6$) hoặc bẫy mật độ ($N_6, D_7$), bổ sung thêm 2-4 frame chuyển động đặc thù (tiếp cận, né ngang, rẽ cua) $\implies$ **Trung bình 18 frames/ca $\times$ 83 ca = ~1,494 frames**.
 
-Sử dụng hàm `intersect_ray` từ `PhysicsDirectSpaceState3D` với mặt nạ va chạm (**Collision Mask**):
-- **Collision Layer 1**: Tường, cột, sàn, trần, cửa phòng khám (`Room_Static`).
-- **Collision Layer 2**: Đạo cụ y tế, bàn, ghế, quầy lễ tân, kiosk, xe đẩy (`Medical_Props`).
-- **Collision Layer 3**: Thực thể người khác trong cảnh (`Other_NPCs`).
-- **Collision Layer 4**: Bản thân NPC đang xét (`Target_NPC`).
+---
+
+## 3. PHÂN LOẠI 83 CA KIỂM THỬ HỢP NHẤT THÀNH 8 PHÂN HỆ LÂM SÀNG
+
+Toàn bộ các kịch bản của Dataset 1 (C01 - C48) và Dataset 2 (N1.1 - N6.5) được gom vào 8 phân hệ chuẩn:
+
+| Mã Nhóm | Tên Phân Hệ Lâm Sàng Hợp Nhất | Số Ca | Số Frames Dự Kiến | Trọng Tâm Đánh Giá |
+| :---: | :--- | :---: | :---: | :--- |
+| **`U1_Camouflage`** | Ngụy trang & Tương phản thấp (Blouse trắng, Scrub xanh, Áo hoa) | 10 ca | ~180 frames | Độ nhạy khi độ lệch màu $\Delta E < 12.0$. |
+| **`U2_ClinicalPoses`** | Tư thế khám bệnh & Ngồi ghế (Cúi gập, ho, ngồi ghế băng, đọc bệnh án) | 12 ca | ~216 frames | Vỡ tỷ lệ aspect ratio khi không đứng thẳng. |
+| **`U3_MedicalProps`** | Che khuất bởi đạo cụ y tế (Xe monitor, Kiosk, Xe cáng, Bàn khám, Quầy lễ tân) | 14 ca | ~252 frames | Raycast bóc tách phần nhìn thấy thực tế. |
+| **`U4_WheelchairBed`** | Phương tiện hỗ trợ di chuyển (Xe lăn các góc $0^\circ, 45^\circ, 90^\circ$, Cáng cấp cứu) | 8 ca | ~144 frames | Nhận diện phức hợp người + phương tiện. |
+| **`U5_Kinematics`** | Động học di chuyển & Rẽ ngoặt (Tuần tra đối đầu, Né ngang, Ló từ góc cua) | 8 ca | ~160 frames | Vận tốc tiếp cận cao và vệt mờ chuyển động. |
+| **`U6_CrowdSocial`** | Mật độ đám đông & Tương tác xã hội (Hàng chờ, Dìu bước, Nhóm thảo luận) | 9 ca | ~162 frames | Bóc tách đối tượng che khuất trục sâu Z và NMS. |
+| **`U7_ExtremeOptics`** | Điều kiện quang học cực đoan (Ngược sáng sảnh, bóng đổ sàn, cắt mép FOV) | 12 ca | ~216 frames | Hiện tượng lóa sáng, phản xạ gương và rìa thấu kính. |
+| **`U8_EmptyTraps`** | Bẫy đạo cụ rỗng & Standee 2D (Standee bác sĩ, Kiosk rỗng, Xe cáng rỗng) | 10 ca | ~180 frames | Đo lường tỷ lệ báo động giả (False Positive Rate). |
+| **TỔNG CỘNG** | **8 Phân Hệ Hợp Nhất Toàn Diện** | **83 ca** | **~1,510 frames** | **Bao quát 100% kịch bản của cả 2 bộ cũ** |
+
+---
+
+## 4. CÔNG NGHỆ GÁN NHÃN MỚI: LƯỚI TIA DÒ VẬT LÝ ĐA ĐIỂM (MULTI-RAYCAST 128 TIA)
+
+Để giải quyết triệt để lỗi "vẽ hộp xuyên tường" và "dính đạo cụ", bộ generator mới `unified_dataset_generator.gd` sẽ tích hợp hệ thống dò tia thời gian thực:
 
 ```gdscript
-# Mã giả giải thuật Raycast kiểm tra che khuất trong Godot 4
-var space_state: PhysicsDirectSpaceState3D = get_world_3d().direct_space_state
-var visible_2d_points: Array[Vector2] = []
-var total_valid_rays: int = 0
-var visible_rays: int = 0
+# Kiến trúc Raycast Grid trong Godot 4
+func _compute_visibility_aware_bbox(actor_node: Node3D, props_node: Node3D) -> Dictionary:
+    var space_state = get_world_3d().direct_space_state
+    var visible_screen_pts: Array[Vector2] = []
+    var total_sampled_rays: int = 0
+    var unoccluded_rays: int = 0
 
-for pt_world in sample_keypoints_world:
-    if robot_camera.is_position_behind(pt_world):
-        continue
-    total_valid_rays += 1
+    # Lấy 128 điểm bề mặt từ khung xương nhân trắc học của NPC
+    var surface_points_3d: PackedVector3Array = _get_actor_surface_mesh_points(actor_node)
     
-    var query = PhysicsRayQueryParameters3D.create(
-        robot_camera.global_position, 
-        pt_world, 
-        collision_mask_environment_and_props
-    )
-    var result = space_state.intersect_ray(query)
+    for pt in surface_points_3d:
+        if robot_camera.is_position_behind(pt):
+            continue
+        total_sampled_rays += 1
+        
+        # Bắn tia từ Camera đến điểm lấy mẫu trên thân người
+        var query = PhysicsRayQueryParameters3D.create(
+            robot_camera.global_position, 
+            pt,
+            COLLISION_MASK_WALLS_AND_PROPS # Lớp va chạm tường và đạo cụ
+        )
+        var hit = space_state.intersect_ray(query)
+        
+        # Nếu tia KHÔNG bị tường hoặc đạo cụ chặn trước khi chạm vào người
+        if hit.is_empty() or hit.collider == actor_node:
+            unoccluded_rays += 1
+            visible_screen_pts.append(robot_camera.unproject_position(pt))
+
+    var true_vis_ratio = float(unoccluded_rays) / float(max(total_sampled_rays, 1))
     
-    # Nếu tia đi thẳng đến điểm lấy mẫu mà không bị vật cản chặn
-    if result.is_empty() or result.collider == target_npc_body:
-        visible_rays += 1
-        var uv: Vector2 = robot_camera.unproject_position(pt_world)
-        visible_2d_points.append(uv)
+    # QUY TẮC AN TOÀN CHUẨN COCO:
+    # Nếu bị che khuất > 80% (chỉ còn < 20% tia nhìn thấy) -> Bỏ qua nhãn đánh giá
+    if true_vis_ratio < 0.20 or visible_screen_pts.size() < 4:
+        return {"valid": false, "ignore_eval": true, "reason": "HEAVY_OCCLUSION_OVER_80PCT"}
+        
+    # Tính Visible Bounding Box ôm sát các điểm THỰC SỰ NHÌN THẤY
+    var x_coords = visible_screen_pts.map(func(p): return p.x)
+    var y_coords = visible_screen_pts.map(func(p): return p.y)
+    var x1 = clampf(x_coords.min(), 0, capture_resolution.x)
+    var y1 = clampf(y_coords.min(), 0, capture_resolution.y)
+    var x2 = clampf(x_coords.max(), 0, capture_resolution.x)
+    var y2 = clampf(y_coords.max(), 0, capture_resolution.y)
+    
+    return {
+        "valid": true,
+        "bbox_visible": [x1, y1, x2, y2],
+        "true_visibility_ratio": true_vis_ratio,
+        "is_occluded": (true_vis_ratio < 0.70)
+    }
 ```
-
-### 2.3. Tính Toán Tỷ Lệ Nhìn Thấy Thực Tế (True Visibility Ratio $V$)
-
-$$V = \frac{N_{\text{visible}}}{N_{\text{total}}}$$
-
-- **Trường hợp $V \ge 0.50$ (Rõ ràng)**: Xuất hộp bao chuẩn, đưa vào tập đánh giá chính.
-- **Trường hợp $0.20 \le V < 0.50$ (Che khuất một phần - Partial Occlusion)**: Xuất Visible Bounding Box ôm sát phần cơ thể lộ ra ngoài, gán cờ `partially_occluded: true`.
-- **Trường hợp $V < 0.20$ (Che khuất cực nặng - Heavy Occlusion / Nấp sau tường)**: Gán cờ `ignore_eval: true` trong file metadata JSONL; **loại bỏ khỏi file nhãn `.txt` của YOLO** để không làm mô hình bị phạt oan khi mắt camera không thể thu nhận thông tin quang học.
 
 ---
 
-## 3. QUY CHUẨN HỘP BAO KÉP (VISIBLE BOX VS FULL BODY BOX) & CHUẨN COCO / CROWDHUMAN
+## 5. QUY CHUẨN HỘP BAO KÉP (VISIBLE BOX CHO YOLO VS FULL BODY CHO SLAM)
 
-Để dữ liệu phục vụ tốt cho cả mô hình nhận diện 2D (YOLO) và mô hình bám vết 3D/SLAM, mỗi nhãn trong `annotations.jsonl` sẽ lưu trữ song song **2 loại hộp bao**:
-
-```text
-┌─────────────────────────────────────────────────────────┐
-│                                                         │
-│        [Đỉnh Đầu]                                       │
-│      ┌────────────┐                                     │
-│      │   MẶT      │ ───► BẮT ĐẦU VÙNG NHÌN THẤY (VISIBLE)│
-│      │   NGỰC     │                                     │
-│  ════╪════════════╪═══════════════════════════════════  │
-│  ████│████████████│████ MẶT BÀN KHÁM / XE MONITOR       │
-│  ████│████████████│████ (VẬT CẢN CHE KHUẤT)             │
-│  ████│████████████│████                                 │
-│  ────┴────────────┴────                                 │
-│       [Bàn Chân]    ───► ĐÁY HỘP BAO TOÀN THÂN (FULL)   │
-│                                                         │
-└─────────────────────────────────────────────────────────┘
-```
-
-1. **Visible Bounding Box (`bbox_visible_xyxy`)**:
-   - Được tính bằng `[min_x, min_y, max_x, max_y]` của **chỉ những điểm tia Raycast nhìn thấy được**.
-   - Khi điều dưỡng đứng sau xe monitor: Hộp bao chỉ ôm phần đầu và vai (từ đỉnh đầu đến mép khay monitor).
-   - **Đây là hộp bao được xuất ra file nhãn `.txt` chuẩn YOLO** $\Rightarrow$ Giúp mô hình YOLO đạt IoU cao khi phát hiện phần cơ thể lộ diện.
-2. **Full Body Bounding Box (`bbox_full_xyxy`)**:
-   - Được tính bằng hình chiếu toàn bộ khung xương 3D của nhân vật (kể cả phần bị che).
-   - Dùng để phục vụ các thuật toán ước lượng vị trí bàn chân trên mặt sàn (*Foot-on-Ground Contact Estimation*) và tính khoảng cách phục vụ tránh va chạm SLAM.
+File metadata `annotations.jsonl` mới sẽ lưu trữ song song:
+1. **`bbox_visible`**: Hộp bao phần cơ thể lộ ra ngoài thấu kính $\implies$ Xuất ra file `.txt` cho mô hình YOLO 2D để tránh trượt IoU.
+2. **`bbox_full`**: Hộp bao toàn bộ khung xương 3D $\implies$ Phục vụ ước tính cự ly gầm sàn cho SLAM / Navigation.
+3. **`props_ground_truths`**: Gán nhãn bounding box riêng biệt cho xe lăn, xe cáng, xe monitor, kiosk để AI nhận dạng đúng đồ vật, không bị tính lỗi False Positive.
 
 ---
 
-## 4. MỞ RỘNG KHÔNG GIAN NHÃN: PHÂN LOẠI ĐA LỚP THỰC THỂ LÂM SÀNG (MULTI-CLASS TAXONOMY)
+## 6. LỘ TRÌNH TRIỂN KHAI 5 BƯỚC KỸ THUẬT
 
-Thay vì chỉ có nhãn `Class 0: person`, hệ thống mới sẽ chuẩn hóa bộ nhãn thành **6 lớp thực thể lâm sàng độc lập**, giải quyết triệt để vấn đề "báo động giả nhầm đạo cụ thành người":
-
-| Class ID | Tên Lớp (Category) | Đối Tượng Lâm Sàng Bao Gồm | Quy Chuẩn Gán Nhãn |
+| Bước | Nhiệm Vụ Cụ Thể | Công Cụ & Tệp Tin | Đầu Ra Nghiệm Thu |
 | :---: | :--- | :--- | :--- |
-| **`0`** | **`person`** | Bác sĩ, y tá, bệnh nhân, người nhà (đang đứng, ngồi, đi, cúi) | Hộp bao `bbox_visible` ôm sát cơ thể thật; loại bỏ nếu $V < 0.20$. |
-| **`1`** | **`wheelchair`** | Xe lăn đẩy tay y tế (có người ngồi hoặc xe rỗng) | Hộp bao ôm trọn khung xe kim loại, bánh xe lớn và bàn để chân. |
-| **`2`** | **`hospital_bed`** | Giường bệnh nội trú, xe cáng cấp cứu có nệm | Hộp bao ôm trọn khung cáng, nệm và thanh chắn đầu giường. |
-| **`3`** | **`medical_cart`** | Xe tiêm thuốc inox, xe đẩy máy monitor sinh hiệu | Hộp bao ôm trọn thân xe, màn hình monitor và bánh xe nhỏ. |
-| **`4`** | **`kiosk_dispenser`** | Cột kiosk bấm số tự động, cây nước nóng lạnh | Hộp bao ôm khối chữ nhật đứng của kiosk / cây nước. |
-| **`5`** | **`standee_poster`** | Bảng Standee 2D in hình bác sĩ, poster dán tường | Hộp bao ôm tấm bạt in hình phẳng 2D (Đánh dấu nhãn riêng). |
-
-> [!IMPORTANT]
-> **Tác dụng đột phá của việc gán nhãn Đạo cụ**:
-> - Trong các ca bẫy đạo cụ rỗng ($D_8$ và $N_4$), khi AI nhìn thấy xe monitor rỗng, thay vì đánh giá là **Báo động giả nhầm người (False Positive)**, hệ thống sẽ nhận diện chính xác đây là lớp `medical_cart` $\Rightarrow$ Robot chuyển sang hành vi né tránh đồ vật thay vì bối rối phanh gấp vì tưởng là con người!
-> - Tỷ lệ FPR trên phòng rỗng sẽ giảm từ **$88\%$ xuống dưới $5\%$**!
+| **B1** | Xây dựng Scene & Script Generator hợp nhất trong Godot | `sim_vision/godot/scripts/unified_dataset_generator.gd`<br>`scenes/hospital_vision_bench_unified.tscn` | Script hỗ trợ dò tia Raycast 128 tia và ngân sách 16-18 frames/ca. |
+| **B2** | Render bộ dữ liệu mới `vision_eval_unified` | Offscreen batch run trên Godot Engine 4.7 | ~1,500 frames ảnh JPEG + labels `.txt` + `annotations.jsonl`. |
+| **B3** | Chạy script hậu kiểm tự động (Quality Gate) | `scripts/validate_dataset_labels.py` | Kiểm toán 100% nhãn: Không còn hộp bao xuyên tường, không còn dính đạo cụ. |
+| **B4** | Chạy lại Benchmark đánh giá 4 mô hình AI | `sim_vision/python/eval_vision_models.py` | Báo cáo hiệu năng mới: F1, Recall, Precision, FPR chuẩn xác thực tế. |
+| **B5** | Xóa sổ hoàn toàn 2 bộ dữ liệu cũ & dọn dẹp | `rm -rf sim_vision/data/vision_eval_1200`<br>`rm -rf sim_vision/data/vision_eval_extended_10800` | Giải phóng 710 MB dung lượng đĩa và làm sạch cấu trúc repo. |
 
 ---
 
-## 5. LỘ TRÌNH TRIỂN KHAI 4 GIAI ĐOẠN (IMPLEMENTATION ROADMAP)
+## 7. KẾ HOẠCH XÓA SỔ (SUNSET & DEPRECATION) 2 BỘ DỮ LIỆU CŨ
 
-```mermaid
-flowchart LR
-    P1["Giai Đoạn 1:<br>Nâng Cấp Engine Godot<br>(Raycast Grid & Multi-Class)"] --> P2["Giai Đoạn 2:<br>Render Bộ Dữ Liệu Mới<br>(12,000 Frames Sạch)"]
-    P2 --> P3["Giai Đoạn 3:<br>Hậu Kiểm Tự Động<br>(Quality Gate Script)"]
-    P3 --> P4["Giai Đoạn 4:<br>Benchmark Đối Soát<br>(Trước vs Sau Rebuild)"]
-
-    style P1 fill:#e3f2fd,stroke:#1565c0,stroke-width:2px
-    style P2 fill:#fff3e0,stroke:#e65100,stroke-width:2px
-    style P3 fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
-    style P4 fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px
-```
-
-### Giai Đoạn 1: Tái Cấu Trúc Mã Nguồn Godot (Thời gian ước tính: 1 - 2 ngày)
-1. **Chỉnh sửa collision shapes**: Thêm `StaticBody3D` và gán collision layer cho toàn bộ các model đạo cụ (`props/`) và nhân vật (`scenes/props/npc_*.tscn`).
-2. **Nâng cấp `extended_dataset_generator.gd`**:
-   - Viết hàm `_compute_actor_ground_truth_raycast()` thay thế hàm cũ.
-   - Bổ sung hàm dò tia cho đạo cụ để xuất đồng thời nhãn các class 1, 2, 3, 4, 5.
-3. **Thêm chế độ Debug Render Visualizer**:
-   - Khi chạy ở chế độ debug, vẽ tia raycast màu xanh/đỏ và hiển thị hộp bao trực tiếp lên viewport để kiểm tra bằng mắt trong thời gian thực.
-
-### Giai Đoạn 2: Tái Kết Xuất Dữ Liệu Siêu Sạch (Offscreen Render Batch)
-1. Chạy render lại **1,200 frames** cho Dataset 1 Baseline (sửa các ca $C_{20}, C_{30}, C_{07}-C_{10}$).
-2. Chạy render lại **10,800 frames** cho Dataset 2 Clinical (sửa dứt điểm $N_{3.1}-N_{3.7}, N_{5.1}-N_{5.4}, N_{6.1}-N_{6.5}, N_{4.1}-N_{4.8}$).
-3. Xuất file `annotations.jsonl` có đầy đủ thông tin:
-   - `bbox_visible_xyxy` (Cho YOLO)
-   - `bbox_full_xyxy` (Cho 3D Tracking)
-   - `true_visibility_ratio`
-   - `is_occluded`, `occluded_by`
-   - `ignore_eval`
-
-### Giai Đoạn 3: Hàng Rào Hậu Kiểm Tự Động Bằng Python (`scripts/validate_dataset_labels.py`)
-1. Quét $100\%$ các file `.txt` nhãn và ảnh tương ứng:
-   - Phát hiện hộp bao bất thường ($W < 8\text{px}$, $H < 8\text{px}$, hoặc diện tích $A < 100\text{px}^2$).
-   - Phát hiện tọa độ vượt ngoài $[0, 1]$.
-   - Đối chiếu với ảnh mask phân đoạn: Xác nhận trong hộp bao có ít nhất $20\%$ pixel mang màu sắc/gradient của con người.
-2. Tự động sinh báo cáo kiểm toán nhãn `dataset_quality_audit_report.json`.
-
-### Giai Đoạn 4: Đánh Giá Lại Benchmark & Đo Đạc Độ Cải Thiện
-1. Chạy lại benchmark trên cả 4 mô hình: `YOLOv8n`, `YOLO11n`, `YOLO26n`, `OpenVINO`.
-2. Lập bảng so sánh đối đầu **Trước vs Sau khi chuẩn hóa nhãn**:
-   - Chỉ số **Precision**: Dự kiến tăng từ $25\% \to 82\%$ (do không còn nhầm đạo cụ).
-   - Chỉ số **Recall**: Dự kiến tăng từ $45\% \to 78\%$ (do Visible Box khớp với dự đoán của mô hình, không bị trượt IoU).
-   - Chỉ số **FPR bẫy rỗng**: Dự kiến giảm từ $88\% \to < 8\%$.
-
----
-
-## 6. HỆ THỐNG HẬU KIỂM TỰ ĐỘNG & HÀNG RÀO CHẤT LƯỢNG (QUALITY GATE PIPELINE)
-
-Để đảm bảo không bao giờ tái diễn tình trạng nhãn lỗi, một script Python tự động [scripts/validate_dataset_labels.py](file:///home/bush/Projects/Data-Science-Major-Project/scripts/validate_dataset_labels.py) sẽ được tích hợp vào pipeline kiểm thử CI:
-
-```python
-# Tiêu chí chặn lỗi tự động (Quality Gate Rules):
-# Rule 1: Zero-Area Box Detection
-assert bw > 0.01 and bh > 0.01, "Error: Degenerate bounding box"
-
-# Rule 2: Boundary Overflow Detection
-assert 0.0 <= cx - bw/2 and cx + bw/2 <= 1.0, "Error: Box out of bounds"
-
-# Rule 3: Visual Presence Check (HSV / Edge Density Check)
-crop = image[y1:y2, x1:x2]
-edge_density = cv2.Canny(crop, 50, 150).mean()
-assert edge_density > 5.0, "Error: Box points to flat background / empty wall"
-
-# Rule 4: Aspect Ratio Plausibility Check (cho người đứng)
-if subcategory == "standing":
-    assert 1.0 <= (bh / bw) <= 5.5, f"Warning: Unrealistic aspect ratio {bh/bw:.2f}"
-```
-
----
-
-## 7. CÁC QUYẾT ĐỊNH KIẾN TRÚC CẦN THỐNG NHẤT
-
-Trước khi kích hoạt quy trình thực thi mã nguồn, cần bạn xác nhận 3 quyết định kỹ thuật trọng tâm:
-
-1. **Quyết định về Định Dạng Nhãn Cho Mô Hình AI (YOLO)**:
-   - **Lựa chọn A (Khuyến nghị)**: File nhãn `.txt` của YOLO **chỉ chứa `bbox_visible`** (phần nhìn thấy thực tế). Nếu người bị che $>80\%$, không ghi dòng nào vào file `.txt` (bỏ qua).
-   - **Lựa chọn B**: File nhãn `.txt` vẫn ghi `bbox_full` (toàn bộ cơ thể), nhưng chấp nhận giảm ngưỡng IoU đánh giá xuống $\text{IoU} \ge 0.30$.
-2. **Quyết định về Số Lượng Lớp Đối Tượng (Class Taxonomy)**:
-   - **Lựa chọn A (Khuyến nghị)**: Xuất đầy đủ 6 lớp (`person`, `wheelchair`, `hospital_bed`, `medical_cart`, `kiosk_dispenser`, `standee_poster`). Giúp mô hình sau này có thể fine-tune nhận diện cả chướng ngại vật y tế.
-   - **Lựa chọn B**: Giữ nguyên duy nhất 1 lớp `person`, nhưng gắn nhãn rỗng (0-byte `.txt`) cho toàn bộ các bẫy đạo cụ rỗng và các trường hợp người bị che khuất $>80\%$.
-3. **Quy Mô Tái Render**:
-   - Tái render toàn bộ **12,000 frames** (Dataset 1: 1,200 frames + Dataset 2: 10,800 frames) hay ưu tiên xử lý trước **55 ca kiểm thử lỗi / nghi vấn** để nghiệm thu nhanh?
+1. **Giai đoạn an toàn (Safety Gate)**:
+   - Bộ dữ liệu mới `sim_vision/data/vision_eval_unified/` sẽ được sinh ra và kiểm tra tính toàn vẹn độc lập.
+   - Chỉ khi script `scripts/validate_dataset_labels.py` xác nhận đạt $100\%$ điểm chuẩn chất lượng thì lệnh xóa 2 bộ cũ mới được kích hoạt.
+2. **Dọn dẹp triệt để**:
+   - Xóa `sim_vision/data/vision_eval_1200/` (91 MB).
+   - Xóa `sim_vision/data/vision_eval_extended_10800/` (619 MB).
+   - Cập nhật toàn bộ các file báo cáo và script dẫn đường trong `docs/` trỏ về duy nhất `vision_eval_unified/`.

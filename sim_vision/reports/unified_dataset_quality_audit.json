@@ -1,0 +1,23 @@
+{
+  "status": "PASSED_QUALITY_GATE",
+  "total_frames": 1494,
+  "total_boxes": 1273,
+  "empty_frames": 390,
+  "out_of_bounds_errors": 0,
+  "invalid_format_errors": 0,
+  "visibility_breakdown": {
+    "clear": 629,
+    "partial": 516,
+    "heavy": 128
+  },
+  "group_boxes": {
+    "U1": 180,
+    "U2": 216,
+    "U3": 116,
+    "U4": 144,
+    "U5": 70,
+    "U6": 331,
+    "U7": 216,
+    "U8": 0
+  }
+}

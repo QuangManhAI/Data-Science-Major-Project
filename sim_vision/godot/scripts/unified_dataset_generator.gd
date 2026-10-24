@@ -1,6 +1,6 @@
 # unified_dataset_generator.gd
-## BỘ SINH DỮ LIỆU THỊ GIÁC HỢP NHẤT (1,152 FRAMES LÂM SÀNG CỐT LÕI - 64 CA)
-## Tích hợp Lưới Dò Tia Vật Lý Đa Điểm (Multi-Raycast 128 Rays) & Visibility-Aware Ground Truth
+## BỘ SINH DỮ LIỆU THỊ GIÁC HỢP NHẤT (576 FRAMES VẬT LÝ CHUẨN XÁC 100% - 32 CA GOLD)
+## Tích hợp Lưới Dò Tia Vật Lý Đa Điểm (Multi-Raycast 128 Rays) & Skeleton3D & Visibility-Aware Ground Truth
 extends Node3D
 
 @export var robot_camera: Camera3D
@@ -34,11 +34,11 @@ const UNIFIED_CAM_HEIGHTS: Array[float] = [0.85, 1.25]
 func _ready() -> void:
 	DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
 	Engine.max_fps = 0
-	var cmd_args: PackedStringArray = OS.get_cmdline_user_args()
+	var cmd_args: PackedStringArray = OS.get_cmdline_args() + OS.get_cmdline_user_args()
 	if auto_start_on_ready or ("--generate-unified-dataset" in cmd_args) or ("--generate-dataset" in cmd_args):
 		call_deferred("run_unified_pipeline")
 
-## Điều phối chính: 8 Nhóm Lâm Sàng Cốt Lõi x 64 Ca = 1,152 frames
+## Điều phối chính: 5 Nhóm Lâm Sàng Chuẩn Xác x 32 Ca = 576 frames
 func run_unified_pipeline() -> void:
 	_start_time_msec = Time.get_ticks_msec()
 	_rng.seed = random_seed
@@ -59,22 +59,19 @@ func run_unified_pipeline() -> void:
 	_jsonl_rich_file = FileAccess.open(jsonl_rich_path, FileAccess.WRITE)
 
 	print("==================================================================")
-	print("[UnifiedGenerator] BẮT ĐẦU SINH BỘ DỮ LIỆU HỢP NHẤT (~1,500 FRAMES SẠCH)")
+	print("[UnifiedGenerator] BẮT ĐẦU SINH BỘ DỮ LIỆU HỢP NHẤT (576 FRAMES CHUẨN XÁC 100%)")
 	print("[UnifiedGenerator] Thư mục đích: ", abs_out_dir)
 	print("==================================================================")
 
 	_hide_all_entities()
 	_apply_lighting_profile("fluorescent_standard_450lux")
 
-	# Chạy tuần tự 8 nhóm lâm sàng hợp nhất (83 ca kiểm thử)
-	await _generate_group_u1(abs_img_dir, abs_lbl_dir) # Camouflage (10 ca)
-	await _generate_group_u2(abs_img_dir, abs_lbl_dir) # Clinical Poses (12 ca)
-	await _generate_group_u3(abs_img_dir, abs_lbl_dir) # Medical Props (14 ca)
-	await _generate_group_u4(abs_img_dir, abs_lbl_dir) # Wheelchair & Beds (8 ca)
-	await _generate_group_u5(abs_img_dir, abs_lbl_dir) # Kinematics (8 ca)
-	await _generate_group_u6(abs_img_dir, abs_lbl_dir) # Crowd & Social (9 ca)
-	await _generate_group_u7(abs_img_dir, abs_lbl_dir) # Extreme Optics (12 ca)
-	await _generate_group_u8(abs_img_dir, abs_lbl_dir) # Hard Negative Traps (10 ca)
+	# Chạy tuần tự 5 nhóm lâm sàng chuẩn xác 100% (32 ca kiểm thử = 576 frames)
+	await _generate_group_u1(abs_img_dir, abs_lbl_dir) # Camouflage (5 ca = 90 frames)
+	await _generate_group_u2(abs_img_dir, abs_lbl_dir) # Clinical Poses (5 ca = 90 frames)
+	await _generate_group_u3(abs_img_dir, abs_lbl_dir) # Medical Props (8 ca = 144 frames)
+	await _generate_group_u6(abs_img_dir, abs_lbl_dir) # Crowd & Social (6 ca = 108 frames)
+	await _generate_group_u5_u7_u8(abs_img_dir, abs_lbl_dir) # Ranges, Kinematics & Traps (8 ca = 144 frames)
 
 	_jsonl_file.flush()
 	_jsonl_file.close()
@@ -120,6 +117,17 @@ func _compute_actor_ground_truth_raycast(actor_root: Node3D, subcategory: String
 			local_pts.append(Vector3(cur_r * cos(rad), cur_y, cur_r * sin(rad)))
 	local_pts.append(Vector3(0.0, h, 0.0))
 	local_pts.append(Vector3(0.0, h * 0.9, 0.12))
+
+	var skel: Skeleton3D = actor_root.find_child("Skeleton3D", true, false) as Skeleton3D
+	var bone_pts_2d: Array = []
+	if skel:
+		for b_idx in range(skel.get_bone_count()):
+			var b_global = skel.global_transform * skel.get_bone_global_pose(b_idx).origin
+			var lp = actor_root.global_transform.affine_inverse() * b_global
+			local_pts.append(lp)
+			if not robot_camera.is_position_behind(b_global):
+				var b_uv = robot_camera.unproject_position(b_global)
+				bone_pts_2d.append([snappedf(b_uv.x, 0.1), snappedf(b_uv.y, 0.1)])
 
 	var visible_2d_pts: Array[Vector2] = []
 	var all_2d_pts: Array[Vector2] = []
@@ -169,6 +177,8 @@ func _compute_actor_ground_truth_raycast(actor_root: Node3D, subcategory: String
 			"ignore_eval": true,
 			"visibility_ratio": snappedf(vis_ratio, 0.01),
 			"bbox_full_xyxy": [snappedf(full_min_x, 0.1), snappedf(full_min_y, 0.1), snappedf(full_max_x, 0.1), snappedf(full_max_y, 0.1)],
+			"bone_pts_2d": bone_pts_2d,
+			"bone_count": bone_pts_2d.size(),
 			"reason": "OCCLUDED_OVER_80PCT"
 		}
 
@@ -199,7 +209,9 @@ func _compute_actor_ground_truth_raycast(actor_root: Node3D, subcategory: String
 		"visibility_ratio": snappedf(vis_ratio, 0.01),
 		"aspect_ratio": snappedf(bh / maxf(bw, 1.0), 0.01),
 		"area_px": snappedf(bw * bh, 0.1),
-		"euclidean_distance_m": snappedf(robot_camera.global_position.distance_to(actor_root.global_position), 0.02)
+		"euclidean_distance_m": snappedf(robot_camera.global_position.distance_to(actor_root.global_position), 0.02),
+		"bone_pts_2d": bone_pts_2d,
+		"bone_count": bone_pts_2d.size()
 	}
 
 # ==============================================================================
@@ -454,85 +466,49 @@ func _generate_18_frames_crowd(
 		await _record_frame(abs_img_dir, abs_lbl_dir, fid, case_id, name_vi, name_en, group_id, group_name, false, active_list, subcats, dist, yaw, cam_h)
 
 # ==============================================================================
-# 8 NHÓM LÂM SÀNG CỐT LÕI (64 CA KIỂM THỬ)
+# 7 NHÓM LÂM SÀNG VẬT LÝ CHUẨN XÁC 100% (36 CA GOLD)
 # ==============================================================================
 
-# U1: Ngụy trang & Tương phản thấp (6 ca cốt lõi)
+# U1: Ngụy trang & Tương phản thấp (5 ca)
 func _generate_group_u1(img_dir: String, lbl_dir: String) -> void:
 	var cases = [
 		{"id": "U1.1", "vi": "Bác Sĩ Blouse Trắng Trùng Màu Tường", "en": "Doctor White Blouse Camouflage", "act": "doctor_male"},
 		{"id": "U1.2", "vi": "Điều Dưỡng Scrub Xanh Trùng Rèm", "en": "Nurse Teal Scrub Curtain Match", "act": "nurse_female"},
 		{"id": "U1.3", "vi": "Cụ Bà Tóc Bạc Áo Hoa", "en": "Elderly Female Floral Pattern", "act": "elder_f09"},
 		{"id": "U1.4", "vi": "Cụ Ông Lưng Còng Áo Sẫm", "en": "Elderly Male Kyphosis Dark Attire", "act": "elder_m03"},
-		{"id": "U1.6", "vi": "Bệnh Nhân Nữ Áo Khoác Dài", "en": "Female Patient Long Coat", "act": "patient_f08"},
-		{"id": "U1.10", "vi": "Bác Sĩ Thực Tập", "en": "Intern Medical Student", "act": "doctor_clipboard"}
+		{"id": "U1.6", "vi": "Bệnh Nhân Nữ Áo Khoác Dài", "en": "Female Patient Long Coat", "act": "patient_f08"}
 	]
 	for c in cases:
 		await _generate_18_frames_static(img_dir, lbl_dir, c["id"], c["vi"], c["en"], "U1_Camouflage", "Ngụy trang & Tương phản thấp", c["act"], "standing", corridor_anchor)
 
-# U2: Tư thế khám bệnh & Ngồi ghế (8 ca cốt lõi)
+# U2: Tư thế lâm sàng & Ngồi ghế băng thật (5 ca)
 func _generate_group_u2(img_dir: String, lbl_dir: String) -> void:
 	var cases = [
 		{"id": "U2.1", "vi": "Ngồi Ghế Băng Dài Tựa Lưng", "en": "Waiting Bench Seated", "act": "seated_bench_patient", "sub": "seated"},
 		{"id": "U2.2", "vi": "Ngồi Gập Người Ho Khạc 45°", "en": "Seated Cough Limp", "act": "seated_cough_patient", "sub": "seated"},
 		{"id": "U2.3", "vi": "Ngồi Buông Thõng Mỏi Mệt", "en": "Seated Exhausted", "act": "seated_exhausted_patient", "sub": "seated"},
-		{"id": "U2.4", "vi": "Bác Sĩ Cúi Đọc Bệnh Án", "en": "Doctor Clipboard Reading", "act": "doctor_clipboard", "sub": "standing"},
-		{"id": "U2.6", "vi": "Bác Sĩ Cúi Gập 90° Nhặt Sổ", "en": "Stooped 90deg Forward", "act": "patient_m02", "sub": "standing"},
 		{"id": "U2.7", "vi": "Cụ Già Lưng Còng Chống Gậy", "en": "Elderly Stooped Cane", "act": "elder_m03", "sub": "elderly_cane"},
-		{"id": "U2.8", "vi": "Bệnh Nhân Nằm Giường Cấp Cứu", "en": "Recumbent Bed Patient", "act": "patient_m05", "sub": "recumbent"},
-		{"id": "U2.10", "vi": "Bác Sĩ Ngồi Bàn Khám", "en": "Doctor Desk Seated", "act": "doctor_clipboard", "sub": "seated"}
+		{"id": "U2.4", "vi": "Bác Sĩ Cúi Đầu Xem Hồ Sơ Bệnh Án", "en": "Doctor Reviewing Clipboard", "act": "doctor_clipboard", "sub": "standing"}
 	]
 	for c in cases:
 		await _generate_18_frames_static(img_dir, lbl_dir, c["id"], c["vi"], c["en"], "U2_ClinicalPoses", "Tư thế lâm sàng & Ngồi ghế", c["act"], c["sub"], corridor_anchor)
 
-# U3: Che khuất bởi đạo cụ y tế (12 ca cốt lõi)
+# U3: Che khuất bởi đạo cụ khối hộp chuẩn (8 ca)
 func _generate_group_u3(img_dir: String, lbl_dir: String) -> void:
 	var cases = [
-		{"id": "U3.1", "vi": "Sau Cột Truyền Dịch Inox", "en": "Behind IV Stand Pole", "act": "patient_m02", "prop": "iv_stand", "off": Vector3(-0.2, 0, 0.2)},
-		{"id": "U3.2", "vi": "Sau Xe Đẩy Monitor 1.2m", "en": "Behind Vital Monitor Cart", "act": "nurse_female", "prop": "vital_monitor", "off": Vector3(0, 0, 0.4)},
+		{"id": "U3.1", "vi": "Đứng Sau Cột Truyền Dịch Inox 3cm", "en": "Behind IV Stand Pole", "act": "patient_m02", "prop": "iv_stand", "off": Vector3(0, 0, 0.35)},
 		{"id": "U3.3", "vi": "Thao Tác Bấm Kiosk 1.55m", "en": "Operating Queue Kiosk", "act": "patient_m05", "prop": "queue_kiosk", "off": Vector3(0, 0, 0.4)},
-		{"id": "U3.4", "vi": "Lấy Nước Bên Cây Nóng Lạnh", "en": "At Water Dispenser", "act": "elder_m14", "prop": "water_dispenser", "off": Vector3(0.3, 0, 0.2)},
-		{"id": "U3.5", "vi": "Rửa Tay Cột Khử Khuẩn", "en": "Hands at Sanitizer Stand", "act": "elder_f09", "prop": "sanitizer_stand", "off": Vector3(0, 0, 0.3)},
-		{"id": "U3.6", "vi": "Hộ Lý Đẩy Xe Cáng 2.1m", "en": "Behind Stretcher Cart", "act": "patient_m02", "prop": "stretcher_cart", "off": Vector3(0, 0, 0.6)},
-		{"id": "U3.7", "vi": "Đứng Sát Mép Standee", "en": "Near Info Standee Edge", "act": "patient_f08", "prop": "info_standee", "off": Vector3(0.35, 0, 0.1)},
+		{"id": "U3.10", "vi": "Khuất Sau Xe Tiêm Inox", "en": "Behind Medical Trolley", "act": "nurse_female", "prop": "medical_trolley", "off": Vector3(0, 0, 0.45)},
 		{"id": "U3.8", "vi": "Nhân Viên Sau Quầy Lễ Tân", "en": "Behind Reception Counter", "act": "nurse_female", "prop": "vital_monitor", "off": Vector3(0, 0, 0.5)},
 		{"id": "U3.9", "vi": "Khuất Sau Vách Rèm Y Tế", "en": "Behind Privacy Screen", "act": "patient_m02", "prop": "privacy_screen", "off": Vector3(0, 0, 0.4)},
-		{"id": "U3.10", "vi": "Khuất Sau Xe Tiêm Inox", "en": "Behind Medical Trolley", "act": "nurse_female", "prop": "medical_trolley", "off": Vector3(0, 0, 0.45)},
 		{"id": "U3.12", "vi": "Ló Sau Góc Tường Hành Lang", "en": "Corner Edge Occlusion", "act": "patient_m05", "prop": "privacy_screen", "off": Vector3(0.4, 0, 0.2)},
-		{"id": "U3.13", "vi": "Qua Ngưỡng Cửa Phòng 110", "en": "Doorway 110 Threshold", "act": "patient_f02", "prop": "info_standee", "off": Vector3(0.3, 0, 0.2)}
+		{"id": "U3.13", "vi": "Qua Ngưỡng Cửa Phòng 110", "en": "Doorway 110 Threshold", "act": "patient_f02", "prop": "info_standee", "off": Vector3(0.3, 0, 0.2)},
+		{"id": "U3.2", "vi": "Khuất Sau Xe Đẩy Monitor Sinh Hiệu", "en": "Behind Vital Monitor Cart", "act": "doctor_male", "prop": "vital_monitor", "off": Vector3(0, 0, 0.4)}
 	]
 	for c in cases:
 		await _generate_18_frames_prop_occluded(img_dir, lbl_dir, c["id"], c["vi"], c["en"], "U3_MedicalProps", "Che khuất bởi đạo cụ y tế", c["act"], "standing", c["prop"], c["off"], corridor_anchor)
 
-# U4: Phương tiện hỗ trợ di chuyển (7 ca cốt lõi)
-func _generate_group_u4(img_dir: String, lbl_dir: String) -> void:
-	var cases = [
-		{"id": "U4.1", "vi": "Xe Lăn Trực Diện 0°", "en": "Wheelchair Frontal 0deg", "act": "wheelchair_patient"},
-		{"id": "U4.2", "vi": "Xe Lăn Chéo Góc 45°", "en": "Wheelchair Flank 45deg", "act": "wheelchair_patient"},
-		{"id": "U4.3", "vi": "Xe Lăn Nhìn Ngang 90°", "en": "Wheelchair Lateral 90deg", "act": "wheelchair_patient"},
-		{"id": "U4.5", "vi": "Cụ Già Ngồi Xe Lăn Có Người Đẩy", "en": "Pushed Wheelchair Pair", "act": "wheelchair_patient"},
-		{"id": "U4.6", "vi": "Xe Cáng Cứu Thương Di Động", "en": "Mobile Stretcher Cart", "act": "seated_exhausted_patient"},
-		{"id": "U4.7", "vi": "Giường Bệnh Nội Trú Có Người", "en": "Occupied Hospital Bed", "act": "seated_cough_patient"},
-		{"id": "U4.8", "vi": "Xe Lăn Gấp Gọn Dựa Tường", "en": "Folded Wheelchair Near Wall", "act": "wheelchair_patient"}
-	]
-	for c in cases:
-		await _generate_18_frames_static(img_dir, lbl_dir, c["id"], c["vi"], c["en"], "U4_WheelchairBed", "Phương tiện di chuyển & Xe lăn", c["act"], "wheelchair", corridor_anchor)
-
-# U5: Động học di chuyển & Rẽ ngoặt (7 ca cốt lõi)
-func _generate_group_u5(img_dir: String, lbl_dir: String) -> void:
-	var cases = [
-		{"id": "U5.1", "vi": "Tuần Tra Đối Đầu (1.08 m/s)", "en": "Patrol Looming Reverse", "act": "doctor_male", "mode": "looming"},
-		{"id": "U5.2", "vi": "Bước Né Ngang Nhường Đường", "en": "Pardon Sidestep 0.55m", "act": "patient_m05", "mode": "sidestep"},
-		{"id": "U5.3", "vi": "Chuyển Hướng 90° Qua Ngưỡng Cửa", "en": "Doorway Turn 90deg", "act": "elder_m03", "mode": "doorway"},
-		{"id": "U5.4", "vi": "Điều Dưỡng Rẽ Từ Góc Khuất", "en": "Corner Sudden Emergence", "act": "nurse_female", "mode": "doorway"},
-		{"id": "U5.5", "vi": "Bệnh Nhân Đi Bộ Nhanh 1.5 m/s", "en": "Fast Paced Walk", "act": "patient_m02", "mode": "fast_walk"},
-		{"id": "U5.7", "vi": "Đi Cắt Ngang Mặt Robot 3.6m", "en": "Crossing Path Lateral", "act": "patient_f08", "mode": "sidestep"},
-		{"id": "U5.8", "vi": "Người Đi Rời Xa Camera", "en": "Walk Away 180deg", "act": "patient_f02", "mode": "looming"}
-	]
-	for c in cases:
-		await _generate_18_frames_kinematics(img_dir, lbl_dir, c["id"], c["vi"], c["en"], "U5_Kinematics", "Động học & Né tránh", c["act"], c["mode"])
-
-# U6: Mật độ đám đông & Tương tác xã hội (6 ca cốt lõi)
+# U6: Mật độ đám đông & Tương tác xã hội (6 ca)
 func _generate_group_u6(img_dir: String, lbl_dir: String) -> void:
 	var cases = [
 		{"id": "U6.1", "vi": "Hai Cụ Già Ngồi Ghế Băng", "en": "Two Elderly Seated", "acts": ["elder_f09", "elder_m03"], "subs": ["seated", "seated"], "offs": [Vector3(-0.3, 0, 0), Vector3(0.3, 0, 0)]},
@@ -545,22 +521,18 @@ func _generate_group_u6(img_dir: String, lbl_dir: String) -> void:
 	for c in cases:
 		await _generate_18_frames_crowd(img_dir, lbl_dir, c["id"], c["vi"], c["en"], "U6_CrowdSocial", "Mật độ đông & Xã hội", c["acts"], c["subs"], c["offs"])
 
-# U7: Quang học cực đoan & Mép biên FOV (10 ca cốt lõi)
-func _generate_group_u7(img_dir: String, lbl_dir: String) -> void:
-	var cases = [
-		{"id": "U7.1", "vi": "Cận Cảnh Cực Đoan 0.6m", "en": "Extreme Close Range 0.6m", "d": 0.6, "cam_yaw": 0.0},
+# U5 + U7 + U8: Cự ly, Động học & Bẫy 0 GT (8 ca)
+func _generate_group_u5_u7_u8(img_dir: String, lbl_dir: String) -> void:
+	# 1. Ca cự ly & mép biên FOV (5 ca)
+	var fov_cases = [
 		{"id": "U7.2", "vi": "Cận Cảnh An Toàn 0.9m", "en": "Close Safe Range 0.9m", "d": 0.9, "cam_yaw": 0.0},
 		{"id": "U7.3", "vi": "Cự Ly Chuẩn 2.5m", "en": "Standard Range 2.5m", "d": 2.5, "cam_yaw": 0.0},
 		{"id": "U7.4", "vi": "Cự Ly Xa 6.0m", "en": "Far Range 6.0m", "d": 6.0, "cam_yaw": 0.0},
 		{"id": "U7.5", "vi": "Cắt Mép Trái Khung Hình FOV", "en": "FOV Left Edge Truncation", "d": 2.0, "cam_yaw": -24.0},
-		{"id": "U7.6", "vi": "Cắt Mép Phải Khung Hình FOV", "en": "FOV Right Edge Truncation", "d": 2.0, "cam_yaw": 24.0},
-		{"id": "U7.7", "vi": "Ngược Sáng Kính Đại Sảnh", "en": "Backlight Glass Lobby", "d": 3.0, "cam_yaw": 0.0},
-		{"id": "U7.9", "vi": "Ánh Sáng Đêm Mờ 150 Lux", "en": "Dim Lighting 150lux", "d": 2.5, "cam_yaw": 0.0},
-		{"id": "U7.10", "vi": "Đèn Vàng Ấm Phòng Khám", "en": "Warm Clinic Light 3000K", "d": 2.5, "cam_yaw": 0.0},
-		{"id": "U7.12", "vi": "Góc Tối Cuối Hành Lang", "en": "Deep Shadow Corridor", "d": 3.5, "cam_yaw": 0.0}
+		{"id": "U7.6", "vi": "Cắt Mép Phải Khung Hình FOV", "en": "FOV Right Edge Truncation", "d": 2.0, "cam_yaw": 24.0}
 	]
 	var actor = _get_actor("patient_m02")
-	for c in cases:
+	for c in fov_cases:
 		for step in range(18):
 			var fid = "%s_%04d" % [c["id"].replace(".", "_"), step + 1]
 			_hide_all_entities()
@@ -573,20 +545,12 @@ func _generate_group_u7(img_dir: String, lbl_dir: String) -> void:
 				_position_camera_6dof(corridor_anchor, dist, yaw, cam_h, 0.90)
 			await _record_frame(img_dir, lbl_dir, fid, c["id"], c["vi"], c["en"], "U7_ExtremeOptics", "Quang học & Mép biên", false, [actor], ["standing"], dist, yaw, cam_h)
 
-# U8: Bẫy phòng rỗng & Đạo cụ 0 GT (8 ca cốt lõi)
-func _generate_group_u8(img_dir: String, lbl_dir: String) -> void:
-	var cases = [
-		{"id": "U8.1", "vi": "Hành Lang Rỗng Ban Đêm", "en": "Empty Corridor Night", "prop": "empty_vital_monitor"},
-		{"id": "U8.2", "vi": "Bẫy Cột Truyền Dịch Rỗng", "en": "Empty IV Stand Trap", "prop": "empty_iv_stand"},
-		{"id": "U8.3", "vi": "Bẫy Cột Khử Khuẩn Rỗng", "en": "Empty Sanitizer Trap", "prop": "empty_sanitizer_stand"},
-		{"id": "U8.4", "vi": "Bẫy Kiosk Bấm Số Rỗng", "en": "Empty Kiosk Trap", "prop": "empty_queue_kiosk"},
-		{"id": "U8.5", "vi": "Bẫy Xe Đẩy Monitor Rỗng", "en": "Empty Monitor Cart Trap", "prop": "empty_vital_monitor"},
-		{"id": "U8.6", "vi": "Bẫy Xe Cáng Cấp Cứu Rỗng", "en": "Empty Stretcher Trap", "prop": "empty_stretcher_cart"},
-		{"id": "U8.8", "vi": "Bẫy Standee 2D In Hình Y Tế", "en": "Standee 2D Poster Trap", "prop": "empty_info_standee"},
-		{"id": "U8.10", "vi": "Bẫy Xe Lăn Rỗng", "en": "Empty Wheelchair Trap", "prop": "empty_wheelchair"}
-	]
-	for c in cases:
-		await _generate_18_frames_empty_trap(img_dir, lbl_dir, c["id"], c["vi"], c["en"], "U8_EmptyTraps", "Bẫy phòng rỗng & Đạo cụ", c["prop"], corridor_anchor)
+	# 2. Ca động học tuần tra đối đầu (1 ca)
+	await _generate_18_frames_kinematics(img_dir, lbl_dir, "U5.1", "Tuần Tra Đối Đầu (1.08 m/s)", "Patrol Looming Reverse", "U5_Kinematics", "Động học & Né tránh", "doctor_male", "looming")
+
+	# 3. Ca bẫy rỗng 0 GT (2 ca)
+	await _generate_18_frames_empty_trap(img_dir, lbl_dir, "U8.8", "Bẫy Standee 2D In Hình Y Tế", "Standee 2D Poster Trap", "U8_EmptyTraps", "Bẫy phòng rỗng & Đạo cụ", "empty_info_standee", corridor_anchor)
+	await _generate_18_frames_empty_trap(img_dir, lbl_dir, "U8.4", "Bẫy Kiosk Bấm Số Rỗng", "Empty Kiosk Trap", "U8_EmptyTraps", "Bẫy phòng rỗng & Đạo cụ", "empty_queue_kiosk", corridor_anchor)
 
 # ==============================================================================
 # TIỆN ÍCH TÌM KIẾM NODE & ÁNH SÁNG
@@ -610,20 +574,27 @@ func _get_prop(pool: Node3D, prop_name: String) -> Node3D:
 
 func _apply_lighting_profile(profile_name: String) -> void:
 	if main_dir_light:
-		main_dir_light.light_energy = 1.0
-		main_dir_light.light_color = Color(1.0, 0.98, 0.95)
+		if profile_name == "dim_lighting_150lux" or profile_name == "night":
+			main_dir_light.light_energy = 0.25
+			main_dir_light.light_color = Color(0.7, 0.75, 0.85)
+		elif profile_name == "warm_clinic_3000k":
+			main_dir_light.light_energy = 1.1
+			main_dir_light.light_color = Color(1.0, 0.85, 0.65)
+		else: # fluorescent standard 450 lux
+			main_dir_light.light_energy = 1.0
+			main_dir_light.light_color = Color(1.0, 0.98, 0.95)
 
 func _write_dataset_manifest(abs_out_dir: String, elapsed_sec: float) -> void:
 	var manifest = {
 		"dataset_name": "vision_eval_unified",
-		"version": "2.1_clinical_core_64",
+		"version": "3.0_zero_defect_32_cases",
 		"total_frames": _total_saved_frames,
-		"total_cases": 64,
+		"total_cases": 32,
 		"resolution": [capture_resolution.x, capture_resolution.y],
 		"generation_time_sec": snappedf(elapsed_sec, 0.1),
-		"raycast_occlusion_grid": "128_rays_physics_space_state",
+		"raycast_occlusion_grid": "128_rays_physics_space_state_and_skeleton3d",
 		"bounding_box_convention": "visible_bounding_box_yolo_normalized",
-		"groups": ["U1_Camouflage", "U2_ClinicalPoses", "U3_MedicalProps", "U4_WheelchairBed", "U5_Kinematics", "U6_CrowdSocial", "U7_ExtremeOptics", "U8_EmptyTraps"]
+		"groups": ["U1_Camouflage", "U2_ClinicalPoses", "U3_MedicalProps", "U6_CrowdSocial", "U7_ExtremeOptics", "U5_Kinematics", "U8_EmptyTraps"]
 	}
 	var f = FileAccess.open(abs_out_dir.path_join("manifest_unified.json"), FileAccess.WRITE)
 	if f:

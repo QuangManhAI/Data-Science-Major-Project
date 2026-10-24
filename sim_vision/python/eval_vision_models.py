@@ -79,12 +79,12 @@ def evaluate_model(
     }
 
     # Khởi tạo thống kê theo từng slice động từ dữ liệu
-    unique_slices = sorted(list({rec.get("group_name") or rec.get("slice", "unknown") for rec in records}))
+    unique_slices = sorted(list({rec.get("group_id") or rec.get("group_name") or rec.get("slice", "unknown") for rec in records}))
     for s in unique_slices:
         stats["slice_metrics"][s] = {"tp": 0, "fn": 0, "fp": 0, "frames": 0}
 
     for rec in records:
-        slice_name = rec.get("group_name") or rec.get("slice", "unknown")
+        slice_name = rec.get("group_id") or rec.get("group_name") or rec.get("slice", "unknown")
         if slice_name in stats["slice_metrics"]:
             stats["slice_metrics"][slice_name]["frames"] += 1
 
@@ -319,6 +319,13 @@ def main() -> None:
             "Hard_Negatives_And_Traps": "N4: Bẫy đạo cụ y tế rỗng (Standee 2D, Cột IV rỗng, Cáng trống)",
             "Kinematics_And_Dynamic_Avoidance": "N5: Động học & Né ngang Pardon Sidestep 0.55m",
             "Crowd_Density_And_Social_Disentanglement": "N6: Mật độ xã hội & Phân rã đối tượng kề sát (Cụ già ngồi kề, Hàng chờ)",
+            "U1_Camouflage": "Nhóm 1: Ngụy trang & Tương phản thấp (Blouse trắng, Scrub xanh, Cụ già áo hoa)",
+            "U2_ClinicalPoses": "Nhóm 2: Tư thế lâm sàng khó (Ngồi ghế băng, Ho gập 45°, Buông thõng, Chống gậy)",
+            "U3_MedicalProps": "Nhóm 3: Che khuất bởi đạo cụ y tế (Cột IV 3cm, Kiosk, Quầy lễ tân, Rèm, Xe tiêm)",
+            "U5_Kinematics": "Nhóm 5a: Động học & Tuần tra đối đầu (Tiến lại gần 5.5m -> 1.0m)",
+            "U6_CrowdSocial": "Nhóm 4: Mật độ đám đông & Dính chùm (Hai cụ già ghế băng, Hàng chờ Kiosk, Cụm 4 người)",
+            "U7_ExtremeOptics": "Nhóm 5b: Cự ly biên & Cắt mép FOV (0.9m, 2.5m, 6.0m, Mép trái/phải FOV)",
+            "U8_EmptyTraps": "Nhóm 5c: Bẫy đạo cụ rỗng (0 GT) (Standee 2D in hình bác sĩ, Kiosk rỗng)",
         }
 
         # Bảng ma trận đối chứng trực diện giữa các models

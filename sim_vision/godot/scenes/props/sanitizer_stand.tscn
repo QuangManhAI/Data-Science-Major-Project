@@ -38,7 +38,7 @@ material = SubResource("mat_sign_green")
 size = Vector3(0.24, 0.18, 0.02)
 
 [sub_resource type="BoxShape3D" id="shape_stand"]
-size = Vector3(0.38, 1.42, 0.38)
+size = Vector3(0.18, 1.42, 0.16)
 
 [node name="SanitizerStand" type="StaticBody3D"]
 

@@ -34,8 +34,9 @@ size = Vector3(0.32, 0.018, 0.018)
 material = SubResource("mat_bag_saline")
 size = Vector3(0.09, 0.19, 0.045)
 
-[sub_resource type="BoxShape3D" id="shape_iv"]
-size = Vector3(0.44, 1.75, 0.44)
+[sub_resource type="CylinderShape3D" id="shape_iv"]
+radius = 0.025
+height = 1.7
 
 [node name="IVStand" type="StaticBody3D"]
 

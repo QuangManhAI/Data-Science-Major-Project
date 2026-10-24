@@ -96,7 +96,8 @@ def run_zero_defect_pipeline():
         phys_gts = rec.get("ground_truth_annotations", [])
 
         for phys in phys_gts:
-            if phys.get("ignore_eval", False) or phys.get("visibility_ratio", 1.0) < 0.20:
+            vis_ratio = float(phys.get("visibility_ratio", 1.0))
+            if vis_ratio < 0.05 and phys.get("ignore_eval", False):
                 total_ignored_occluded += 1
                 continue
 

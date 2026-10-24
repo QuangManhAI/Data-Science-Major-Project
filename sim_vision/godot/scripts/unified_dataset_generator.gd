@@ -34,9 +34,34 @@ const UNIFIED_CAM_HEIGHTS: Array[float] = [0.85, 1.25]
 func _ready() -> void:
 	DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
 	Engine.max_fps = 0
+	_clean_ambient_room_npcs()
 	var cmd_args: PackedStringArray = OS.get_cmdline_args() + OS.get_cmdline_user_args()
 	if auto_start_on_ready or ("--generate-unified-dataset" in cmd_args) or ("--generate-dataset" in cmd_args):
 		call_deferred("run_unified_pipeline")
+
+func _clean_ambient_room_npcs() -> void:
+	var furn = get_node_or_null("../Room/Furniture")
+	if furn == null and get_parent() != null:
+		furn = get_parent().find_child("Furniture", true, false)
+	if furn:
+		for child in furn.get_children():
+			var cname = child.name
+			if cname.begins_with("MedicalStaff") or cname.begins_with("WaitingPatient") or (child is HospitalNpc):
+				child.visible = false
+				child.set_physics_process(false)
+				child.set_process(false)
+				child.global_position = Vector3(0, -9999, 0)
+				child.queue_free()
+		print("[UnifiedGenerator] ĐÃ DỌN DẸP TRIỆT ĐỂ TOÀN BỘ NPC VÃNG LAI TRONG ROOM/FURNITURE!")
+	if actors_pool:
+		for child in actors_pool.get_children():
+			if child is Node3D:
+				child.set_physics_process(false)
+				child.set_process(false)
+				if "walks" in child:
+					child.walks = false
+				if "pardon_enabled" in child:
+					child.pardon_enabled = false
 
 ## Điều phối chính: 5 Nhóm Lâm Sàng Chuẩn Xác x 32 Ca = 576 frames
 func run_unified_pipeline() -> void:
@@ -170,16 +195,16 @@ func _compute_actor_ground_truth_raycast(actor_root: Node3D, subcategory: String
 	var full_max_x = clampf(all_x[all_x.size() - 1], 0.0, vp_size.x)
 	var full_max_y = clampf(all_y[all_y.size() - 1], 0.0, vp_size.y)
 
-	# BỊ CHE KHUẤT > 80% HOẶC KHÔNG CÓ ĐIỂM NHÌN THẤY -> IGNORE EVAL!
-	if vis_ratio < 0.20 or visible_2d_pts.size() < 4:
+	# BỊ CHE KHUẤT HOÀN TOÀN (0 điểm nhìn thấy)
+	if visible_2d_pts.is_empty() or unoccluded_count == 0:
 		return {
 			"valid": false,
 			"ignore_eval": true,
-			"visibility_ratio": snappedf(vis_ratio, 0.01),
+			"visibility_ratio": 0.0,
 			"bbox_full_xyxy": [snappedf(full_min_x, 0.1), snappedf(full_min_y, 0.1), snappedf(full_max_x, 0.1), snappedf(full_max_y, 0.1)],
 			"bone_pts_2d": bone_pts_2d,
 			"bone_count": bone_pts_2d.size(),
-			"reason": "OCCLUDED_OVER_80PCT"
+			"reason": "OCCLUDED_COMPLETELY_100PCT"
 		}
 
 	var vis_x: Array = []
@@ -195,7 +220,7 @@ func _compute_actor_ground_truth_raycast(actor_root: Node3D, subcategory: String
 
 	var bw = vis_max_x - vis_min_x
 	var bh = vis_max_y - vis_min_y
-	if bw < 6.0 or bh < 6.0:
+	if bw < 4.0 or bh < 4.0:
 		return {"valid": false, "reason": "TOO_SMALL"}
 
 	return {
@@ -218,21 +243,38 @@ func _compute_actor_ground_truth_raycast(actor_root: Node3D, subcategory: String
 # QUẢN LÝ THỰC THỂ & LƯU KHUNG HÌNH
 # ==============================================================================
 func _hide_all_entities() -> void:
+	var furn = get_node_or_null("../Room/Furniture")
+	if furn == null and get_parent() != null:
+		furn = get_parent().find_child("Furniture", true, false)
+	if furn:
+		for child in furn.get_children():
+			var cname = child.name
+			if cname.begins_with("MedicalStaff") or cname.begins_with("WaitingPatient") or (child is HospitalNpc):
+				child.visible = false
+				child.set_physics_process(false)
+				child.set_process(false)
+				child.global_position = Vector3(0, -9999, 0)
 	if actors_pool:
 		for child in actors_pool.get_children():
 			if child is Node3D:
 				child.visible = false
-				child.global_position = Vector3(0, -500, 0)
+				child.set_physics_process(false)
+				child.set_process(false)
+				if "walks" in child:
+					child.walks = false
+				if "pardon_enabled" in child:
+					child.pardon_enabled = false
+				child.global_position = Vector3(0, -9999, 0)
 	if obstacle_props:
 		for child in obstacle_props.get_children():
 			if child is Node3D:
 				child.visible = false
-				child.global_position = Vector3(0, -500, 0)
+				child.global_position = Vector3(0, -9999, 0)
 	if hard_negatives_pool:
 		for child in hard_negatives_pool.get_children():
 			if child is Node3D:
 				child.visible = false
-				child.global_position = Vector3(0, -500, 0)
+				child.global_position = Vector3(0, -9999, 0)
 
 func _position_camera_6dof(anchor: Vector3, dist: float, yaw_deg: float, cam_h: float, look_h: float) -> void:
 	if robot_camera == null: return
@@ -328,6 +370,10 @@ func _generate_18_frames_static(
 				_hide_all_entities()
 				if actor:
 					actor.visible = true
+					actor.set_physics_process(false)
+					actor.set_process(false)
+					if "walks" in actor: actor.walks = false
+					if "pardon_enabled" in actor: actor.pardon_enabled = false
 					actor.global_position = anchor
 					_position_camera_6dof(anchor, dist, yaw, cam_h, look_h)
 				await _record_frame(abs_img_dir, abs_lbl_dir, fid, case_id, name_vi, name_en, group_id, group_name, false, [actor], [subcat], dist, yaw, cam_h)
@@ -339,6 +385,10 @@ func _generate_18_frames_static(
 		_hide_all_entities()
 		if actor:
 			actor.visible = true
+			actor.set_physics_process(false)
+			actor.set_process(false)
+			if "walks" in actor: actor.walks = false
+			if "pardon_enabled" in actor: actor.pardon_enabled = false
 			actor.global_position = anchor
 			_position_camera_6dof(anchor, dist, 0.0, 1.15, look_h)
 		await _record_frame(abs_img_dir, abs_lbl_dir, fid, case_id, name_vi, name_en, group_id, group_name, false, [actor], [subcat], dist, 0.0, 1.15)
@@ -362,6 +412,10 @@ func _generate_18_frames_prop_occluded(
 				_hide_all_entities()
 				if actor and prop:
 					actor.visible = true; prop.visible = true
+					actor.set_physics_process(false)
+					actor.set_process(false)
+					if "walks" in actor: actor.walks = false
+					if "pardon_enabled" in actor: actor.pardon_enabled = false
 					actor.global_position = anchor
 					prop.global_position = anchor + prop_offset
 					_position_camera_6dof(anchor, dist, yaw, cam_h, look_h)
@@ -373,6 +427,10 @@ func _generate_18_frames_prop_occluded(
 		_hide_all_entities()
 		if actor and prop:
 			actor.visible = true; prop.visible = true
+			actor.set_physics_process(false)
+			actor.set_process(false)
+			if "walks" in actor: actor.walks = false
+			if "pardon_enabled" in actor: actor.pardon_enabled = false
 			actor.global_position = anchor
 			prop.global_position = anchor + prop_offset
 			_position_camera_6dof(anchor, dist, 0.0, 1.15, look_h)
@@ -421,25 +479,23 @@ func _generate_18_frames_kinematics(
 		var t = float(step) / 17.0
 		var fid = "%s_%04d" % [case_id.replace(".", "_"), step + 1]
 		_hide_all_entities()
-		var pos = corridor_anchor
-		var dist = 3.0
 
-		if mode == "looming": # Tuần tra đối đầu (tiến lại gần)
-			pos = corridor_anchor + Vector3(0.0, 0.0, lerpf(5.5, 1.0, t))
-			dist = 2.0
-		elif mode == "sidestep": # Né ngang 0.55m
-			var lat = sin(t * PI) * 0.55
-			pos = corridor_anchor + Vector3(lat, 0.0, lerpf(3.0, 1.5, t))
-		elif mode == "doorway": # Ló ra từ cửa 90 deg
-			pos = clinic_door_anchor + Vector3(lerpf(-0.6, 0.8, t), 0.0, 0.0)
-		elif mode == "fast_walk": # Đi nhanh
-			pos = corridor_anchor + Vector3(0.0, 0.0, lerpf(6.0, 1.0, t))
+		# Robot Camera cố định tại (0, 1.15, 2.0) nhìn dọc hành lang về (0, 0.90, 0.0)
+		_position_camera_6dof(corridor_anchor, 2.0, 0.0, 1.15, 0.90)
+
+		# Bác sĩ tuần tra đối đầu tiếp cận trực diện từ 4.5m đến 1.0m trước camera
+		var dist_ahead = lerpf(4.5, 1.0, t)
+		var pos = Vector3(0.0, 0.0, 2.0 - dist_ahead)
 
 		if actor:
 			actor.visible = true
+			actor.set_physics_process(false)
+			actor.set_process(false)
+			if "walks" in actor:
+				actor.walks = false
 			actor.global_position = pos
-			_position_camera_6dof(corridor_anchor, dist, 0.0, 1.15, 0.90)
-		await _record_frame(abs_img_dir, abs_lbl_dir, fid, case_id, name_vi, name_en, group_id, group_name, false, [actor], ["standing"], dist, 0.0, 1.15)
+			actor.rotation = Vector3(0, 0, 0)
+		await _record_frame(abs_img_dir, abs_lbl_dir, fid, case_id, name_vi, name_en, group_id, group_name, false, [actor], ["standing"], dist_ahead, 0.0, 1.15)
 
 func _generate_18_frames_crowd(
 	abs_img_dir: String, abs_lbl_dir: String,
@@ -459,6 +515,10 @@ func _generate_18_frames_crowd(
 			var a = _get_actor(actors[i])
 			if a:
 				a.visible = true
+				a.set_physics_process(false)
+				a.set_process(false)
+				if "walks" in a: a.walks = false
+				if "pardon_enabled" in a: a.pardon_enabled = false
 				a.global_position = corridor_anchor + offsets[i]
 				active_list.append(a)
 
@@ -497,13 +557,13 @@ func _generate_group_u2(img_dir: String, lbl_dir: String) -> void:
 func _generate_group_u3(img_dir: String, lbl_dir: String) -> void:
 	var cases = [
 		{"id": "U3.1", "vi": "Đứng Sau Cột Truyền Dịch Inox 3cm", "en": "Behind IV Stand Pole", "act": "patient_m02", "prop": "iv_stand", "off": Vector3(0, 0, 0.35)},
-		{"id": "U3.3", "vi": "Thao Tác Bấm Kiosk 1.55m", "en": "Operating Queue Kiosk", "act": "patient_m05", "prop": "queue_kiosk", "off": Vector3(0, 0, 0.4)},
-		{"id": "U3.10", "vi": "Khuất Sau Xe Tiêm Inox", "en": "Behind Medical Trolley", "act": "nurse_female", "prop": "medical_trolley", "off": Vector3(0, 0, 0.45)},
-		{"id": "U3.8", "vi": "Nhân Viên Sau Quầy Lễ Tân", "en": "Behind Reception Counter", "act": "nurse_female", "prop": "vital_monitor", "off": Vector3(0, 0, 0.5)},
-		{"id": "U3.9", "vi": "Khuất Sau Vách Rèm Y Tế", "en": "Behind Privacy Screen", "act": "patient_m02", "prop": "privacy_screen", "off": Vector3(0, 0, 0.4)},
-		{"id": "U3.12", "vi": "Ló Sau Góc Tường Hành Lang", "en": "Corner Edge Occlusion", "act": "patient_m05", "prop": "privacy_screen", "off": Vector3(0.4, 0, 0.2)},
-		{"id": "U3.13", "vi": "Qua Ngưỡng Cửa Phòng 110", "en": "Doorway 110 Threshold", "act": "patient_f02", "prop": "info_standee", "off": Vector3(0.3, 0, 0.2)},
-		{"id": "U3.2", "vi": "Khuất Sau Xe Đẩy Monitor Sinh Hiệu", "en": "Behind Vital Monitor Cart", "act": "doctor_male", "prop": "vital_monitor", "off": Vector3(0, 0, 0.4)}
+		{"id": "U3.3", "vi": "Thao Tác Bấm Kiosk 1.55m", "en": "Operating Queue Kiosk", "act": "patient_m05", "prop": "queue_kiosk", "off": Vector3(0.24, 0, 0.35)},
+		{"id": "U3.10", "vi": "Khuất Sau Xe Tiêm Inox", "en": "Behind Medical Trolley", "act": "nurse_female", "prop": "medical_trolley", "off": Vector3(0.18, 0, 0.40)},
+		{"id": "U3.8", "vi": "Nhân Viên Sau Quầy Lễ Tân", "en": "Behind Reception Counter", "act": "nurse_female", "prop": "vital_monitor", "off": Vector3(0.20, 0, 0.45)},
+		{"id": "U3.9", "vi": "Khuất Sau Vách Rèm Y Tế", "en": "Behind Privacy Screen", "act": "patient_m02", "prop": "privacy_screen", "off": Vector3(0.65, 0, 0.35)},
+		{"id": "U3.12", "vi": "Ló Sau Góc Tường Hành Lang", "en": "Corner Edge Occlusion", "act": "patient_m05", "prop": "privacy_screen", "off": Vector3(0.38, 0, 0.25)},
+		{"id": "U3.13", "vi": "Qua Ngưỡng Cửa Phòng 110", "en": "Doorway 110 Threshold", "act": "patient_f02", "prop": "info_standee", "off": Vector3(0.25, 0, 0.25)},
+		{"id": "U3.2", "vi": "Khuất Sau Xe Đẩy Monitor Sinh Hiệu", "en": "Behind Vital Monitor Cart", "act": "doctor_male", "prop": "vital_monitor", "off": Vector3(0.18, 0, 0.38)}
 	]
 	for c in cases:
 		await _generate_18_frames_prop_occluded(img_dir, lbl_dir, c["id"], c["vi"], c["en"], "U3_MedicalProps", "Che khuất bởi đạo cụ y tế", c["act"], "standing", c["prop"], c["off"], corridor_anchor)
@@ -541,6 +601,10 @@ func _generate_group_u5_u7_u8(img_dir: String, lbl_dir: String) -> void:
 			var cam_h = 0.85 if (step % 2 == 0) else 1.25
 			if actor:
 				actor.visible = true
+				actor.set_physics_process(false)
+				actor.set_process(false)
+				if "walks" in actor: actor.walks = false
+				if "pardon_enabled" in actor: actor.pardon_enabled = false
 				actor.global_position = corridor_anchor
 				_position_camera_6dof(corridor_anchor, dist, yaw, cam_h, 0.90)
 			await _record_frame(img_dir, lbl_dir, fid, c["id"], c["vi"], c["en"], "U7_ExtremeOptics", "Quang học & Mép biên", false, [actor], ["standing"], dist, yaw, cam_h)

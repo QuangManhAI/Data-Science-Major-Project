@@ -119,7 +119,7 @@ def evaluate_model(
         gts = [g for g in raw_gts if not g.get("ignore_eval", False)]
 
         # Lát cắt Hard Negatives (không có người thật)
-        is_hard_neg = rec.get("is_hard_negative", False) or slice_name in ("S5_Hard_Neg", "D8_Hard_Neg", "D8_Hard_Negatives", "Hard_Negatives_And_Traps") or len(gts) == 0
+        is_hard_neg = rec.get("is_hard_negative", False) or slice_name in ("U8_EmptyTraps", "S5_Hard_Neg", "D8_Hard_Neg", "D8_Hard_Negatives", "Hard_Negatives_And_Traps")
         if is_hard_neg:
             stats["total_hard_neg_frames"] += 1
             if len(preds_px) > 0:

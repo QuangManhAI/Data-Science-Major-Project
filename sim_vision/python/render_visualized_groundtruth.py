@@ -1,29 +1,59 @@
 #!/usr/bin/env python3
 """
 render_visualized_groundtruth.py
-Vẽ bounding box Ground Truth (xanh lá) cùng siêu dữ liệu trực quan lên toàn bộ ảnh
-để người dùng duyệt mắt chay (manual visual inspection).
+Vẽ song song Bounding Box Ground Truth (Xanh Lá) và Model Prediction (Xanh Dương/Cam)
+cùng siêu dữ liệu trực quan lên toàn bộ ảnh để người dùng đối chứng trực tiếp.
 """
 
 import os
+import sys
 import json
 import time
+import argparse
 from pathlib import Path
 import cv2
 import numpy as np
 import shutil
+from ultralytics import YOLO
 
-def render_groundtruth_visualizations():
+def compute_iou(boxA, boxB):
+    xA = max(boxA[0], boxB[0])
+    yA = max(boxA[1], boxB[1])
+    xB = min(boxA[2], boxB[2])
+    yB = min(boxA[3], boxB[3])
+    interW = max(0.0, xB - xA)
+    interH = max(0.0, yB - yA)
+    interArea = interW * interH
+    areaA = max(1.0, (boxA[2] - boxA[0]) * (boxA[3] - boxA[1]))
+    areaB = max(1.0, (boxB[2] - boxB[0]) * (boxB[3] - boxB[1]))
+    return interArea / float(areaA + areaB - interArea)
+
+def render_groundtruth_and_predictions(model_path: str = "yolo26n.pt", conf_thres: float = 0.25, iou_thres: float = 0.50):
     repo_root = Path(__file__).resolve().parent.parent.parent
     dataset_dir = repo_root / "sim_vision/data/vision_eval_unified"
     img_dir = dataset_dir / "images"
-    jsonl_file = dataset_dir / "annotations.jsonl"
+    jsonl_file = dataset_dir / "annotations_rich_5w1h.jsonl"
+    if not jsonl_file.exists():
+        jsonl_file = dataset_dir / "annotations.jsonl"
+
     out_vis_dir = repo_root / "sim_vision/data/vision_eval_groundtruth_visualized"
 
     # Reset output directory
     if out_vis_dir.exists():
         shutil.rmtree(out_vis_dir)
     out_vis_dir.mkdir(parents=True, exist_ok=True)
+
+    # Load Model (YOLO26n / specified)
+    model_file = Path(model_path)
+    if not model_file.is_absolute():
+        model_file = repo_root / model_path
+    
+    model_name_label = model_file.stem.upper()
+    print("==================================================================")
+    print(f"🤖 Đang nạp mô hình Object Detection: {model_file.name} ({model_name_label})...")
+    model = YOLO(str(model_file))
+    print(f"📁 Thư mục xuất ảnh trực quan: {out_vis_dir}")
+    print("==================================================================")
 
     # Load annotations
     annotations = {}
@@ -33,14 +63,16 @@ def render_groundtruth_visualizations():
                 data = json.loads(line)
                 annotations[data["frame_id"]] = data
 
-    print("==================================================================")
-    print(f"🎨 BẮT ĐẦU VẼ TRỰC QUAN HÓA GROUND TRUTH CHO {len(annotations)} FRAMES...")
-    print(f"📁 Thư mục đích: {out_vis_dir}")
-    print("==================================================================")
+    print(f"🎨 BẮT ĐẦU VẼ ĐỐI CHỨNG DUAL-BOX (GROUND TRUTH + {model_name_label}) CHO {len(annotations)} FRAMES...")
     t0 = time.time()
 
     rendered_count = 0
     group_counts = {}
+
+    total_gt_all = 0
+    total_tp_all = 0
+    total_fp_all = 0
+    total_fn_all = 0
 
     for fid, meta in annotations.items():
         img_p = img_dir / f"{fid}.jpg"
@@ -63,13 +95,71 @@ def render_groundtruth_visualizations():
 
         gts = meta.get("ground_truth_annotations", [])
 
-        # Header bar
-        cv2.rectangle(img, (0, 0), (w, 32), (25, 25, 25), -1)
-        title_text = f"[{cid}] {name_vi} | Frame: {fid}"
-        cv2.putText(img, title_text, (10, 22), cv2.FONT_HERSHEY_SIMPLEX, 0.52, (255, 255, 255), 1, cv2.LINE_AA)
+        # Run model inference on this image
+        res = model(str(img_p), conf=conf_thres, classes=[0], verbose=False)[0]
+        preds = []
+        for box in res.boxes:
+            b_coords = box.xyxy[0].cpu().numpy().tolist()
+            b_conf = float(box.conf[0].cpu().numpy())
+            preds.append({
+                "bbox": b_coords,
+                "conf": b_conf,
+                "matched_gt_idx": -1,
+                "matched_iou": 0.0
+            })
 
-        # Info bar at bottom
-        cv2.rectangle(img, (0, h - 26), (w, h), (25, 25, 25), -1)
+        # Match predictions with GT
+        gt_matched = [False] * len(gts)
+        matched_gt_ious = [0.0] * len(gts)
+
+        for p_idx, pred in enumerate(preds):
+            best_iou = 0.0
+            best_g_idx = -1
+            for g_idx, gt in enumerate(gts):
+                gt_box = gt.get("bbox_xyxy_px") or gt.get("bbox_xyxy", [])
+                if len(gt_box) < 4:
+                    continue
+                iou = compute_iou(gt_box, pred["bbox"])
+                if iou >= iou_thres and iou > best_iou:
+                    best_iou = iou
+                    best_g_idx = g_idx
+
+            if best_g_idx >= 0 and not gt_matched[best_g_idx]:
+                gt_matched[best_g_idx] = True
+                matched_gt_ious[best_g_idx] = best_iou
+                pred["matched_gt_idx"] = best_g_idx
+                pred["matched_iou"] = best_iou
+
+        tp_count = sum(1 for p in preds if p["matched_gt_idx"] >= 0)
+        fp_count = len(preds) - tp_count
+        fn_count = len(gts) - sum(gt_matched)
+
+        total_gt_all += len(gts)
+        total_tp_all += tp_count
+        total_fp_all += fp_count
+        total_fn_all += fn_count
+
+        # ==============================================================================
+        # DRAW TOP HUD HEADER
+        # ==============================================================================
+        cv2.rectangle(img, (0, 0), (w, 46), (20, 20, 20), -1)
+        # Line 1: Case Title
+        title_text = f"[{cid}] {name_vi} | Frame: {fid}"
+        cv2.putText(img, title_text, (8, 18), cv2.FONT_HERSHEY_SIMPLEX, 0.48, (255, 255, 255), 1, cv2.LINE_AA)
+
+        # Line 2: Legend & Stats bar
+        hud_legend = (
+            f"GT [GREEN]: {len(gts)}  |  "
+            f"{model_name_label} TP [CYAN]: {tp_count}  |  "
+            f"FP [RED]: {fp_count}  |  "
+            f"FN [MAGENTA]: {fn_count}"
+        )
+        cv2.putText(img, hud_legend, (8, 38), cv2.FONT_HERSHEY_SIMPLEX, 0.42, (180, 240, 255), 1, cv2.LINE_AA)
+
+        # ==============================================================================
+        # DRAW BOTTOM FOOTER
+        # ==============================================================================
+        cv2.rectangle(img, (0, h - 26), (w, h), (20, 20, 20), -1)
         ctx = meta.get("context", {})
         dist = ctx.get("distance_m", "?")
         yaw = ctx.get("cam_yaw_deg", "?")
@@ -78,49 +168,98 @@ def render_groundtruth_visualizations():
         yaw_str = f"{yaw:+.1f}deg" if isinstance(yaw, (int, float)) else str(yaw)
         cam_h_str = f"{cam_h:.2f}m" if isinstance(cam_h, (int, float)) else str(cam_h)
 
-        footer_text = f"Cam: d={dist_str}, yaw={yaw_str}, h={cam_h_str} | Verified GT: {len(gts)} person(s)"
-        cv2.putText(img, footer_text, (10, h - 8), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (200, 200, 200), 1, cv2.LINE_AA)
+        status_str = "MATCH (PERFECT)" if (tp_count == len(gts) and fp_count == 0) else ("MISSED / FN" if fn_count > 0 else "FALSE POSITIVE")
+        if is_hard_neg:
+            status_str = "PASS (0 FP)" if fp_count == 0 else "FAIL (FP TRIGGERED)"
 
-        if is_hard_neg or len(gts) == 0:
-            # Banner giữa ảnh cho ca 0 GT
-            banner_bg = (160, 60, 20) if is_hard_neg else (50, 50, 50)
-            banner_text = "GT: 0 PERSON (BAY DAO CU RONG / ZERO-GT HARD NEGATIVE)" if is_hard_neg else "GT: 0 PERSON (OCCLUDED > 80% / IGNORED)"
-            text_size = cv2.getTextSize(banner_text, cv2.FONT_HERSHEY_SIMPLEX, 0.52, 2)[0]
+        footer_text = f"Cam: d={dist_str}, yaw={yaw_str}, h={cam_h_str} | Status: {status_str} | Conf>={conf_thres:.2f}"
+        footer_color = (120, 255, 120) if "PASS" in status_str or "PERFECT" in status_str else (120, 160, 255)
+        cv2.putText(img, footer_text, (8, h - 8), cv2.FONT_HERSHEY_SIMPLEX, 0.43, footer_color, 1, cv2.LINE_AA)
+
+        # ==============================================================================
+        # CASE 0 GT / HARD NEGATIVE
+        # ==============================================================================
+        if is_hard_neg and len(gts) == 0:
+            if fp_count == 0:
+                banner_bg = (30, 100, 30)  # Green True Negative
+                banner_text = f"GT: 0 PERSON | {model_name_label}: 0 DETECTIONS [TRUE NEGATIVE PASS]"
+            else:
+                banner_bg = (20, 30, 180)  # Red Alert
+                banner_text = f"GT: 0 PERSON | {model_name_label}: {fp_count} FALSE POSITIVE DETECTED!"
+            
+            text_size = cv2.getTextSize(banner_text, cv2.FONT_HERSHEY_SIMPLEX, 0.46, 2)[0]
             cx, cy = w // 2, h // 2
-            bx1 = cx - text_size[0] // 2 - 12
-            by1 = cy - text_size[1] // 2 - 8
-            bx2 = cx + text_size[0] // 2 + 12
-            by2 = cy + text_size[1] // 2 + 8
+            bx1 = cx - text_size[0] // 2 - 10
+            by1 = cy - text_size[1] // 2 - 6
+            bx2 = cx + text_size[0] // 2 + 10
+            by2 = cy + text_size[1] // 2 + 6
             cv2.rectangle(img, (bx1, by1), (bx2, by2), banner_bg, -1)
             cv2.rectangle(img, (bx1, by1), (bx2, by2), (255, 255, 255), 1)
-            cv2.putText(img, banner_text, (bx1 + 12, by2 - 8), cv2.FONT_HERSHEY_SIMPLEX, 0.52, (255, 255, 255), 2, cv2.LINE_AA)
-        else:
-            # Vẽ các box Ground Truth
-            for idx, gt in enumerate(gts):
-                box = gt.get("bbox_xyxy_px") or gt.get("bbox_xyxy")
-                if not box or len(box) < 4:
-                    continue
-                x1, y1, x2, y2 = [int(round(v)) for v in box[:4]]
-                x1 = max(0, min(w - 1, x1))
-                y1 = max(0, min(h - 1, y1))
-                x2 = max(0, min(w - 1, x2))
-                y2 = max(0, min(h - 1, y2))
+            cv2.putText(img, banner_text, (bx1 + 10, by2 - 6), cv2.FONT_HERSHEY_SIMPLEX, 0.46, (255, 255, 255), 1, cv2.LINE_AA)
 
-                # Box viền xanh lá đậm (BGR: 0, 220, 0)
-                cv2.rectangle(img, (x1, y1), (x2, y2), (0, 220, 0), 2)
+        # ==============================================================================
+        # 1. DRAW GROUND TRUTH BOXES (THICK GREEN SOLID LINE)
+        # ==============================================================================
+        for g_idx, gt in enumerate(gts):
+            box = gt.get("bbox_xyxy_px") or gt.get("bbox_xyxy")
+            if not box or len(box) < 4:
+                continue
+            x1, y1, x2, y2 = [int(round(v)) for v in box[:4]]
+            x1 = max(0, min(w - 1, x1))
+            y1 = max(0, min(h - 1, y1))
+            x2 = max(0, min(w - 1, x2))
+            y2 = max(0, min(h - 1, y2))
 
-                # Tag nhãn
-                vis_ratio = gt.get("visibility_ratio", 1.0)
-                subcat = gt.get("subcategory", "person")
-                tag_str = f"#{idx+1} {subcat} (Vis:{int(vis_ratio*100)}%)"
-                (tw, th), _ = cv2.getTextSize(tag_str, cv2.FONT_HERSHEY_SIMPLEX, 0.42, 1)
+            is_hit = gt_matched[g_idx]
+            gt_color = (0, 230, 0) if is_hit else (180, 0, 255)  # Green if detected, Magenta if missed
 
-                ty1 = max(34, y1 - th - 6)
-                ty2 = ty1 + th + 6
-                tx2 = min(w, x1 + tw + 8)
+            # Box viền đậm
+            cv2.rectangle(img, (x1, y1), (x2, y2), gt_color, 2)
 
-                cv2.rectangle(img, (x1, ty1), (tx2, ty2), (0, 180, 0), -1)
-                cv2.putText(img, tag_str, (x1 + 4, ty2 - 4), cv2.FONT_HERSHEY_SIMPLEX, 0.42, (0, 0, 0), 1, cv2.LINE_AA)
+            # Tag nhãn GT ở phía trên bên trái box
+            vis_ratio = gt.get("visibility_ratio", 1.0)
+            subcat = gt.get("subcategory", "person")
+            match_status = f"MATCH IoU:{matched_gt_ious[g_idx]:.2f}" if is_hit else "MISSED (FN)"
+            tag_str = f"GT #{g_idx+1} {subcat} | {match_status}"
+            (tw, th), _ = cv2.getTextSize(tag_str, cv2.FONT_HERSHEY_SIMPLEX, 0.38, 1)
+
+            ty1 = max(48, y1 - th - 6)
+            ty2 = ty1 + th + 6
+            tx2 = min(w, x1 + tw + 6)
+
+            cv2.rectangle(img, (x1, ty1), (tx2, ty2), gt_color, -1)
+            cv2.putText(img, tag_str, (x1 + 3, ty2 - 4), cv2.FONT_HERSHEY_SIMPLEX, 0.38, (0, 0, 0), 1, cv2.LINE_AA)
+
+        # ==============================================================================
+        # 2. DRAW MODEL PREDICTIONS (CYAN IF MATCH, ORANGE/RED IF FP)
+        # ==============================================================================
+        for p_idx, pred in enumerate(preds):
+            b = pred["bbox"]
+            px1, py1, px2, py2 = [int(round(v)) for v in b]
+            px1 = max(0, min(w - 1, px1))
+            py1 = max(0, min(h - 1, py1))
+            px2 = max(0, min(w - 1, px2))
+            py2 = max(0, min(h - 1, py2))
+
+            is_tp = pred["matched_gt_idx"] >= 0
+            if is_tp:
+                pred_color = (255, 210, 0)  # Cyan/Sky Blue (BGR)
+                tag_label = f"{model_name_label}: {pred['conf']:.2f} (IoU:{pred['matched_iou']:.2f}) [TP]"
+            else:
+                pred_color = (0, 80, 255)  # Orange-Red (BGR)
+                tag_label = f"{model_name_label}: {pred['conf']:.2f} [FP]"
+
+            # Vẽ viền nét đứt hoặc viền mỏng 2px
+            cv2.rectangle(img, (px1, py1), (px2, py2), pred_color, 2)
+
+            # Tag nhãn Model ở phía dưới bên trái box (để không đè lên tag GT ở trên)
+            (ptw, pth), _ = cv2.getTextSize(tag_label, cv2.FONT_HERSHEY_SIMPLEX, 0.38, 1)
+            pty1 = min(h - 28, py2)
+            pty2 = pty1 + pth + 6
+            ptx2 = min(w, px1 + ptw + 6)
+
+            cv2.rectangle(img, (px1, pty1), (ptx2, pty2), pred_color, -1)
+            cv2.putText(img, tag_label, (px1 + 3, pty2 - 4), cv2.FONT_HERSHEY_SIMPLEX, 0.38, (0, 0, 0), 1, cv2.LINE_AA)
 
         # Lưu ảnh
         out_path = target_group_dir / f"{fid}.jpg"
@@ -129,14 +268,30 @@ def render_groundtruth_visualizations():
         group_counts[gid] = group_counts.get(gid, 0) + 1
 
         if rendered_count % 100 == 0 or rendered_count == len(annotations):
-            print(f"[Render] Đã xuất {rendered_count}/{len(annotations)} ảnh trực quan...")
+            print(f"[Render] Đã xuất {rendered_count}/{len(annotations)} ảnh đối chứng...")
 
     elapsed = time.time() - t0
+    overall_prec = total_tp_all / max(1, total_tp_all + total_fp_all)
+    overall_rec = total_tp_all / max(1, total_gt_all)
+
     print("==================================================================")
-    print(f"✅ HOÀN TẤT VẼ TRỰC QUAN HÓA {rendered_count} ẢNH TRONG {elapsed:.1f}s!")
+    print(f"✅ HOÀN TẤT VẼ ĐỐI CHỨNG DUAL-BOX {rendered_count} ẢNH TRONG {elapsed:.1f}s!")
+    print(f"📊 Thống kê sơ bộ với {model_name_label}:")
+    print(f"  • Tổng GT Boxes: {total_gt_all}")
+    print(f"  • True Positives (Khớp đúng): {total_tp_all} ({overall_rec:.2%})")
+    print(f"  • False Positives (Báo sai): {total_fp_all}")
+    print(f"  • False Negatives (Bỏ sót): {total_fn_all}")
+    print(f"  • Precision: {overall_prec:.2%} | Recall: {overall_rec:.2%}")
+    print("📁 Phân bổ theo thư mục lát cắt:")
     for gid, cnt in sorted(group_counts.items()):
         print(f"  • {gid}: {cnt} frames ({cnt // 18} ca)")
     print("==================================================================")
 
 if __name__ == "__main__":
-    render_groundtruth_visualizations()
+    parser = argparse.ArgumentParser(description="Render Ground Truth & Model Detections Visual Inspection")
+    parser.add_argument("--model", type=str, default="yolo26n.pt", help="Đường dẫn file trọng số model (mặc định: yolo26n.pt)")
+    parser.add_argument("--conf", type=float, default=0.25, help="Ngưỡng tin cậy confidence threshold (mặc định: 0.25)")
+    parser.add_argument("--iou", type=float, default=0.50, help="Ngưỡng IoU matching (mặc định: 0.50)")
+    args = parser.parse_args()
+
+    render_groundtruth_and_predictions(model_path=args.model, conf_thres=args.conf, iou_thres=args.iou)

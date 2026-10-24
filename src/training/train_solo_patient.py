@@ -1,12 +1,13 @@
-"""Dedicated 1000-Episode PPO Training Script for Solo Patient Hospital Environment.
+"""Dedicated PPO Training Script for Solo Patient Hospital Environment.
 
-Warm-starts from the converged 80-epoch checkpoint, enforces early stagnation
-termination (45s without completing a task), updates PPO policy every 5 episodes,
-and streams real-time single-line logs directly to the terminal.
+Trains robot to explore hospital corridors, find patients, engage them,
+and escort them to destinations with early stagnation cutoff and strict
+collision penalties. Supports training from scratch or warm-started weights.
 
 Usage:
-    python -m src.training.train_solo_1000ep
-    python -m src.training.train_solo_1000ep --resume-from experiments/runs/20261024_143453_PPOHospital-solo-1000ep
+    python -m src.training.train_solo_patient --episodes 30000 --no-warmstart
+    python -m src.training.train_solo_patient --episodes 5000
+    python -m src.training.train_solo_patient --resume-from experiments/runs/<run_dir> --episodes 30000
 """
 
 from __future__ import annotations
@@ -45,9 +46,9 @@ def format_eta(seconds: float) -> str:
     return f"{m:02d}m{s:02d}s"
 
 
-def run_train_solo_1000ep(
-    episodes: int = 1000,
-    warmstart_path: str | Path | None = DEFAULT_WARMSTART_PATH,
+def run_train_solo_patient(
+    episodes: int = 30000,
+    warmstart_path: str | Path | None = None,
     resume_from: str | Path | None = None,
     stagnation_timeout_s: float = 45.0,
     stagnation_penalty: float = -10.0,
@@ -96,7 +97,11 @@ def run_train_solo_1000ep(
             run_dir = r_path.parent.parent
         else:
             run_dir = r_path
-            ckpt_file = run_dir / "checkpoints" / "PPOHospital-solo-1000ep_last.pt"
+            ckpt_file = run_dir / "checkpoints" / "PPOHospital-solo_last.pt"
+            if not ckpt_file.exists():
+                ckpt_file = run_dir / "checkpoints" / "PPOHospital-solo-1000ep_last.pt"
+            if not ckpt_file.exists():
+                ckpt_file = run_dir / "checkpoints" / "PPOHospital-solo_best.pt"
             if not ckpt_file.exists():
                 ckpt_file = run_dir / "checkpoints" / "PPOHospital-solo-1000ep_best.pt"
 
@@ -105,11 +110,6 @@ def run_train_solo_1000ep(
         if "optimizer_state_dict" in ckpt:
             try:
                 optimizer.load_state_dict(ckpt["optimizer_state_dict"])
-            except Exception:
-                pass
-        if "scheduler_state_dict" in ckpt:
-            try:
-                scheduler.load_state_dict(ckpt["scheduler_state_dict"])
             except Exception:
                 pass
 
@@ -136,7 +136,7 @@ def run_train_solo_1000ep(
         print(f" Resumed Training    : Continuing from Ep {start_ep} (Best Roll20: {best_roll20:+.1f}, Peak: {peak_r_team:+.1f}) in {run_dir.name}", flush=True)
     else:
         timestamp = dt.datetime.now().strftime("%Y%m%d_%H%M%S")
-        run_dir = Path(experiments_root) / "runs" / f"{timestamp}_PPOHospital-solo-1000ep"
+        run_dir = Path(experiments_root) / "runs" / f"{timestamp}_PPOHospital-solo-patient"
         ckpt_dir = run_dir / "checkpoints"
         ckpt_dir.mkdir(parents=True, exist_ok=True)
         metrics_file = run_dir / "metrics.jsonl"
@@ -153,6 +153,8 @@ def run_train_solo_1000ep(
                 print(f" Warm-start Weights  : Loaded successfully from {w_path.name} (Val R_team: {checkpoint.get('best_val_acc', 'N/A')})", flush=True)
             else:
                 print(f" Warm-start Warning  : File not found at {w_path}. Starting from scratch.", flush=True)
+        else:
+            print(" Training Mode       : From Scratch (Random initialization)", flush=True)
 
     print("=" * 86, flush=True)
     print(f" PPO SOLO PATIENT TRAINING -- {episodes} EPISODES (Start Ep: {start_ep})", flush=True)
@@ -202,8 +204,9 @@ def run_train_solo_1000ep(
     completed_in_run = 0
 
     for ep in range(start_ep, episodes + 1):
-        # Linear BC decay from 0.10 to 0.0 over first 200 episodes
-        bc_weight = max(0.0, 0.10 * (1.0 - (ep - 1) / 200.0))
+        # Teacher guidance weight: if warm-start decaying over 200 eps; if scratch decaying over 500 eps
+        max_bc_eps = 200.0 if warmstart_loaded else 500.0
+        bc_weight = max(0.0, 0.15 * (1.0 - (ep - 1) / max_bc_eps))
 
         env = HospitalShiftEnv(
             curriculum_stage=1,
@@ -292,7 +295,7 @@ def run_train_solo_1000ep(
 
         # Real-time single line flush to terminal
         print(
-            f"[EP {ep:04d}/{episodes:04d}] Tasks: {tasks:2d} | "
+            f"[EP {ep:05d}/{episodes:05d}] Tasks: {tasks:2d} | "
             f"R_team: {r_team:+6.1f} | "
             f"Dur: {duration_s:5.1f}s ({steps:3d} stp) | "
             f"Exit: {exit_reason:<18} | "
@@ -337,7 +340,7 @@ def run_train_solo_1000ep(
             t_adv = torch.as_tensor(b_adv_arr, dtype=torch.float32, device=device)
             t_ret = torch.as_tensor(b_ret_arr, dtype=torch.float32, device=device)
 
-            # Safely normalize advantages across whole batch (unbiased=False avoids N-1=0 issues)
+            # Safely normalize advantages across whole batch
             adv_std = t_adv.std(unbiased=False)
             if adv_std > 1e-6:
                 t_adv = (t_adv - t_adv.mean()) / (adv_std + 1e-8)
@@ -349,7 +352,7 @@ def run_train_solo_1000ep(
                 np.random.shuffle(b_inds)
                 for start in range(0, n_samples, batch_size):
                     end = min(start + batch_size, n_samples)
-                    if end - start < 8:  # Skip tiny remainder slice
+                    if end - start < 8:
                         continue
                     mb_idx = b_inds[start:end]
 
@@ -396,10 +399,10 @@ def run_train_solo_1000ep(
             batch_adv.clear()
             batch_ret.clear()
 
-        # Save Best Checkpoint (after full rolling window or at least min(20, episodes))
+        # Save Best Checkpoint
         if len(rolling_20) >= min(20, episodes) and roll20_mean > best_roll20:
             best_roll20 = roll20_mean
-            best_ckpt_path = ckpt_dir / "PPOHospital-solo-1000ep_best.pt"
+            best_ckpt_path = ckpt_dir / "PPOHospital-solo_best.pt"
             torch.save(
                 {
                     "model_state_dict": agent.state_dict(),
@@ -419,7 +422,7 @@ def run_train_solo_1000ep(
         # Periodic Last Checkpoint (every 50-100 episodes or end)
         save_freq = 50 if episodes <= 1000 else 100
         if (ep % save_freq == 0) or (ep == episodes):
-            last_ckpt_path = ckpt_dir / "PPOHospital-solo-1000ep_last.pt"
+            last_ckpt_path = ckpt_dir / "PPOHospital-solo_last.pt"
             torch.save(
                 {
                     "model_state_dict": agent.state_dict(),
@@ -447,32 +450,32 @@ def run_train_solo_1000ep(
     print(f" Stagnation Timeouts  : {stagnation_timeouts}", flush=True)
     print(f" Best Rolling-20      : {best_roll20:+.2f}", flush=True)
     print(f" Peak R_team Achieved : {peak_r_team:+.2f}", flush=True)
-    print(f" Best Checkpoint Saved: {ckpt_dir / 'PPOHospital-solo-1000ep_best.pt'}", flush=True)
+    print(f" Best Checkpoint Saved: {ckpt_dir / 'PPOHospital-solo_best.pt'}", flush=True)
     print("=" * 86, flush=True)
 
     # Write summary README.md
-    readme_content = f"""# Run Summary: Solo Patient PPO 1000-Episode Training
+    readme_content = f"""# Run Summary: Solo Patient PPO Training
 
 - **Run Directory**: `{run_dir}`
 - **Date**: {dt.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
-- **Warm-start Checkpoint**: `{warmstart_path}`
-- **Episodes**: {episodes} (completed to {episodes})
+- **Warm-start**: {warmstart_path if warmstart_path else 'None (From Scratch)'}
+- **Episodes**: {episodes}
 - **Stagnation Timeout**: {stagnation_timeout_s}s ({int(stagnation_timeout_s / 0.2)} steps)
 - **Stagnation Penalty**: {stagnation_penalty:+.1f}
 - **Best Rolling-20 $R_{{team}}$**: {best_roll20:+.2f}
 - **Peak Episode $R_{{team}}$**: {peak_r_team:+.2f}
-- **Best Checkpoint**: `checkpoints/PPOHospital-solo-1000ep_best.pt`
+- **Best Checkpoint**: `checkpoints/PPOHospital-solo_best.pt`
 """
     (run_dir / "README.md").write_text(readme_content, encoding="utf-8")
     return run_dir
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="PPO Solo Patient 1000-Episode Training")
-    parser.add_argument("--episodes", type=int, default=1000, help="Number of discrete episodes to train (default: 1000)")
-    parser.add_argument("--warmstart", type=str, default=DEFAULT_WARMSTART_PATH, help="Path to warm-start checkpoint")
+    parser = argparse.ArgumentParser(description="PPO Solo Patient Training")
+    parser.add_argument("--episodes", type=int, default=30000, help="Number of episodes to train (default: 30000)")
+    parser.add_argument("--warmstart", type=str, default=None, help="Path to warm-start checkpoint (default: None)")
+    parser.add_argument("--no-warmstart", action="store_true", help="Explicitly train from scratch without warm-start")
     parser.add_argument("--resume-from", type=str, default=None, help="Path to checkpoint or run directory to resume")
-    parser.add_argument("--no-warmstart", action="store_true", help="Start from scratch without warm-start")
     parser.add_argument("--stagnation-timeout", type=float, default=45.0, help="Stagnation timeout in seconds (default: 45.0)")
     parser.add_argument("--stagnation-penalty", type=float, default=-10.0, help="Stagnation terminal penalty (default: -10.0)")
     parser.add_argument("--shift-duration", type=float, default=180.0, help="Max shift duration in seconds (default: 180.0)")
@@ -491,7 +494,7 @@ def main() -> None:
     episodes = 10 if args.smoke else args.episodes
     update_freq = 2 if args.smoke else args.update_freq
 
-    run_train_solo_1000ep(
+    run_train_solo_patient(
         episodes=episodes,
         warmstart_path=warmstart,
         resume_from=args.resume_from,

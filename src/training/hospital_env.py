@@ -42,7 +42,7 @@ TETHER_IDEAL_M = 1.6
 TETHER_MAX_M = 2.5
 GOAL_ARRIVE_ROBOT_M = 1.4
 GOAL_ARRIVE_PATIENT_M = 2.0
-COLLISION_LIDAR_M = 0.35
+COLLISION_LIDAR_M = 0.40
 PATIENT_TALK_DIST_M = 1.35
 
 ELDERLY_PATIENT_SPEED = 0.48
@@ -377,38 +377,19 @@ class HospitalShiftEnv:
             # 1. Spawn patient in corridor / lobby
             self.patient_x, self.patient_z = self._sample_patient_spawn_solo()
 
-            # 2. Spawn robot nearby (2.0 to 3.5m) with direct line of sight
+            # 2. Spawn robot independently across the hospital corridors/lobby
+            # so the robot must actively SEARCH, navigate corridors, and find the patient
             robot_placed = False
             for _ in range(150):
-                dist = float(self.rng.uniform(2.0, 3.5))
-                angle = float(self.rng.uniform(-math.pi, math.pi))
-                rx = self.patient_x + dist * math.cos(angle)
-                rz = self.patient_z + dist * math.sin(angle)
-                if abs(rx) <= 10.8 and abs(rz) <= 7.2:
-                    if all(not w.contains(rx, rz, margin=0.65) for w in HOSPITAL_WALLS):
-                        ux, uz = (self.patient_x - rx) / dist, (self.patient_z - rz) / dist
-                        blocked = any(
-                            w.ray_intersect(rx, rz, ux, uz, dist) < (dist - 0.15)
-                            for w in HOSPITAL_WALLS
-                        )
-                        if not blocked:
-                            self.robot_x, self.robot_z = rx, rz
-                            robot_placed = True
-                            break
+                rx, rz = self._sample_patient_spawn_solo()
+                if math.hypot(rx - self.patient_x, rz - self.patient_z) >= 3.5:
+                    self.robot_x, self.robot_z = rx, rz
+                    robot_placed = True
+                    break
             if not robot_placed:
-                for _ in range(50):
-                    rx, rz = self._sample_patient_spawn_solo()
-                    if math.hypot(rx - self.patient_x, rz - self.patient_z) >= 1.5:
-                        self.robot_x, self.robot_z = rx, rz
-                        break
-                else:
-                    self.robot_x, self.robot_z = 0.0, 0.0
+                self.robot_x, self.robot_z = 0.0, 0.0
 
-            # Robot faces the patient with small random angle jitter
-            dx = self.patient_x - self.robot_x
-            dz = self.patient_z - self.robot_z
-            base_yaw = math.atan2(-dx, -dz)
-            self.robot_yaw = float(base_yaw + self.rng.uniform(-0.25, 0.25))
+            self.robot_yaw = float(self.rng.uniform(-math.pi, math.pi))
             self.robot_v = 0.0
             self.robot_omega = 0.0
 
@@ -626,10 +607,12 @@ class HospitalShiftEnv:
                     event = "engaged"
                     self.task_phase = TaskPhase.GUIDE_ESCORT
                     self.goal_key = resolved
+                    self.steps_since_task = 0
                 elif self.scenario_action in ("call_staff", "emergency"):
                     event = "engaged"
                     self.task_phase = TaskPhase.CALL_STAFF
                     self.goal_key = "staff"
+                    self.steps_since_task = 0
                 else:
                     event = "answer"
                     self.patients_helped += 1

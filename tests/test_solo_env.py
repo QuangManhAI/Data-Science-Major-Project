@@ -7,32 +7,24 @@ import pytest
 from src.training.hospital_env import HospitalShiftEnv, TaskPhase, OBS_DIM
 
 
-def test_solo_env_initial_robot_spawn_nearby():
-    """Verify robot spawns in close proximity (2.0–3.5m) facing the patient on reset."""
+def test_solo_env_initial_robot_spawn_independent():
+    """Verify robot and patient spawn independently in public areas so robot learns to search."""
     for seed in range(42, 62):
         env = HospitalShiftEnv(env_mode="solo", seed=seed)
         obs = env.reset(seed=seed)
         assert obs.shape == (OBS_DIM,)
 
-        # Distance check
+        # Distance check: spawned at separate locations across public corridors/lobby
         dist = math.hypot(env.patient_x - env.robot_x, env.patient_z - env.robot_z)
-        assert 1.8 <= dist <= 3.6, f"Expected 2.0-3.5m, got {dist:.2f}m for seed {seed}"
+        assert dist >= 2.5, f"Expected independent spawn >= 2.5m, got {dist:.2f}m for seed {seed}"
 
-        # Doctor must be disabled
+        # Doctor must be disabled in solo mode
         assert env.doctor_active is False
 
         # Patient must be in non-medical area (Corridor: z in [-1.4, 1.4], Lobby: z in [2.1, 6.6], x in [-3.5, 3.5])
         assert env.patient_z >= -2.0, f"Patient spawned in north exam room: z={env.patient_z}"
         if env.patient_z > 2.0:
             assert abs(env.patient_x) <= 3.8, f"Patient spawned outside lobby: x={env.patient_x}, z={env.patient_z}"
-
-        # Robot yaw should generally face patient
-        fwd_x = -math.sin(env.robot_yaw)
-        fwd_z = -math.cos(env.robot_yaw)
-        dx = env.patient_x - env.robot_x
-        dz = env.patient_z - env.robot_z
-        dot = (fwd_x * dx + fwd_z * dz) / dist
-        assert dot > 0.80, f"Robot is not facing patient: dot={dot:.2f}"
 
 
 def test_solo_env_continuous_robot_persistence():

@@ -38,6 +38,11 @@
 | [D-022](#d-022--ad-camera-rotation-and-multi-npc-hospital-speech-support)                                     | A/D camera rotation and multi-NPC hospital speech support                                      | human                          | accepted |
 | [D-023](#d-023--fix-seated-patient-arrival-trigger-and-implement-two-stage-doorway-waypoint-navigation)       | Fix seated patient arrival trigger and implement two-stage doorway waypoint navigation         | human                          | accepted |
 | [D-024](#d-024--implement-gradio-web-dashboard-for-rl-training-control-live-telemetry-and-history-inspection) | Implement Gradio web dashboard for RL training control, live telemetry, and history inspection | human                          | accepted |
+| [D-025](#d-025--fix-godot-3d-patient-escort-speed-and-improve-doorway-navigation-tolerance)                   | Fix Godot 3D patient escort speed and improve doorway navigation tolerance                      | human                          | accepted |
+| [D-026](#d-026--contrast-and-readability-overhaul-for-rl-training-dashboard-dark-theme)                       | Contrast and readability overhaul for RL training dashboard dark theme                         | human                          | accepted |
+| [D-027](#d-027--fix-subprocess-pipe-buffer-deadlock-and-dynamic-run-dropdown-refresh)                         | Fix subprocess pipe buffer deadlock and dynamic run dropdown refresh                           | AI-pair (Manh + Antigravity)   | accepted |
+| [D-028](#d-028--implement-solo-patient-focus-training-environment--godot-3d-solo-mode)                        | Implement Solo Patient Focus training environment & Godot 3D solo mode                          | human                          | accepted |
+| [D-029](#d-029--1000-episode-solo-patient-ppo-training-with-45s-early-stagnation-cutoff)                     | 1000-Episode Solo Patient PPO training with 45s early stagnation cutoff                         | human                          | accepted |
 
 ---
 
@@ -418,3 +423,20 @@
 - **Why:** Eliminates multi-NPC navigation distractions during early policy learning, focuses learning capacity on core patient interaction, tethered escorting, and doorway navigation from nearby spawns.
 - **Touches:** `src/training/hospital_env.py`, `src/training/rl_hospital_train.py`, `run_simulation.py`, `sim_vision/godot/scripts/main.gd`, `src/ui/rl_dashboard.py`, `tests/test_solo_env.py`, `docs/AI-Human-logs/Vuong.md`
 - **Evidence:** 4/4 tests in `tests/test_solo_env.py` pass; all 13 repo pytest tests pass; all 151 Godot GUT unit tests pass (13,015 asserts, 0 failures); verified 1-epoch GPU smoke test on RTX 4060 with `--env-mode solo`.
+
+
+### D-029 — 1000-Episode Solo Patient PPO Training with 45s Early Stagnation Cutoff
+- **Status:** accepted
+- **When:** 2026-10-24T14:35:00+07:00
+- **Decided by:** human-approved via `/grill-me` alignment (`train_solo_1000ep_plan.md`)
+- **Trigger:** "train for me 1000 episode, each episode terminate when a certain number of times haves pass and it dont complete anymore task /grill-me monitor in real time via terminal logs when running/grill-me"
+- **Decision:**
+  1. In `src/training/hospital_env.py`: Added `stagnation_timeout_s: float = 0.0` and `stagnation_penalty: float = -10.0` configuration to `HospitalShiftEnv`. When `stagnation_timeout_s > 0` (45.0s = 225 steps at dt=0.2s), an internal counter `steps_since_task` increments each step and resets to 0 whenever a task is completed (`answer`, `call_staff`, `guide_completed`). If 225 steps elapse without completing any task, the episode immediately terminates (`done = True`, `exit_reason = "STAGNATION_TIMEOUT"`) and applies `-10.0` terminal penalty.
+  2. Implemented dedicated trainer `src/training/train_solo_1000ep.py` managing a discrete 1000-episode training loop (Ep 1 to 1000) warm-started from the best converged 80-epoch checkpoint `PPOHospital-converged-80ep-full_best.pt` ($R_{team} = 103.0$).
+  3. Action execution blends teacher guidance decaying linearly from `prior_weight = 0.10` to `0.0` over the first 200 episodes.
+  4. PPO optimization is batched every 5 episodes (200 updates total) over 4 epochs per batch with AdamW (lr: 1e-4 -> 3e-5 via CosineAnnealingLR) and grad norm clipping 0.5.
+  5. Live single-line log flushed to terminal after each episode: `[EP 0142/1000] Tasks: 4 | R_team: +42.0 | Dur: 36.8s (184 stp) | Exit: COMPLETED | Col: 1 | Roll20: +33.5 | Peak: +60.0 | ETA: 28.4m`.
+  6. Checkpointing: Saves `PPOHospital-solo-1000ep_best.pt` on rolling-20 reward all-time high and `PPOHospital-solo-1000ep_last.pt` every 50 episodes.
+- **Why:** Prevents wasting compute wandering when robot gets stuck or loses tether during solo patient interaction, strongly shapes the policy to act decisively to resolve tasks within 45 seconds, and provides full transparency through real-time terminal output.
+- **Touches:** `src/training/hospital_env.py`, `src/training/train_solo_1000ep.py`, `tests/test_stagnation_env.py`, `docs/AI-Human-logs/Vuong.md`
+- **Evidence:** 3/3 tests in `tests/test_stagnation_env.py` pass; all 16 repo pytest tests pass; verified 10-episode GPU smoke run and initiated 1000-episode training on RTX 4060.

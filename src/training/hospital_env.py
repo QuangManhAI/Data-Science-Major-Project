@@ -215,11 +215,20 @@ class HospitalShiftEnv:
         dt: float = 0.2,
         seed: int = 42,
         env_mode: str = "solo",
+        stagnation_timeout_s: float = 0.0,
+        stagnation_penalty: float = -10.0,
     ) -> None:
         self.curriculum_stage = int(curriculum_stage)
         self.shift_duration_s = float(shift_duration_s)
         self.dt = float(dt)
         self.env_mode = str(env_mode).lower().strip()
+        self.stagnation_timeout_s = float(stagnation_timeout_s)
+        self.stagnation_penalty = float(stagnation_penalty)
+        self.max_stagnation_steps = (
+            int(round(self.stagnation_timeout_s / self.dt))
+            if self.stagnation_timeout_s > 0.0
+            else 0
+        )
         self.max_steps = int(round(self.shift_duration_s / self.dt))
         self.rng = np.random.default_rng(seed)
 
@@ -247,6 +256,7 @@ class HospitalShiftEnv:
         self.doctor_dir = 1.0
 
         self.step_count = 0
+        self.steps_since_task = 0
         self.cumulative_team_reward = 0.0
         self.patients_helped = 0
         self.collisions = 0
@@ -353,6 +363,7 @@ class HospitalShiftEnv:
         if seed is not None:
             self.rng = np.random.default_rng(seed)
         self.step_count = 0
+        self.steps_since_task = 0
         self.cumulative_team_reward = 0.0
         self.patients_helped = 0
         self.collisions = 0
@@ -385,8 +396,13 @@ class HospitalShiftEnv:
                             robot_placed = True
                             break
             if not robot_placed:
-                self.robot_x = self.patient_x
-                self.robot_z = max(-1.3, min(1.3, self.patient_z + 2.2))
+                for _ in range(50):
+                    rx, rz = self._sample_patient_spawn_solo()
+                    if math.hypot(rx - self.patient_x, rz - self.patient_z) >= 1.5:
+                        self.robot_x, self.robot_z = rx, rz
+                        break
+                else:
+                    self.robot_x, self.robot_z = 0.0, 0.0
 
             # Robot faces the patient with small random angle jitter
             dx = self.patient_x - self.robot_x
@@ -533,6 +549,7 @@ class HospitalShiftEnv:
 
     def step(self, action: np.ndarray | list[float] | tuple[float, float]) -> tuple[np.ndarray, float, bool, dict[str, Any]]:
         self.step_count += 1
+        self.steps_since_task += 1
         a_v = float(np.clip(action[0], -1.0, 1.0))
         a_omega = float(np.clip(action[1], -1.0, 1.0))
 
@@ -616,6 +633,7 @@ class HospitalShiftEnv:
                 else:
                     event = "answer"
                     self.patients_helped += 1
+                    self.steps_since_task = 0
                     self._spawn_next_patient()
         elif self.task_phase == TaskPhase.GUIDE_ESCORT:
             dest_x, dest_z = DESTINATION_POSITIONS.get(self.goal_key, (0.0, 4.5))
@@ -624,12 +642,14 @@ class HospitalShiftEnv:
             if d_robot_dest <= GOAL_ARRIVE_ROBOT_M and d_patient_dest <= GOAL_ARRIVE_PATIENT_M:
                 event = "guide_completed"
                 self.patients_helped += 1
+                self.steps_since_task = 0
                 self._spawn_next_patient()
         elif self.task_phase == TaskPhase.CALL_STAFF:
             dest_x, dest_z = DESTINATION_POSITIONS["staff"]
             if math.hypot(dest_x - self.robot_x, dest_z - self.robot_z) <= GOAL_ARRIVE_ROBOT_M:
                 event = "call_staff"
                 self.patients_helped += 1
+                self.steps_since_task = 0
                 self._spawn_next_patient()
 
         # Compute step reward matching RLEnvBridge.compute_step_reward
@@ -664,10 +684,22 @@ class HospitalShiftEnv:
         angle_sub = signed_angle_rad(fwd_x, fwd_z, self.goal_x - self.robot_x, self.goal_z - self.robot_z)
         r_align = 0.04 * math.cos(angle_sub) if self.robot_v > 0.05 else 0.0
 
+        stagnated = False
+        if self.max_stagnation_steps > 0 and self.steps_since_task >= self.max_stagnation_steps:
+            stagnated = True
+            r_team += self.stagnation_penalty
+
         total_reward = float(r_team + r_progress + r_tether + r_safety + r_align)
         self.cumulative_team_reward += r_team
 
-        done = self.step_count >= self.max_steps
+        done = (self.step_count >= self.max_steps) or stagnated
+        if stagnated:
+            exit_reason = "STAGNATION_TIMEOUT"
+        elif self.step_count >= self.max_steps:
+            exit_reason = "COMPLETED"
+        else:
+            exit_reason = "RUNNING"
+
         info = {
             "r_team": r_team,
             "cumulative_team_reward": self.cumulative_team_reward,
@@ -676,6 +708,8 @@ class HospitalShiftEnv:
             "task_phase": int(self.task_phase),
             "d_tether": d_tether,
             "event": event,
+            "steps_since_task": self.steps_since_task,
+            "exit_reason": exit_reason,
         }
         return self._get_obs(), total_reward, done, info
 

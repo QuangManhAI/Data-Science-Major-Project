@@ -21,6 +21,7 @@ docs/
 ├── OVERVIEW.md                                  # 🧭 Lộ trình phát triển sống & Theo dõi các cột mốc
 │
 ├── reports/                                     # 📊 Báo Cáo Kỹ Thuật & Đánh Giá Benchmark Thị Giác
+│   ├── weakest_person_detection_cases_deep_dive_report.md
 │   ├── comprehensive_data_metrics_and_inference_audit_report.md
 │   ├── cases_under_70pct_detection_forensic_report.md
 │   ├── master_failure_cases_and_low_detection_rates_report.md

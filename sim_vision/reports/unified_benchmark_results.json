@@ -1,46 +1,46 @@
 [
   {
     "model": "yolov8n.pt",
-    "precision": 48.0,
-    "recall": 83.82,
-    "f1": 61.04,
-    "fpr": 85.9,
-    "latency_ms": 7.66,
+    "precision": 45.96,
+    "recall": 80.88,
+    "f1": 58.61,
+    "fpr": 82.54,
+    "latency_ms": 7.51,
     "counts": {
-      "tp": 1067,
-      "fp": 1156,
-      "fn": 206,
-      "empty_fp": 335,
+      "tp": 774,
+      "fp": 910,
+      "fn": 183,
+      "empty_fp": 260,
       "empty_tn": 55
     }
   },
   {
     "model": "yolo11n.pt",
-    "precision": 48.5,
-    "recall": 83.66,
-    "f1": 61.4,
-    "fpr": 87.69,
-    "latency_ms": 9.13,
+    "precision": 46.22,
+    "recall": 80.56,
+    "f1": 58.74,
+    "fpr": 85.08,
+    "latency_ms": 9.24,
     "counts": {
-      "tp": 1065,
-      "fp": 1131,
-      "fn": 208,
-      "empty_fp": 342,
-      "empty_tn": 48
+      "tp": 771,
+      "fp": 897,
+      "fn": 186,
+      "empty_fp": 268,
+      "empty_tn": 47
     }
   },
   {
     "model": "yolo26n.pt",
-    "precision": 48.94,
-    "recall": 83.66,
-    "f1": 61.76,
-    "fpr": 87.95,
-    "latency_ms": 10.36,
+    "precision": 46.76,
+    "recall": 80.56,
+    "f1": 59.17,
+    "fpr": 85.08,
+    "latency_ms": 10.24,
     "counts": {
-      "tp": 1065,
-      "fp": 1111,
-      "fn": 208,
-      "empty_fp": 343,
+      "tp": 771,
+      "fp": 878,
+      "fn": 186,
+      "empty_fp": 268,
       "empty_tn": 47
     }
   }

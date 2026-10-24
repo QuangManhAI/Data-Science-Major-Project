@@ -1,23 +1,27 @@
 {
   "status": "PASSED_QUALITY_GATE",
-  "total_frames": 1494,
-  "total_boxes": 1273,
-  "empty_frames": 390,
+  "dataset": "vision_eval_unified",
+  "version": "2.1_clinical_core_64",
+  "total_frames": 1152,
+  "total_cases": 64,
+  "total_boxes": 957,
+  "empty_frames": 315,
   "out_of_bounds_errors": 0,
   "invalid_format_errors": 0,
   "visibility_breakdown": {
-    "clear": 629,
-    "partial": 516,
-    "heavy": 128
+    "high_vis_gt_80": 456,
+    "med_vis_50_80": 354,
+    "low_vis_20_50": 147,
+    "occluded_lt_20": 0
   },
   "group_boxes": {
-    "U1": 180,
-    "U2": 216,
-    "U3": 116,
-    "U4": 144,
-    "U5": 70,
-    "U6": 331,
-    "U7": 216,
-    "U8": 0
+    "U1_Camouflage": 108,
+    "U2_ClinicalPoses": 144,
+    "U3_MedicalProps": 109,
+    "U4_WheelchairBed": 126,
+    "U5_Kinematics": 62,
+    "U6_CrowdSocial": 228,
+    "U7_ExtremeOptics": 180,
+    "U8_EmptyTraps": 0
   }
 }

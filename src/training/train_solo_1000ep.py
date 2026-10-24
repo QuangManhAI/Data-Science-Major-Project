@@ -119,6 +119,11 @@ def run_train_solo_1000ep(
         ckpt_dir = run_dir / "checkpoints"
         metrics_file = run_dir / "metrics.jsonl"
 
+        remaining_updates = max(1, (episodes - start_ep + 1) // update_freq_episodes)
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+            optimizer, T_max=remaining_updates, eta_min=lr_min
+        )
+
         if metrics_file.exists():
             with metrics_file.open("r", encoding="utf-8") as f:
                 for line in f:
@@ -411,8 +416,9 @@ def run_train_solo_1000ep(
                 best_ckpt_path,
             )
 
-        # Periodic Last Checkpoint (every 50 episodes or end)
-        if (ep % 50 == 0) or (ep == episodes):
+        # Periodic Last Checkpoint (every 50-100 episodes or end)
+        save_freq = 50 if episodes <= 1000 else 100
+        if (ep % save_freq == 0) or (ep == episodes):
             last_ckpt_path = ckpt_dir / "PPOHospital-solo-1000ep_last.pt"
             torch.save(
                 {

@@ -6,7 +6,7 @@ and streams real-time single-line logs directly to the terminal.
 
 Usage:
     python -m src.training.train_solo_1000ep
-    python -m src.training.train_solo_1000ep --smoke
+    python -m src.training.train_solo_1000ep --resume-from experiments/runs/20261024_143453_PPOHospital-solo-1000ep
 """
 
 from __future__ import annotations
@@ -48,6 +48,7 @@ def format_eta(seconds: float) -> str:
 def run_train_solo_1000ep(
     episodes: int = 1000,
     warmstart_path: str | Path | None = DEFAULT_WARMSTART_PATH,
+    resume_from: str | Path | None = None,
     stagnation_timeout_s: float = 45.0,
     stagnation_penalty: float = -10.0,
     shift_duration_s: float = 180.0,
@@ -74,44 +75,87 @@ def run_train_solo_1000ep(
     else:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    timestamp = dt.datetime.now().strftime("%Y%m%d_%H%M%S")
-    run_dir = Path(experiments_root) / "runs" / f"{timestamp}_PPOHospital-solo-1000ep"
-    ckpt_dir = run_dir / "checkpoints"
-    ckpt_dir.mkdir(parents=True, exist_ok=True)
-    metrics_file = run_dir / "metrics.jsonl"
-
-    print("=" * 86, flush=True)
-    print(f" PPO SOLO PATIENT TRAINING -- {episodes} EPISODES", flush=True)
-    print(f" Output Directory    : {run_dir}", flush=True)
-    print(f" Compute Device      : {device} ({torch.cuda.get_device_name(0) if device.type == 'cuda' else 'CPU'})", flush=True)
-    print(f" Stagnation Timeout  : {stagnation_timeout_s:.1f}s ({int(stagnation_timeout_s / 0.2)} steps) | Penalty: {stagnation_penalty:+.1f}", flush=True)
-    print(f" PPO Batch Update    : Every {update_freq_episodes} episodes | PPO Epochs: {ppo_epochs} | Batch: {batch_size}", flush=True)
-    print(f" Learning Rate       : {lr_init:.1e} -> {lr_min:.1e} (Cosine Annealing)", flush=True)
-
     agent = PPOHospitalAgent(obs_dim=OBS_DIM, act_dim=ACT_DIM).to(device)
-
-    # Warm-start weights
-    warmstart_loaded = False
-    if warmstart_path:
-        w_path = Path(warmstart_path)
-        if w_path.exists():
-            checkpoint = torch.load(w_path, map_location=device, weights_only=True)
-            if "model_state_dict" in checkpoint:
-                agent.load_state_dict(checkpoint["model_state_dict"])
-            else:
-                agent.load_state_dict(checkpoint)
-            warmstart_loaded = True
-            print(f" Warm-start Weights  : Loaded successfully from {w_path.name} (Val R_team: {checkpoint.get('best_val_acc', 'N/A')})", flush=True)
-        else:
-            print(f" Warm-start Warning  : File not found at {w_path}. Starting from scratch.", flush=True)
-    else:
-        print(" Warm-start Weights  : None (Training from random init)", flush=True)
 
     total_updates = max(1, episodes // update_freq_episodes)
     optimizer = torch.optim.AdamW(agent.parameters(), lr=lr_init, eps=1e-5, weight_decay=1e-4)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
         optimizer, T_max=total_updates, eta_min=lr_min
     )
+
+    rolling_20 = collections.deque(maxlen=20)
+    best_roll20 = -float("inf")
+    peak_r_team = -float("inf")
+    start_ep = 1
+    warmstart_loaded = False
+
+    if resume_from:
+        r_path = Path(resume_from)
+        if r_path.is_file():
+            ckpt_file = r_path
+            run_dir = r_path.parent.parent
+        else:
+            run_dir = r_path
+            ckpt_file = run_dir / "checkpoints" / "PPOHospital-solo-1000ep_last.pt"
+            if not ckpt_file.exists():
+                ckpt_file = run_dir / "checkpoints" / "PPOHospital-solo-1000ep_best.pt"
+
+        ckpt = torch.load(ckpt_file, map_location=device, weights_only=True)
+        agent.load_state_dict(ckpt["model_state_dict"])
+        if "optimizer_state_dict" in ckpt:
+            try:
+                optimizer.load_state_dict(ckpt["optimizer_state_dict"])
+            except Exception:
+                pass
+        if "scheduler_state_dict" in ckpt:
+            try:
+                scheduler.load_state_dict(ckpt["scheduler_state_dict"])
+            except Exception:
+                pass
+
+        start_ep = int(ckpt.get("episode", 0)) + 1
+        best_roll20 = float(ckpt.get("best_roll20", -float("inf")))
+        peak_r_team = float(ckpt.get("peak_r_team", -float("inf")))
+        ckpt_dir = run_dir / "checkpoints"
+        metrics_file = run_dir / "metrics.jsonl"
+
+        if metrics_file.exists():
+            with metrics_file.open("r", encoding="utf-8") as f:
+                for line in f:
+                    try:
+                        data = json.loads(line.strip())
+                        if "r_team" in data:
+                            rolling_20.append(float(data["r_team"]))
+                    except Exception:
+                        pass
+        print(f" Resumed Training    : Continuing from Ep {start_ep} (Best Roll20: {best_roll20:+.1f}, Peak: {peak_r_team:+.1f}) in {run_dir.name}", flush=True)
+    else:
+        timestamp = dt.datetime.now().strftime("%Y%m%d_%H%M%S")
+        run_dir = Path(experiments_root) / "runs" / f"{timestamp}_PPOHospital-solo-1000ep"
+        ckpt_dir = run_dir / "checkpoints"
+        ckpt_dir.mkdir(parents=True, exist_ok=True)
+        metrics_file = run_dir / "metrics.jsonl"
+
+        if warmstart_path:
+            w_path = Path(warmstart_path)
+            if w_path.exists():
+                checkpoint = torch.load(w_path, map_location=device, weights_only=True)
+                if "model_state_dict" in checkpoint:
+                    agent.load_state_dict(checkpoint["model_state_dict"])
+                else:
+                    agent.load_state_dict(checkpoint)
+                warmstart_loaded = True
+                print(f" Warm-start Weights  : Loaded successfully from {w_path.name} (Val R_team: {checkpoint.get('best_val_acc', 'N/A')})", flush=True)
+            else:
+                print(f" Warm-start Warning  : File not found at {w_path}. Starting from scratch.", flush=True)
+
+    print("=" * 86, flush=True)
+    print(f" PPO SOLO PATIENT TRAINING -- {episodes} EPISODES (Start Ep: {start_ep})", flush=True)
+    print(f" Output Directory    : {run_dir}", flush=True)
+    print(f" Compute Device      : {device} ({torch.cuda.get_device_name(0) if device.type == 'cuda' else 'CPU'})", flush=True)
+    print(f" Stagnation Timeout  : {stagnation_timeout_s:.1f}s ({int(stagnation_timeout_s / 0.2)} steps) | Penalty: {stagnation_penalty:+.1f}", flush=True)
+    print(f" PPO Batch Update    : Every {update_freq_episodes} episodes | PPO Epochs: {ppo_epochs} | Batch: {batch_size}", flush=True)
+    print(f" Learning Rate       : {lr_init:.1e} -> {lr_min:.1e} (Cosine Annealing)", flush=True)
 
     # Buffers across update_freq_episodes
     batch_obs: list[np.ndarray] = []
@@ -121,9 +165,6 @@ def run_train_solo_1000ep(
     batch_adv: list[np.ndarray] = []
     batch_ret: list[np.ndarray] = []
 
-    rolling_20 = collections.deque(maxlen=20)
-    best_roll20 = -float("inf")
-    peak_r_team = -float("inf")
     total_helped = 0
     total_collisions = 0
     stagnation_timeouts = 0
@@ -153,9 +194,9 @@ def run_train_solo_1000ep(
     print("-" * 86, flush=True)
 
     t_start = time.time()
-    update_count = 0
+    completed_in_run = 0
 
-    for ep in range(1, episodes + 1):
+    for ep in range(start_ep, episodes + 1):
         # Linear BC decay from 0.10 to 0.0 over first 200 episodes
         bc_weight = max(0.0, 0.10 * (1.0 - (ep - 1) / 200.0))
 
@@ -238,8 +279,9 @@ def run_train_solo_1000ep(
         elif exit_reason == "COMPLETED":
             completed_shifts += 1
 
+        completed_in_run += 1
         elapsed = time.time() - t_start
-        rate_eps = ep / max(1e-5, elapsed)
+        rate_eps = completed_in_run / max(1e-5, elapsed)
         eta_s = (episodes - ep) / max(1e-5, rate_eps)
         eta_str = format_eta(eta_s)
 
@@ -276,7 +318,6 @@ def run_train_solo_1000ep(
 
         # PPO Batch Update Every update_freq_episodes
         if (ep % update_freq_episodes == 0) or (ep == episodes):
-            update_count += 1
             b_obs_arr = np.asarray(batch_obs, dtype=np.float32)
             b_act_arr = np.asarray(batch_act, dtype=np.float32)
             b_teach_arr = np.asarray(batch_teacher, dtype=np.float32)
@@ -291,13 +332,20 @@ def run_train_solo_1000ep(
             t_adv = torch.as_tensor(b_adv_arr, dtype=torch.float32, device=device)
             t_ret = torch.as_tensor(b_ret_arr, dtype=torch.float32, device=device)
 
+            # Safely normalize advantages across whole batch (unbiased=False avoids N-1=0 issues)
+            adv_std = t_adv.std(unbiased=False)
+            if adv_std > 1e-6:
+                t_adv = (t_adv - t_adv.mean()) / (adv_std + 1e-8)
+
             n_samples = len(b_obs_arr)
             b_inds = np.arange(n_samples)
 
             for _ in range(ppo_epochs):
                 np.random.shuffle(b_inds)
                 for start in range(0, n_samples, batch_size):
-                    end = start + batch_size
+                    end = min(start + batch_size, n_samples)
+                    if end - start < 8:  # Skip tiny remainder slice
+                        continue
                     mb_idx = b_inds[start:end]
 
                     _, newlogprob, entropy, newval = agent.get_action_and_value(
@@ -306,7 +354,6 @@ def run_train_solo_1000ep(
                     ratio = (newlogprob - t_logp[mb_idx]).exp()
 
                     mb_adv = t_adv[mb_idx]
-                    mb_adv = (mb_adv - mb_adv.mean()) / (mb_adv.std() + 1e-8)
 
                     pg_loss1 = -mb_adv * ratio
                     pg_loss2 = -mb_adv * torch.clamp(ratio, 1.0 - clip_coef, 1.0 + clip_coef)
@@ -322,9 +369,17 @@ def run_train_solo_1000ep(
                     loss = pg_loss - ent_coef * ent_loss + vf_coef * v_loss + 0.2 * bc_weight * bc_loss
 
                     optimizer.zero_grad()
-                    loss.backward()
-                    nn.utils.clip_grad_norm_(agent.parameters(), 0.5)
-                    optimizer.step()
+                    if not torch.isnan(loss) and not torch.isinf(loss):
+                        loss.backward()
+                        nn.utils.clip_grad_norm_(agent.parameters(), 0.5)
+                        has_nan_grad = any(
+                            p.grad is not None and (torch.isnan(p.grad).any() or torch.isinf(p.grad).any())
+                            for p in agent.parameters()
+                        )
+                        if not has_nan_grad:
+                            optimizer.step()
+                        else:
+                            optimizer.zero_grad()
 
             scheduler.step()
 
@@ -378,12 +433,12 @@ def run_train_solo_1000ep(
     t_total = time.time() - t_start
     print("-" * 86, flush=True)
     print("TRAINING RUN COMPLETE SUMMARY:", flush=True)
-    print(f" Total Episodes       : {episodes}", flush=True)
+    print(f" Total Episodes Run   : {completed_in_run} (Final Ep: {episodes})", flush=True)
     print(f" Total Elapsed Time   : {format_eta(t_total)} ({t_total:.1f}s)", flush=True)
-    print(f" Total Patients Helped: {total_helped} (avg {total_helped / episodes:.2f} per ep)", flush=True)
-    print(f" Total Collisions     : {total_collisions} (avg {total_collisions / episodes:.2f} per ep)", flush=True)
-    print(f" Completed Shifts     : {completed_shifts} ({completed_shifts / episodes * 100:.1f}%)", flush=True)
-    print(f" Stagnation Timeouts  : {stagnation_timeouts} ({stagnation_timeouts / episodes * 100:.1f}%)", flush=True)
+    print(f" Total Patients Helped: {total_helped}", flush=True)
+    print(f" Total Collisions     : {total_collisions}", flush=True)
+    print(f" Completed Shifts     : {completed_shifts}", flush=True)
+    print(f" Stagnation Timeouts  : {stagnation_timeouts}", flush=True)
     print(f" Best Rolling-20      : {best_roll20:+.2f}", flush=True)
     print(f" Peak R_team Achieved : {peak_r_team:+.2f}", flush=True)
     print(f" Best Checkpoint Saved: {ckpt_dir / 'PPOHospital-solo-1000ep_best.pt'}", flush=True)
@@ -395,12 +450,9 @@ def run_train_solo_1000ep(
 - **Run Directory**: `{run_dir}`
 - **Date**: {dt.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 - **Warm-start Checkpoint**: `{warmstart_path}`
-- **Episodes**: {episodes}
+- **Episodes**: {episodes} (completed to {episodes})
 - **Stagnation Timeout**: {stagnation_timeout_s}s ({int(stagnation_timeout_s / 0.2)} steps)
 - **Stagnation Penalty**: {stagnation_penalty:+.1f}
-- **Total Patients Helped**: {total_helped} (avg {total_helped / episodes:.2f}/ep)
-- **Completed Shifts**: {completed_shifts}/{episodes} ({completed_shifts / episodes * 100:.1f}%)
-- **Stagnation Timeouts**: {stagnation_timeouts}/{episodes} ({stagnation_timeouts / episodes * 100:.1f}%)
 - **Best Rolling-20 $R_{{team}}$**: {best_roll20:+.2f}
 - **Peak Episode $R_{{team}}$**: {peak_r_team:+.2f}
 - **Best Checkpoint**: `checkpoints/PPOHospital-solo-1000ep_best.pt`
@@ -413,6 +465,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="PPO Solo Patient 1000-Episode Training")
     parser.add_argument("--episodes", type=int, default=1000, help="Number of discrete episodes to train (default: 1000)")
     parser.add_argument("--warmstart", type=str, default=DEFAULT_WARMSTART_PATH, help="Path to warm-start checkpoint")
+    parser.add_argument("--resume-from", type=str, default=None, help="Path to checkpoint or run directory to resume")
     parser.add_argument("--no-warmstart", action="store_true", help="Start from scratch without warm-start")
     parser.add_argument("--stagnation-timeout", type=float, default=45.0, help="Stagnation timeout in seconds (default: 45.0)")
     parser.add_argument("--stagnation-penalty", type=float, default=-10.0, help="Stagnation terminal penalty (default: -10.0)")
@@ -435,6 +488,7 @@ def main() -> None:
     run_train_solo_1000ep(
         episodes=episodes,
         warmstart_path=warmstart,
+        resume_from=args.resume_from,
         stagnation_timeout_s=args.stagnation_timeout,
         stagnation_penalty=args.stagnation_penalty,
         shift_duration_s=args.shift_duration,

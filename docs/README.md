@@ -29,6 +29,7 @@ docs/
 │   └── README.md
 │
 ├── plans/                                       # 📋 Kế Hoạch, Đề Cương & Bản Quy Hoạch Kỹ Thuật
+│   ├── plan_dataset_and_groundtruth_rebuild.md # Kế hoạch tái thiết kế dataset & nhãn chuẩn xác
 │   ├── de_cuong_do_an_robot_benh_vien.md       # Đề cương đồ án tốt nghiệp Data Science
 │   ├── plan_bad_detection_cases_deep_dive.md   # Quy hoạch kỹ thuật đào sâu 44 ca phát hiện lỗi
 │   ├── RL_TRAINING_PLAN.md                     # Kế hoạch huấn luyện mạng PPO / RL Navigation

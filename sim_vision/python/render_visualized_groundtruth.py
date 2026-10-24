@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """
 render_visualized_groundtruth.py
-Vẽ song song Bounding Box Ground Truth (Xanh Lá) và Model Prediction (Xanh Dương/Cam)
-cùng siêu dữ liệu trực quan lên toàn bộ ảnh để người dùng đối chứng trực tiếp.
+Vẽ song song Bounding Box Ground Truth Đa Lớp (Person: Xanh Lá / Wheelchair: Vàng Gold)
+và Model Prediction (Cyan / Đỏ) cùng siêu dữ liệu trực quan lên toàn bộ ảnh (648 frames)
+để người dùng đối chứng trực tiếp từng khung hình.
 """
 
 import os
@@ -28,15 +29,17 @@ def compute_iou(boxA, boxB):
     areaB = max(1.0, (boxB[2] - boxB[0]) * (boxB[3] - boxB[1]))
     return interArea / float(areaA + areaB - interArea)
 
-def render_groundtruth_and_predictions(model_path: str = "yolo26n.pt", conf_thres: float = 0.25, iou_thres: float = 0.50):
+def render_groundtruth_and_predictions(model_path: str = "models/yolo26n/yolo26n.pt", conf_thres: float = 0.25, iou_thres: float = 0.50):
     repo_root = Path(__file__).resolve().parent.parent.parent
-    dataset_dir = repo_root / "sim_vision/data/vision_eval_unified"
+    dataset_dir = repo_root / "data/vision/vision_eval_unified"
+    if not dataset_dir.exists():
+        dataset_dir = repo_root / "data/vision_eval_unified"
     img_dir = dataset_dir / "images"
     jsonl_file = dataset_dir / "annotations_rich_5w1h.jsonl"
     if not jsonl_file.exists():
         jsonl_file = dataset_dir / "annotations.jsonl"
 
-    out_vis_dir = repo_root / "sim_vision/data/vision_eval_groundtruth_visualized"
+    out_vis_dir = repo_root / "data/vision/vision_eval_groundtruth_visualized"
 
     # Reset output directory
     if out_vis_dir.exists():
@@ -63,13 +66,14 @@ def render_groundtruth_and_predictions(model_path: str = "yolo26n.pt", conf_thre
                 data = json.loads(line)
                 annotations[data["frame_id"]] = data
 
-    print(f"🎨 BẮT ĐẦU VẼ ĐỐI CHỨNG DUAL-BOX (GROUND TRUTH + {model_name_label}) CHO {len(annotations)} FRAMES...")
+    print(f"🎨 BẮT ĐẦU VẼ ĐỐI CHỨNG DUAL-BOX (GROUND TRUTH MULTI-CLASS + {model_name_label}) CHO {len(annotations)} FRAMES...")
     t0 = time.time()
 
     rendered_count = 0
     group_counts = {}
 
-    total_gt_all = 0
+    total_person_gt_all = 0
+    total_wheelchair_gt_all = 0
     total_tp_all = 0
     total_fp_all = 0
     total_fn_all = 0
@@ -94,8 +98,17 @@ def render_groundtruth_and_predictions(model_path: str = "yolo26n.pt", conf_thre
         target_group_dir.mkdir(parents=True, exist_ok=True)
 
         gts = meta.get("ground_truth_annotations", [])
+        if not gts and "zero_defect_boxes" in meta:
+            gts = meta["zero_defect_boxes"]
 
-        # Run model inference on this image
+        # Phân tách Person GT và Wheelchair GT
+        person_gts = [g for g in gts if g.get("category_id", 0) == 0]
+        wheelchair_gts = [g for g in gts if g.get("category_id", 0) == 1]
+
+        total_person_gt_all += len(person_gts)
+        total_wheelchair_gt_all += len(wheelchair_gts)
+
+        # Run model inference on this image (Person class = 0)
         res = model(str(img_p), conf=conf_thres, classes=[0], verbose=False)[0]
         preds = []
         for box in res.boxes:
@@ -108,14 +121,14 @@ def render_groundtruth_and_predictions(model_path: str = "yolo26n.pt", conf_thre
                 "matched_iou": 0.0
             })
 
-        # Match predictions with GT
-        gt_matched = [False] * len(gts)
-        matched_gt_ious = [0.0] * len(gts)
+        # Match person predictions with person GT
+        gt_matched = [False] * len(person_gts)
+        matched_gt_ious = [0.0] * len(person_gts)
 
         for p_idx, pred in enumerate(preds):
             best_iou = 0.0
             best_g_idx = -1
-            for g_idx, gt in enumerate(gts):
+            for g_idx, gt in enumerate(person_gts):
                 gt_box = gt.get("bbox_xyxy_px") or gt.get("bbox_xyxy", [])
                 if len(gt_box) < 4:
                     continue
@@ -132,9 +145,8 @@ def render_groundtruth_and_predictions(model_path: str = "yolo26n.pt", conf_thre
 
         tp_count = sum(1 for p in preds if p["matched_gt_idx"] >= 0)
         fp_count = len(preds) - tp_count
-        fn_count = len(gts) - sum(gt_matched)
+        fn_count = len(person_gts) - sum(gt_matched)
 
-        total_gt_all += len(gts)
         total_tp_all += tp_count
         total_fp_all += fp_count
         total_fn_all += fn_count
@@ -148,8 +160,10 @@ def render_groundtruth_and_predictions(model_path: str = "yolo26n.pt", conf_thre
         cv2.putText(img, title_text, (8, 18), cv2.FONT_HERSHEY_SIMPLEX, 0.48, (255, 255, 255), 1, cv2.LINE_AA)
 
         # Line 2: Legend & Stats bar
+        wc_info = f"GT WC [GOLD]: {len(wheelchair_gts)}  |  " if wheelchair_gts else ""
         hud_legend = (
-            f"GT [GREEN]: {len(gts)}  |  "
+            f"GT Person: {len(person_gts)}  |  "
+            f"{wc_info}"
             f"{model_name_label} TP [CYAN]: {tp_count}  |  "
             f"FP [RED]: {fp_count}  |  "
             f"FN [MAGENTA]: {fn_count}"
@@ -168,7 +182,7 @@ def render_groundtruth_and_predictions(model_path: str = "yolo26n.pt", conf_thre
         yaw_str = f"{yaw:+.1f}deg" if isinstance(yaw, (int, float)) else str(yaw)
         cam_h_str = f"{cam_h:.2f}m" if isinstance(cam_h, (int, float)) else str(cam_h)
 
-        status_str = "MATCH (PERFECT)" if (tp_count == len(gts) and fp_count == 0) else ("MISSED / FN" if fn_count > 0 else "FALSE POSITIVE")
+        status_str = "MATCH (PERFECT)" if (tp_count == len(person_gts) and fp_count == 0) else ("MISSED / FN" if fn_count > 0 else "FALSE POSITIVE")
         if is_hard_neg:
             status_str = "PASS (0 FP)" if fp_count == 0 else "FAIL (FP TRIGGERED)"
 
@@ -177,17 +191,25 @@ def render_groundtruth_and_predictions(model_path: str = "yolo26n.pt", conf_thre
         cv2.putText(img, footer_text, (8, h - 8), cv2.FONT_HERSHEY_SIMPLEX, 0.43, footer_color, 1, cv2.LINE_AA)
 
         # ==============================================================================
-        # CASE 0 GT / HARD NEGATIVE
+        # CASE 0 PERSON GT / HARD NEGATIVE (U8.2, U8.4, U8.6, U8.8)
         # ==============================================================================
-        if is_hard_neg and len(gts) == 0:
-            if fp_count == 0:
-                banner_bg = (30, 100, 30)  # Green True Negative
-                banner_text = f"GT: 0 PERSON | {model_name_label}: 0 DETECTIONS [TRUE NEGATIVE PASS]"
+        if is_hard_neg and len(person_gts) == 0:
+            if cid == "U8.2":
+                if fp_count == 0:
+                    banner_bg = (30, 100, 30)
+                    banner_text = f"GT: 0 PERSON (1 WHEELCHAIR TRAP) | {model_name_label}: 0 PERSON DETECTIONS [TRUE NEGATIVE PASS]"
+                else:
+                    banner_bg = (20, 30, 180)
+                    banner_text = f"GT: 0 PERSON (1 WHEELCHAIR TRAP) | {model_name_label}: {fp_count} FALSE POSITIVE HALLUCINATED!"
             else:
-                banner_bg = (20, 30, 180)  # Red Alert
-                banner_text = f"GT: 0 PERSON | {model_name_label}: {fp_count} FALSE POSITIVE DETECTED!"
+                if fp_count == 0:
+                    banner_bg = (30, 100, 30)
+                    banner_text = f"GT: 0 PERSON | {model_name_label}: 0 DETECTIONS [TRUE NEGATIVE PASS]"
+                else:
+                    banner_bg = (20, 30, 180)
+                    banner_text = f"GT: 0 PERSON | {model_name_label}: {fp_count} FALSE POSITIVE DETECTED!"
             
-            text_size = cv2.getTextSize(banner_text, cv2.FONT_HERSHEY_SIMPLEX, 0.46, 2)[0]
+            text_size = cv2.getTextSize(banner_text, cv2.FONT_HERSHEY_SIMPLEX, 0.44, 2)[0]
             cx, cy = w // 2, h // 2
             bx1 = cx - text_size[0] // 2 - 10
             by1 = cy - text_size[1] // 2 - 6
@@ -195,12 +217,36 @@ def render_groundtruth_and_predictions(model_path: str = "yolo26n.pt", conf_thre
             by2 = cy + text_size[1] // 2 + 6
             cv2.rectangle(img, (bx1, by1), (bx2, by2), banner_bg, -1)
             cv2.rectangle(img, (bx1, by1), (bx2, by2), (255, 255, 255), 1)
-            cv2.putText(img, banner_text, (bx1 + 10, by2 - 6), cv2.FONT_HERSHEY_SIMPLEX, 0.46, (255, 255, 255), 1, cv2.LINE_AA)
+            cv2.putText(img, banner_text, (bx1 + 10, by2 - 6), cv2.FONT_HERSHEY_SIMPLEX, 0.44, (255, 255, 255), 1, cv2.LINE_AA)
 
         # ==============================================================================
-        # 1. DRAW GROUND TRUTH BOXES (THICK GREEN SOLID LINE)
+        # 1. DRAW WHEELCHAIR GROUND TRUTH BOXES (THICK GOLD/AMBER SOLID LINE)
         # ==============================================================================
-        for g_idx, gt in enumerate(gts):
+        for w_idx, w_gt in enumerate(wheelchair_gts):
+            w_box = w_gt.get("bbox_xyxy_px") or w_gt.get("bbox_xyxy", [])
+            if len(w_box) < 4:
+                continue
+            wx1, wy1, wx2, wy2 = [int(round(v)) for v in w_box[:4]]
+            wx1 = max(0, min(w - 1, wx1))
+            wy1 = max(0, min(h - 1, wy1))
+            wx2 = max(0, min(w - 1, wx2))
+            wy2 = max(0, min(h - 1, wy2))
+
+            wc_color = (0, 215, 255)  # Bright Gold / Amber (BGR)
+            cv2.rectangle(img, (wx1, wy1), (wx2, wy2), wc_color, 2)
+
+            w_tag = f"GT #{w_idx+1} WHEELCHAIR [GOLD]"
+            (wtw, wth), _ = cv2.getTextSize(w_tag, cv2.FONT_HERSHEY_SIMPLEX, 0.38, 1)
+            wty1 = max(48, wy1 - wth - 6)
+            wty2 = wty1 + wth + 6
+            wtx2 = min(w, wx1 + wtw + 6)
+            cv2.rectangle(img, (wx1, wty1), (wtx2, wty2), wc_color, -1)
+            cv2.putText(img, w_tag, (wx1 + 3, wty2 - 4), cv2.FONT_HERSHEY_SIMPLEX, 0.38, (0, 0, 0), 1, cv2.LINE_AA)
+
+        # ==============================================================================
+        # 2. DRAW PERSON GROUND TRUTH BOXES (THICK GREEN SOLID LINE / MAGENTA IF MISSED)
+        # ==============================================================================
+        for g_idx, gt in enumerate(person_gts):
             box = gt.get("bbox_xyxy_px") or gt.get("bbox_xyxy")
             if not box or len(box) < 4:
                 continue
@@ -217,7 +263,6 @@ def render_groundtruth_and_predictions(model_path: str = "yolo26n.pt", conf_thre
             cv2.rectangle(img, (x1, y1), (x2, y2), gt_color, 2)
 
             # Tag nhãn GT ở phía trên bên trái box
-            vis_ratio = gt.get("visibility_ratio", 1.0)
             subcat = gt.get("subcategory", "person")
             match_status = f"MATCH IoU:{matched_gt_ious[g_idx]:.2f}" if is_hit else "MISSED (FN)"
             tag_str = f"GT #{g_idx+1} {subcat} | {match_status}"
@@ -231,7 +276,7 @@ def render_groundtruth_and_predictions(model_path: str = "yolo26n.pt", conf_thre
             cv2.putText(img, tag_str, (x1 + 3, ty2 - 4), cv2.FONT_HERSHEY_SIMPLEX, 0.38, (0, 0, 0), 1, cv2.LINE_AA)
 
         # ==============================================================================
-        # 2. DRAW MODEL PREDICTIONS (CYAN IF MATCH, ORANGE/RED IF FP)
+        # 3. DRAW MODEL PERSON PREDICTIONS (CYAN IF MATCH, ORANGE/RED IF FP)
         # ==============================================================================
         for p_idx, pred in enumerate(preds):
             b = pred["bbox"]
@@ -272,12 +317,13 @@ def render_groundtruth_and_predictions(model_path: str = "yolo26n.pt", conf_thre
 
     elapsed = time.time() - t0
     overall_prec = total_tp_all / max(1, total_tp_all + total_fp_all)
-    overall_rec = total_tp_all / max(1, total_gt_all)
+    overall_rec = total_tp_all / max(1, total_person_gt_all)
 
     print("==================================================================")
     print(f"✅ HOÀN TẤT VẼ ĐỐI CHỨNG DUAL-BOX {rendered_count} ẢNH TRONG {elapsed:.1f}s!")
     print(f"📊 Thống kê sơ bộ với {model_name_label}:")
-    print(f"  • Tổng GT Boxes: {total_gt_all}")
+    print(f"  • Tổng Person GT Boxes: {total_person_gt_all}")
+    print(f"  • Tổng Wheelchair GT Boxes: {total_wheelchair_gt_all}")
     print(f"  • True Positives (Khớp đúng): {total_tp_all} ({overall_rec:.2%})")
     print(f"  • False Positives (Báo sai): {total_fp_all}")
     print(f"  • False Negatives (Bỏ sót): {total_fn_all}")

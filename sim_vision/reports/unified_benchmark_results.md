@@ -1,79 +1,92 @@
 # Báo Cáo Đánh Giá Đối Chứng Vision Models (Godot Hospital Dataset)
 
-- **Ngày đánh giá**: 2026-10-24T22:25:50+0700
-- **Tổng số frames**: 576 (định dạng 640x480, 5 Slices phân tầng)
+- **Ngày đánh giá**: 2026-10-24T23:08:02+0700
+- **Tổng số frames**: 648 (định dạng 640x480, 5 Slices phân tầng)
 - **Ngưỡng kiểm thử**: $\tau_{\text{conf}} = 0.50$, $\tau_{\text{IoU}} = 0.50$
 
 ## 1. Bảng Tổng Hợp Chỉ Số Cốt Lõi
 
 | Model | Precision | Recall (Toàn bộ) | Recall (Xe lăn / Người già) | Recall (Đám đông che khuất) | Báo động giả (FPR Đạo cụ rỗng) | Sai số góc lái $\Delta\theta$ (độ) | Latency P95 (ms) |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **yolov8n.pt (Baseline)** | 92.30% | 86.47% | 100.00% | 52.08% | 0.00% | 0.60° | 55.7 ms |
-| **yolo11n.pt (C2PSA Attention)** | 93.50% | 84.36% | 100.00% | 47.22% | 0.00% | 0.58° | 50.4 ms |
-| **yolo26n.pt (NMS-Free)** | 91.36% | 85.86% | 100.00% | 50.69% | 0.00% | 0.55° | 51.4 ms |
-| **intel/person-retail-0013 (OpenVINO)** | 91.36% | 77.89% | 94.44% | 50.69% | 2.78% | 0.60° | 11.0 ms |
+| **yolov8n.pt (Baseline)** | 92.95% | 84.84% | 100.00% | 53.10% | 0.00% | 0.58° | 35.2 ms |
+| **yolo11n.pt (C2PSA Attention)** | 93.14% | 83.55% | 100.00% | 48.97% | 0.00% | 0.57° | 35.2 ms |
+| **yolo26n.pt (NMS-Free)** | 91.80% | 84.84% | 100.00% | 53.10% | 0.00% | 0.55° | 35.1 ms |
+| **yolov8x.pt (SOTA 131M)** | 94.86% | 89.84% | 100.00% | 73.10% | 0.00% | 0.51° | 655.1 ms |
+| **intel/person-retail-0013 (OpenVINO)** | 90.07% | 76.54% | 94.44% | 51.72% | 4.17% | 0.53° | 8.9 ms |
 
 ## 2. Đánh Giá Phân Tầng Theo Từng Lát Cắt Kịch Bản (Stratified Slices)
 
 ### Bảng Ma Trận Đối Chứng Độ Nhạy (Recall / FP) Theo Từng Trục Kịch Bản
 
-| Trục kiểm thử | Chi tiết kịch bản | **yolov8n.pt (Baseline)** | **yolo11n.pt (C2PSA Attention)** | **yolo26n.pt (NMS-Free)** | **intel/person-retail-0013 (OpenVINO)** |
-| :--- | :--- | :---: | :---: | :---: | :---: |
-| `U1_Camouflage` | Nhóm 1: Ngụy trang & Tương phản thấp (Blouse trắng, Scrub xanh, Cụ già áo hoa) | 100.0% | 100.0% | 100.0% | 93.3% |
-| `U2_ClinicalPoses` | Nhóm 2: Tư thế lâm sàng khó (Ngồi ghế băng, Ho gập 45°, Buông thõng, Chống gậy) | 100.0% | 100.0% | 98.9% | 87.8% |
-| `U3_MedicalProps` | Nhóm 3: Che khuất bởi đạo cụ y tế (Cột IV 3cm, Kiosk, Quầy lễ tân, Rèm, Xe tiêm) | 66.9% | 60.2% | 66.9% | 60.2% |
-| `U5_Kinematics` | Nhóm 5a: Động học & Tuần tra đối đầu (Tiến lại gần 5.5m -> 1.0m) | 83.3% | 83.3% | 83.3% | 66.7% |
-| `U6_CrowdSocial` | Nhóm 4: Mật độ đám đông & Dính chùm (Hai cụ già ghế băng, Hàng chờ Kiosk, Cụm 4 người) | 82.4% | 80.3% | 81.1% | 74.6% |
-| `U7_ExtremeOptics` | Nhóm 5b: Cự ly biên & Cắt mép FOV (0.9m, 2.5m, 6.0m, Mép trái/phải FOV) | 100.0% | 100.0% | 100.0% | 90.0% |
-| `U8_EmptyTraps` | Nhóm 5c: Bẫy đạo cụ rỗng (0 GT) (Standee 2D in hình bác sĩ, Kiosk rỗng) | 0 FP | 0 FP | 0 FP | 1 FP |
+| Trục kiểm thử | Chi tiết kịch bản | **yolov8n.pt (Baseline)** | **yolo11n.pt (C2PSA Attention)** | **yolo26n.pt (NMS-Free)** | **yolov8x.pt (SOTA 131M)** | **intel/person-retail-0013 (OpenVINO)** |
+| :--- | :--- | :---: | :---: | :---: | :---: | :---: |
+| `U1_Camouflage` | Nhóm 1: Ngụy trang & Tương phản thấp (Blouse trắng, Scrub xanh, Cụ già áo hoa) | 100.0% | 98.9% | 100.0% | 100.0% | 93.3% |
+| `U2_ClinicalPoses` | Nhóm 2: Tư thế lâm sàng khó (Ngồi ghế băng, Ho gập 45°, Buông thõng, Chống gậy) | 85.7% | 85.7% | 85.7% | 85.7% | 77.0% |
+| `U3_MedicalProps` | Nhóm 3: Che khuất bởi đạo cụ y tế (Cột IV 3cm, Kiosk, Quầy lễ tân, Rèm, Xe tiêm) | 70.0% | 66.2% | 72.3% | 86.2% | 61.5% |
+| `U5_Kinematics` | Nhóm 5a: Động học & Tuần tra đối đầu (Tiến lại gần 5.5m -> 1.0m) | 83.3% | 88.9% | 83.3% | 88.9% | 66.7% |
+| `U6_CrowdSocial` | Nhóm 4: Mật độ đám đông & Dính chùm (Hai cụ già ghế băng, Hàng chờ Kiosk, Cụm 4 người) | 81.2% | 79.6% | 80.0% | 86.5% | 73.5% |
+| `U7_ExtremeOptics` | Nhóm 5b: Cự ly biên & Cắt mép FOV (0.9m, 2.5m, 6.0m, Mép trái/phải FOV) | 100.0% | 100.0% | 100.0% | 100.0% | 91.1% |
+| `U8_EmptyTraps` | Nhóm 5c: Bẫy đạo cụ rỗng (0 GT) (Standee 2D in hình bác sĩ, Kiosk rỗng) | 0 FP | 0 FP | 0 FP | 0 FP | 4 FP |
 
 ### Chi tiết: yolov8n.pt (Baseline)
 
 | Slice | Mô tả | Số frame | TP | FP | FN | Recall |
 | :--- | :--- | :---: | :---: | :---: | :---: | :---: |
 | `U1_Camouflage` | Nhóm 1: Ngụy trang & Tương phản thấp (Blouse trắng, Scrub xanh, Cụ già áo hoa) | 90 | 90 | 0 | 0 | 100.00% |
-| `U2_ClinicalPoses` | Nhóm 2: Tư thế lâm sàng khó (Ngồi ghế băng, Ho gập 45°, Buông thõng, Chống gậy) | 90 | 90 | 0 | 0 | 100.00% |
-| `U3_MedicalProps` | Nhóm 3: Che khuất bởi đạo cụ y tế (Cột IV 3cm, Kiosk, Quầy lễ tân, Rèm, Xe tiêm) | 144 | 89 | 44 | 44 | 66.92% |
-| `U5_Kinematics` | Nhóm 5a: Động học & Tuần tra đối đầu (Tiến lại gần 5.5m -> 1.0m) | 18 | 15 | 1 | 3 | 83.33% |
-| `U6_CrowdSocial` | Nhóm 4: Mật độ đám đông & Dính chùm (Hai cụ già ghế băng, Hàng chờ Kiosk, Cụm 4 người) | 108 | 201 | 3 | 43 | 82.38% |
+| `U2_ClinicalPoses` | Nhóm 2: Tư thế lâm sàng khó (Ngồi ghế băng, Ho gập 45°, Buông thõng, Chống gậy) | 126 | 108 | 3 | 18 | 85.71% |
+| `U3_MedicalProps` | Nhóm 3: Che khuất bởi đạo cụ y tế (Cột IV 3cm, Kiosk, Quầy lễ tân, Rèm, Xe tiêm) | 144 | 91 | 39 | 39 | 70.00% |
+| `U5_Kinematics` | Nhóm 5a: Động học & Tuần tra đối đầu (Tiến lại gần 5.5m -> 1.0m) | 18 | 15 | 0 | 3 | 83.33% |
+| `U6_CrowdSocial` | Nhóm 4: Mật độ đám đông & Dính chùm (Hai cụ già ghế băng, Hàng chờ Kiosk, Cụm 4 người) | 108 | 199 | 3 | 46 | 81.22% |
 | `U7_ExtremeOptics` | Nhóm 5b: Cự ly biên & Cắt mép FOV (0.9m, 2.5m, 6.0m, Mép trái/phải FOV) | 90 | 90 | 0 | 0 | 100.00% |
-| `U8_EmptyTraps` | Nhóm 5c: Bẫy đạo cụ rỗng (0 GT) (Standee 2D in hình bác sĩ, Kiosk rỗng) | 36 | 0 | 0 | 0 | N/A (0 GT) |
+| `U8_EmptyTraps` | Nhóm 5c: Bẫy đạo cụ rỗng (0 GT) (Standee 2D in hình bác sĩ, Kiosk rỗng) | 72 | 0 | 0 | 0 | N/A (0 GT) |
 
 ### Chi tiết: yolo11n.pt (C2PSA Attention)
 
 | Slice | Mô tả | Số frame | TP | FP | FN | Recall |
 | :--- | :--- | :---: | :---: | :---: | :---: | :---: |
-| `U1_Camouflage` | Nhóm 1: Ngụy trang & Tương phản thấp (Blouse trắng, Scrub xanh, Cụ già áo hoa) | 90 | 90 | 0 | 0 | 100.00% |
-| `U2_ClinicalPoses` | Nhóm 2: Tư thế lâm sàng khó (Ngồi ghế băng, Ho gập 45°, Buông thõng, Chống gậy) | 90 | 90 | 0 | 0 | 100.00% |
-| `U3_MedicalProps` | Nhóm 3: Che khuất bởi đạo cụ y tế (Cột IV 3cm, Kiosk, Quầy lễ tân, Rèm, Xe tiêm) | 144 | 80 | 34 | 53 | 60.15% |
-| `U5_Kinematics` | Nhóm 5a: Động học & Tuần tra đối đầu (Tiến lại gần 5.5m -> 1.0m) | 18 | 15 | 0 | 3 | 83.33% |
-| `U6_CrowdSocial` | Nhóm 4: Mật độ đám đông & Dính chùm (Hai cụ già ghế băng, Hàng chờ Kiosk, Cụm 4 người) | 108 | 196 | 5 | 48 | 80.33% |
+| `U1_Camouflage` | Nhóm 1: Ngụy trang & Tương phản thấp (Blouse trắng, Scrub xanh, Cụ già áo hoa) | 90 | 89 | 0 | 1 | 98.89% |
+| `U2_ClinicalPoses` | Nhóm 2: Tư thế lâm sàng khó (Ngồi ghế băng, Ho gập 45°, Buông thõng, Chống gậy) | 126 | 108 | 4 | 18 | 85.71% |
+| `U3_MedicalProps` | Nhóm 3: Che khuất bởi đạo cụ y tế (Cột IV 3cm, Kiosk, Quầy lễ tân, Rèm, Xe tiêm) | 144 | 86 | 38 | 44 | 66.15% |
+| `U5_Kinematics` | Nhóm 5a: Động học & Tuần tra đối đầu (Tiến lại gần 5.5m -> 1.0m) | 18 | 16 | 0 | 2 | 88.89% |
+| `U6_CrowdSocial` | Nhóm 4: Mật độ đám đông & Dính chùm (Hai cụ già ghế băng, Hàng chờ Kiosk, Cụm 4 người) | 108 | 195 | 1 | 50 | 79.59% |
 | `U7_ExtremeOptics` | Nhóm 5b: Cự ly biên & Cắt mép FOV (0.9m, 2.5m, 6.0m, Mép trái/phải FOV) | 90 | 90 | 0 | 0 | 100.00% |
-| `U8_EmptyTraps` | Nhóm 5c: Bẫy đạo cụ rỗng (0 GT) (Standee 2D in hình bác sĩ, Kiosk rỗng) | 36 | 0 | 0 | 0 | N/A (0 GT) |
+| `U8_EmptyTraps` | Nhóm 5c: Bẫy đạo cụ rỗng (0 GT) (Standee 2D in hình bác sĩ, Kiosk rỗng) | 72 | 0 | 0 | 0 | N/A (0 GT) |
 
 ### Chi tiết: yolo26n.pt (NMS-Free)
 
 | Slice | Mô tả | Số frame | TP | FP | FN | Recall |
 | :--- | :--- | :---: | :---: | :---: | :---: | :---: |
 | `U1_Camouflage` | Nhóm 1: Ngụy trang & Tương phản thấp (Blouse trắng, Scrub xanh, Cụ già áo hoa) | 90 | 90 | 0 | 0 | 100.00% |
-| `U2_ClinicalPoses` | Nhóm 2: Tư thế lâm sàng khó (Ngồi ghế băng, Ho gập 45°, Buông thõng, Chống gậy) | 90 | 89 | 1 | 1 | 98.89% |
-| `U3_MedicalProps` | Nhóm 3: Che khuất bởi đạo cụ y tế (Cột IV 3cm, Kiosk, Quầy lễ tân, Rèm, Xe tiêm) | 144 | 89 | 50 | 44 | 66.92% |
+| `U2_ClinicalPoses` | Nhóm 2: Tư thế lâm sàng khó (Ngồi ghế băng, Ho gập 45°, Buông thõng, Chống gậy) | 126 | 108 | 4 | 18 | 85.71% |
+| `U3_MedicalProps` | Nhóm 3: Che khuất bởi đạo cụ y tế (Cột IV 3cm, Kiosk, Quầy lễ tân, Rèm, Xe tiêm) | 144 | 94 | 46 | 36 | 72.31% |
 | `U5_Kinematics` | Nhóm 5a: Động học & Tuần tra đối đầu (Tiến lại gần 5.5m -> 1.0m) | 18 | 15 | 0 | 3 | 83.33% |
-| `U6_CrowdSocial` | Nhóm 4: Mật độ đám đông & Dính chùm (Hai cụ già ghế băng, Hàng chờ Kiosk, Cụm 4 người) | 108 | 198 | 3 | 46 | 81.15% |
+| `U6_CrowdSocial` | Nhóm 4: Mật độ đám đông & Dính chùm (Hai cụ già ghế băng, Hàng chờ Kiosk, Cụm 4 người) | 108 | 196 | 3 | 49 | 80.00% |
 | `U7_ExtremeOptics` | Nhóm 5b: Cự ly biên & Cắt mép FOV (0.9m, 2.5m, 6.0m, Mép trái/phải FOV) | 90 | 90 | 0 | 0 | 100.00% |
-| `U8_EmptyTraps` | Nhóm 5c: Bẫy đạo cụ rỗng (0 GT) (Standee 2D in hình bác sĩ, Kiosk rỗng) | 36 | 0 | 0 | 0 | N/A (0 GT) |
+| `U8_EmptyTraps` | Nhóm 5c: Bẫy đạo cụ rỗng (0 GT) (Standee 2D in hình bác sĩ, Kiosk rỗng) | 72 | 0 | 0 | 0 | N/A (0 GT) |
+
+### Chi tiết: yolov8x.pt (SOTA 131M)
+
+| Slice | Mô tả | Số frame | TP | FP | FN | Recall |
+| :--- | :--- | :---: | :---: | :---: | :---: | :---: |
+| `U1_Camouflage` | Nhóm 1: Ngụy trang & Tương phản thấp (Blouse trắng, Scrub xanh, Cụ già áo hoa) | 90 | 90 | 0 | 0 | 100.00% |
+| `U2_ClinicalPoses` | Nhóm 2: Tư thế lâm sàng khó (Ngồi ghế băng, Ho gập 45°, Buông thõng, Chống gậy) | 126 | 108 | 6 | 18 | 85.71% |
+| `U3_MedicalProps` | Nhóm 3: Che khuất bởi đạo cụ y tế (Cột IV 3cm, Kiosk, Quầy lễ tân, Rèm, Xe tiêm) | 144 | 112 | 23 | 18 | 86.15% |
+| `U5_Kinematics` | Nhóm 5a: Động học & Tuần tra đối đầu (Tiến lại gần 5.5m -> 1.0m) | 18 | 16 | 3 | 2 | 88.89% |
+| `U6_CrowdSocial` | Nhóm 4: Mật độ đám đông & Dính chùm (Hai cụ già ghế băng, Hàng chờ Kiosk, Cụm 4 người) | 108 | 212 | 2 | 33 | 86.53% |
+| `U7_ExtremeOptics` | Nhóm 5b: Cự ly biên & Cắt mép FOV (0.9m, 2.5m, 6.0m, Mép trái/phải FOV) | 90 | 90 | 0 | 0 | 100.00% |
+| `U8_EmptyTraps` | Nhóm 5c: Bẫy đạo cụ rỗng (0 GT) (Standee 2D in hình bác sĩ, Kiosk rỗng) | 72 | 0 | 0 | 0 | N/A (0 GT) |
 
 ### Chi tiết: intel/person-retail-0013 (OpenVINO)
 
 | Slice | Mô tả | Số frame | TP | FP | FN | Recall |
 | :--- | :--- | :---: | :---: | :---: | :---: | :---: |
 | `U1_Camouflage` | Nhóm 1: Ngụy trang & Tương phản thấp (Blouse trắng, Scrub xanh, Cụ già áo hoa) | 90 | 84 | 0 | 6 | 93.33% |
-| `U2_ClinicalPoses` | Nhóm 2: Tư thế lâm sàng khó (Ngồi ghế băng, Ho gập 45°, Buông thõng, Chống gậy) | 90 | 79 | 5 | 11 | 87.78% |
-| `U3_MedicalProps` | Nhóm 3: Che khuất bởi đạo cụ y tế (Cột IV 3cm, Kiosk, Quầy lễ tân, Rèm, Xe tiêm) | 144 | 80 | 32 | 53 | 60.15% |
+| `U2_ClinicalPoses` | Nhóm 2: Tư thế lâm sàng khó (Ngồi ghế băng, Ho gập 45°, Buông thõng, Chống gậy) | 126 | 97 | 7 | 29 | 76.98% |
+| `U3_MedicalProps` | Nhóm 3: Che khuất bởi đạo cụ y tế (Cột IV 3cm, Kiosk, Quầy lễ tân, Rèm, Xe tiêm) | 144 | 80 | 33 | 50 | 61.54% |
 | `U5_Kinematics` | Nhóm 5a: Động học & Tuần tra đối đầu (Tiến lại gần 5.5m -> 1.0m) | 18 | 12 | 0 | 6 | 66.67% |
-| `U6_CrowdSocial` | Nhóm 4: Mật độ đám đông & Dính chùm (Hai cụ già ghế băng, Hàng chờ Kiosk, Cụm 4 người) | 108 | 182 | 11 | 62 | 74.59% |
-| `U7_ExtremeOptics` | Nhóm 5b: Cự ly biên & Cắt mép FOV (0.9m, 2.5m, 6.0m, Mép trái/phải FOV) | 90 | 81 | 0 | 9 | 90.00% |
-| `U8_EmptyTraps` | Nhóm 5c: Bẫy đạo cụ rỗng (0 GT) (Standee 2D in hình bác sĩ, Kiosk rỗng) | 36 | 0 | 1 | 0 | N/A (0 GT) |
+| `U6_CrowdSocial` | Nhóm 4: Mật độ đám đông & Dính chùm (Hai cụ già ghế băng, Hàng chờ Kiosk, Cụm 4 người) | 108 | 180 | 15 | 65 | 73.47% |
+| `U7_ExtremeOptics` | Nhóm 5b: Cự ly biên & Cắt mép FOV (0.9m, 2.5m, 6.0m, Mép trái/phải FOV) | 90 | 82 | 0 | 8 | 91.11% |
+| `U8_EmptyTraps` | Nhóm 5c: Bẫy đạo cụ rỗng (0 GT) (Standee 2D in hình bác sĩ, Kiosk rỗng) | 72 | 0 | 4 | 0 | N/A (0 GT) |
 
 ## 3. Kết Luận Thực Nghiệm & Quyết Định Lựa Chọn Model
 

@@ -12,7 +12,7 @@ from ultralytics import YOLO
 
 def main():
     parser = argparse.ArgumentParser(description="Huấn luyện mô hình YOLO trên bộ dữ liệu thị giác bệnh viện")
-    parser.add_argument("--model", type=str, default="yolo26n.pt", help="Mô hình khởi tạo (yolo26n.pt, yolov8n.pt, yolo11n.pt)")
+    parser.add_argument("--model", type=str, default="models/yolo26n/yolo26n.pt", help="Mô hình khởi tạo (mặc định YOLO26n)")
     parser.add_argument("--epochs", type=int, default=30, help="Số epoch huấn luyện")
     parser.add_argument("--batch", type=int, default=16, help="Kích thước batch size")
     parser.add_argument("--imgsz", type=int, default=640, help="Độ phân giải đầu vào (mặc định 640)")
@@ -22,7 +22,9 @@ def main():
     args = parser.parse_args()
 
     repo_root = Path(__file__).resolve().parent.parent.parent
-    data_yaml = repo_root / "sim_vision/data/vision_eval_unified/data.yaml"
+    data_yaml = repo_root / "data/vision/vision_eval_unified/data.yaml"
+    if not data_yaml.exists():
+        data_yaml = repo_root / "data/vision_eval_unified/data.yaml"
 
     if not data_yaml.exists():
         print(f"❌ Lỗi: Không tìm thấy file cấu hình dữ liệu tại {data_yaml}")

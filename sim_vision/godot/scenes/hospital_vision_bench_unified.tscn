@@ -103,9 +103,20 @@ badge_text = ""
 
 [node name="PatientBody" parent="ActorsPool/wheelchair_patient" instance=ExtResource("14")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.08, -0.04)
+anim_path = "res://assets/models/human_m06/anims/m_sit_waiting.res"
+is_seated = true
 badge_text = ""
 
 [node name="WheelchairProp" parent="ActorsPool/wheelchair_patient" instance=ExtResource("4")]
+
+[node name="recumbent_bed_patient" type="Node3D" parent="ActorsPool"]
+
+[node name="PatientBody" parent="ActorsPool/recumbent_bed_patient" instance=ExtResource("14")]
+transform = Transform3D(1, 0, 0, 0, 0.052335974, 0.9986295, 0, -0.9986295, 0.052335974, 0, 0.72, 0.25)
+anim_path = "res://assets/models/human_m06/anims/m_idle_waiting.res"
+badge_text = ""
+
+[node name="BedProp" parent="ActorsPool/recumbent_bed_patient" instance=ExtResource("6")]
 
 [node name="ObstacleProps" type="Node3D" parent="."]
 
@@ -149,6 +160,7 @@ badge_text = ""
 
 [node name="empty_queue_display" parent="HardNegativesPool" instance=ExtResource("23")]
 [node name="empty_wheelchair" parent="HardNegativesPool" instance=ExtResource("4")]
+[node name="empty_hospital_bed" parent="HardNegativesPool" instance=ExtResource("6")]
 
 
 [node name="DatasetGenerator" type="Node3D" parent="." node_paths=PackedStringArray("robot_camera", "world_env", "main_dir_light", "actors_pool", "obstacle_props", "hard_negatives_pool")]
@@ -159,5 +171,5 @@ main_dir_light = NodePath("../Room/Sun")
 actors_pool = NodePath("../ActorsPool")
 obstacle_props = NodePath("../ObstacleProps")
 hard_negatives_pool = NodePath("../HardNegativesPool")
-output_root_dir = "res://../data/vision_eval_unified"
+output_root_dir = "res://../../data/vision/vision_eval_unified"
 auto_start_on_ready = false

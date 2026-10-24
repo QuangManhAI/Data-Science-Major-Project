@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 generate_visualization_report_assets.py
-Sinh các biểu đồ xếp hạng 32 ca (Best to Weakest) và Poster trực quan hóa pháp y (forensic poster)
+Sinh các biểu đồ xếp hạng 36 ca (Best to Weakest) và Poster trực quan hóa pháp y (forensic poster)
 cho các ca yếu nhất nhằm giải thích chi tiết lý do suy giảm độ nhạy phát hiện người.
 """
 
@@ -30,9 +30,13 @@ def compute_iou(boxA, boxB):
 
 def main():
     repo_root = Path(__file__).resolve().parent.parent.parent
-    data_dir = repo_root / "sim_vision/data/vision_eval_unified"
+    data_dir = repo_root / "data/vision/vision_eval_unified"
+    if not data_dir.exists():
+        data_dir = repo_root / "data/vision_eval_unified"
     img_dir = data_dir / "images"
-    vis_dir = repo_root / "sim_vision/data/vision_eval_groundtruth_visualized"
+    vis_dir = repo_root / "data/vision/vision_eval_groundtruth_visualized"
+    if not vis_dir.exists():
+        vis_dir = repo_root / "data/vision_eval_groundtruth_visualized"
     jsonl_file = data_dir / "annotations_rich_5w1h.jsonl"
     report_dir = repo_root / "sim_vision/reports"
     report_dir.mkdir(parents=True, exist_ok=True)
@@ -66,7 +70,8 @@ def main():
         
         st = case_stats[cid]
         st["frames"] += 1
-        gts = r.get("ground_truth_annotations", [])
+        # Chỉ lọc Person GT (category_id == 0) để đánh giá model person detector
+        gts = [g for g in r.get("ground_truth_annotations", []) if g.get("category_id", 0) == 0]
         st["gt_total"] += len(gts)
 
         img_path = str(img_dir / f"{r['frame_id']}.jpg")
@@ -99,23 +104,23 @@ def main():
             st["recall"] = st["tp"] / st["gt_total"]
             st["precision"] = st["tp"] / max(1, st["tp"] + st["fp"])
         else:
+            # Ca bẫy rỗng (U8): Recall 100% nếu né bẫy hoàn hảo (0 FP)
             st["recall"] = 1.0 if st["fp"] == 0 else 0.0
             st["precision"] = 1.0 if st["fp"] == 0 else 0.0
         st["mean_iou"] = float(np.mean(st["ious"])) if st["ious"] else 0.0
 
     # Lưu kết quả ra file JSON
-    cases_summary_path = report_dir / "all_32_cases_ranking.json"
+    cases_summary_path = report_dir / "all_36_cases_ranking.json"
     with open(cases_summary_path, "w", encoding="utf-8") as f:
         json.dump(case_stats, f, ensure_ascii=False, indent=2)
-    print(f"✅ Đã lưu kết quả chi tiết 32 ca tại: {cases_summary_path}")
+    print(f"✅ Đã lưu kết quả chi tiết 36 ca tại: {cases_summary_path}")
 
     # ==============================================================================
-    # 1. BIỂU ĐỒ 1: XẾP HẠNG TOÀN BỘ 32 CA (BEST TO WEAKEST)
+    # 1. BIỂU ĐỒ 1: XẾP HẠNG TOÀN BỘ 36 CA (BEST TO WEAKEST)
     # ==============================================================================
-    # Sắp xếp tăng dần để khi plot ngang (barh), ca tốt nhất ở trên cùng
     sorted_cases = sorted(case_stats.values(), key=lambda x: (x["recall"], x["precision"]))
 
-    fig, ax = plt.subplots(figsize=(15, 12), dpi=180)
+    fig, ax = plt.subplots(figsize=(15, 14), dpi=180)
     y_pos = np.arange(len(sorted_cases))
 
     labels = [f"[{c['case_id']}] {c['name_vi']}" for c in sorted_cases]
@@ -145,7 +150,7 @@ def main():
     ax.set_yticklabels(labels, fontsize=9, fontweight="medium")
     ax.set_xlim(0, 115)
     ax.set_xlabel("Độ Nhạy Phát Hiện Người (Recall %) & Độ Chuẩn Xác (Precision %)", fontsize=11, fontweight="bold", labelpad=10)
-    ax.set_title("XẾP HẠNG TOÀN BỘ 32 CA KIỂM THỬ ROBOT BỆNH VIỆN TRÊN YOLO26N (BEST TO WEAKEST)", fontsize=13, fontweight="bold", pad=15)
+    ax.set_title("XẾP HẠNG TOÀN BỘ 36 CA KIỂM THỬ ROBOT BỆNH VIỆN TRÊN YOLO26N (BEST TO WEAKEST)", fontsize=13, fontweight="bold", pad=15)
     ax.axvline(x=80.0, color="#e67e22", linestyle="--", linewidth=1.2, alpha=0.7, label="Ngưỡng An Toàn Lâm Sàng (80%)")
     ax.axvline(x=50.0, color="#c0392b", linestyle=":", linewidth=1.2, alpha=0.7, label="Ngưỡng Nguy Cơ Đụng Độ (50%)")
 
@@ -156,7 +161,7 @@ def main():
     chart1_path = report_dir / "01_best_to_weakest_cases_ranking.png"
     plt.savefig(str(chart1_path), dpi=180)
     plt.close()
-    print(f"📊 Đã xuất biểu đồ xếp hạng: {chart1_path}")
+    print(f"📊 Đã xuất biểu đồ xếp hạng 36 ca: {chart1_path}")
 
     # Copy sang artifacts
     if artifact_dir.exists():
@@ -165,26 +170,31 @@ def main():
     # ==============================================================================
     # 2. BIỂU ĐỒ 2: ĐỐI CHỨNG THEO 7 LÁT CẮT LÂM SÀNG (STRATIFIED RADAR / GROUP BAR)
     # ==============================================================================
-    with open(repo_root / "sim_vision/reports/unified_benchmark_results.json") as f:
+    bench_json_path = repo_root / "sim_vision/reports/vision_model_benchmark.json"
+    if not bench_json_path.exists():
+        bench_json_path = repo_root / "sim_vision/reports/unified_benchmark_results.json"
+    
+    with open(bench_json_path) as f:
         bench_data = json.load(f)
 
-    # 4 models: YOLOv8n, YOLO11n, YOLO26n, Intel OpenVINO
+    # Models to plot
     group_keys = ["U1_Camouflage", "U2_ClinicalPoses", "U3_MedicalProps", "U5_Kinematics", "U6_CrowdSocial", "U7_ExtremeOptics", "U8_EmptyTraps"]
     group_labels = [
         "U1: Ngụy trang\n(Scrub/Blouse)",
-        "U2: Tư thế khó\n(Xe lăn/Ghế băng)",
+        "U2: Tư thế khó\n(Xe lăn/Giường/Ghế)",
         "U3: Che khuất\n(Kiosk/Rèm/Xe tiêm)",
         "U5: Tuần tra\n(Đối đầu 1.08m/s)",
         "U6: Đám đông\n(Hàng chờ/Dính chùm)",
         "U7: Mép biên\n(0.9m - 6.0m/FOV)",
-        "U8: Bẫy rỗng\n(Standee 2D/Kiosk)"
+        "U8: Bẫy rỗng\n(Xe lăn/Giường/Standee)"
     ]
 
-    fig, ax = plt.subplots(figsize=(14, 7), dpi=180)
+    fig, ax = plt.subplots(figsize=(15, 7.5), dpi=180)
     x = np.arange(len(group_keys))
-    width = 0.20
+    n_models = len(bench_data)
+    width = min(0.18, 0.75 / max(1, n_models))
 
-    palette = ["#3498db", "#9b59b6", "#2ecc71", "#e67e22"]
+    palette = ["#3498db", "#9b59b6", "#2ecc71", "#e67e22", "#e74c3c"]
 
     for idx, model_info in enumerate(bench_data):
         m_name = model_info["model_name"].split()[0]
@@ -199,20 +209,21 @@ def main():
                 # Với U8 bẫy rỗng: tính độ chính xác né bẫy (100% - FPR)
                 rec_list.append(100.0 if sm.get("fp", 0) == 0 else 0.0)
 
-        offset = (idx - 1.5) * width
-        bars = ax.bar(x + offset, rec_list, width, label=m_name, color=palette[idx], alpha=0.9, edgecolor="black", linewidth=0.5)
+        offset = (idx - (n_models - 1) / 2.0) * width
+        color = palette[idx % len(palette)]
+        bars = ax.bar(x + offset, rec_list, width, label=m_name, color=color, alpha=0.9, edgecolor="black", linewidth=0.5)
         for b in bars:
             h_val = b.get_height()
-            ax.text(b.get_x() + b.get_width() / 2, h_val + 1.2, f"{h_val:.0f}%", ha="center", va="bottom", fontsize=7.5, fontweight="bold")
+            ax.text(b.get_x() + b.get_width() / 2, h_val + 1.2, f"{h_val:.0f}%", ha="center", va="bottom", fontsize=7.0, fontweight="bold")
 
     ax.set_xticks(x)
     ax.set_xticklabels(group_labels, fontsize=9.5, fontweight="medium")
     ax.set_ylim(0, 115)
     ax.set_ylabel("Độ Nhạy Phát Hiện Người (Recall %) / Khả Năng Né Bẫy (%)", fontsize=10.5, fontweight="bold")
-    ax.set_title("ĐỐI CHỨNG NĂNG LỰC NHẬN DIỆN NGƯỜI TRÊN 7 LÁT CẮT (YOLO26n vs YOLOv8n vs YOLO11n vs Intel OpenVINO)", fontsize=12, fontweight="bold", pad=15)
+    ax.set_title("ĐỐI CHỨNG NĂNG LỰC NHẬN DIỆN NGƯỜI TRÊN 7 LÁT CẮT (YOLO26n vs YOLOv8n vs YOLO11n vs YOLOv8x vs OpenVINO)", fontsize=12, fontweight="bold", pad=15)
     ax.axhline(y=80.0, color="#e67e22", linestyle="--", linewidth=1.2, alpha=0.8, label="Chuẩn An Toàn Lâm Sàng (80%)")
     ax.grid(axis="y", linestyle="--", alpha=0.5)
-    ax.legend(loc="upper right", framealpha=0.95, fontsize=9.5)
+    ax.legend(loc="upper right", framealpha=0.95, fontsize=9.0)
     plt.tight_layout()
 
     chart2_path = report_dir / "02_model_benchmark_radar_comparison.png"

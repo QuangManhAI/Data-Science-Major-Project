@@ -116,7 +116,7 @@ def evaluate_model(
         ]
 
         raw_gts = rec.get("ground_truth_annotations") or rec.get("ground_truths", [])
-        gts = [g for g in raw_gts if not g.get("ignore_eval", False)]
+        gts = [g for g in raw_gts if not g.get("ignore_eval", False) and g.get("category_id", 0) == 0]
 
         # Lát cắt Hard Negatives (không có người thật)
         is_hard_neg = rec.get("is_hard_negative", False) or slice_name in ("U8_EmptyTraps", "S5_Hard_Neg", "D8_Hard_Neg", "D8_Hard_Negatives", "Hard_Negatives_And_Traps")
@@ -217,7 +217,7 @@ def evaluate_model(
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Benchmark đối chứng Vision Models trên Godot Hospital Dataset")
-    parser.add_argument("--dataset-dir", type=str, default="data/vision_eval_600", help="Thư mục dataset chứa annotations.jsonl")
+    parser.add_argument("--dataset-dir", type=str, default="data/vision/vision_eval_unified", help="Thư mục dataset chứa annotations.jsonl")
     parser.add_argument("--iou-thres", type=float, default=0.50, help="Ngưỡng IoU matching")
     parser.add_argument("--output-report", type=str, default="sim_vision/reports/vision_model_benchmark.md", help="Đường dẫn file báo cáo Markdown")
     args = parser.parse_args()
@@ -243,23 +243,37 @@ def main() -> None:
 
     # 1. YOLOv8n (Baseline)
     yolov8_path = repo_root / "models/yolov8n/yolov8n.pt"
+    if not yolov8_path.exists():
+        yolov8_path = repo_root / "yolov8n.pt"
     if yolov8_path.exists():
         print("Khởi tạo YOLOv8n...")
         models_to_test.append(("yolov8n.pt (Baseline)", YoloDetector(str(yolov8_path))))
 
     # 2. YOLO11n (C2PSA Attention)
     yolo11_path = repo_root / "models/yolo11n/yolo11n.pt"
+    if not yolo11_path.exists():
+        yolo11_path = repo_root / "yolo11n.pt"
     if yolo11_path.exists():
         print("Khởi tạo YOLO11n...")
         models_to_test.append(("yolo11n.pt (C2PSA Attention)", YoloDetector(str(yolo11_path))))
 
     # 3. YOLO26n (NMS-Free Head)
     yolo26_path = repo_root / "models/yolo26n/yolo26n.pt"
+    if not yolo26_path.exists():
+        yolo26_path = repo_root / "yolo26n.pt"
     if yolo26_path.exists():
         print("Khởi tạo YOLO26n...")
         models_to_test.append(("yolo26n.pt (NMS-Free)", YoloDetector(str(yolo26_path))))
 
-    # 4. Intel OpenVINO person-detection-retail-0013
+    # 4. YOLOv8x (SOTA Reference)
+    yolov8x_path = repo_root / "models/yolov8x/yolov8x.pt"
+    if not yolov8x_path.exists():
+        yolov8x_path = repo_root / "yolov8x.pt"
+    if yolov8x_path.exists():
+        print("Khởi tạo YOLOv8x...")
+        models_to_test.append(("yolov8x.pt (SOTA 131M)", YoloDetector(str(yolov8x_path))))
+
+    # 5. Intel OpenVINO person-detection-retail-0013
     intel_xml = repo_root / "models/intel_person/person-detection-retail-0013.xml"
     if intel_xml.exists():
         print("Khởi tạo Intel OpenVINO person-detection-retail-0013...")

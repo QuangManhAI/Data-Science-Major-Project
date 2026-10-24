@@ -80,9 +80,13 @@ logs/
 *.tar.gz
 *.pt
 # Vision benchmark evaluation data & model weights
+/data/vision/
+/data/vision_eval_unified/
+/data/vision_eval_groundtruth_visualized/
 /data/vision_eval_600/
 /sim_vision/data/
 !/sim_vision/data/README.md
 /models/intel_person/*.bin
 /models/yolo11n/*.pt
 /models/yolo26n/*.pt
+/models/yolov8x/*.pt

@@ -2,7 +2,10 @@
 """
 generate_zero_defect_groundtruth.py
 Quy trình gán nhãn 2 vòng "Bất Khả Sai" (Zero-Defect Hybrid Annotation Pipeline).
-Kết hợp SOTA Model (YOLOv8x) quét sơ bộ với Dữ liệu Vật lý Godot 3D (Skeleton3D & 128-Raycast).
+Kết hợp SOTA Model (YOLOv8x) quét sơ bộ với Dữ liệu Vật lý Godot 3D (Skeleton3D, 128-Raycast & Prop 3D Models).
+Hỗ trợ Multi-Class:
+  Class 0: person (Bác sĩ, Điều dưỡng, Cụ già, Bệnh nhân nằm giường cấp cứu, Bệnh nhân ngồi xe lăn)
+  Class 1: wheelchair (Xe lăn y tế có người ngồi hoặc xe lăn rỗng)
 """
 
 import json
@@ -28,14 +31,16 @@ def compute_iou(boxA, boxB):
 
 def run_zero_defect_pipeline():
     repo_root = Path(__file__).resolve().parent.parent.parent
-    data_dir = repo_root / "sim_vision" / "data" / "vision_eval_unified"
+    data_dir = repo_root / "data" / "vision" / "vision_eval_unified"
+    if not data_dir.exists():
+        data_dir = repo_root / "data" / "vision_eval_unified"
     img_dir = data_dir / "images"
     lbl_dir = data_dir / "labels"
     rich_jsonl_path = data_dir / "annotations_rich_5w1h.jsonl"
     manifest_path = data_dir / "manifest_unified.json"
 
     print("==================================================================")
-    print("🚀 BẮT ĐẦU QUY TRÌNH GÁN NHÃN 2 VÒNG ZERO-DEFECT HYBRID")
+    print("🚀 BẮT ĐẦU QUY TRÌNH GÁN NHÃN 2 VÒNG ZERO-DEFECT HYBRID (MULTI-CLASS)")
     print(f"📁 Thư mục dữ liệu: {data_dir}")
     print("==================================================================")
 
@@ -57,6 +62,7 @@ def run_zero_defect_pipeline():
     total_frames = len(records)
     total_hard_negatives = 0
     total_persons_gt = 0
+    total_wheelchairs_gt = 0
     total_ai_matched = 0
     total_raycast_fallback = 0
     total_ignored_occluded = 0
@@ -65,6 +71,7 @@ def run_zero_defect_pipeline():
 
     for idx, rec in enumerate(records):
         frame_id = rec["frame_id"]
+        case_id = rec.get("case_id", "")
         is_hard_neg = rec.get("is_hard_negative", False)
         img_file = img_dir / f"{frame_id}.jpg"
         lbl_file = lbl_dir / f"{frame_id}.txt"
@@ -74,17 +81,53 @@ def run_zero_defect_pipeline():
         final_gt_boxes = []
 
         if is_hard_neg:
-            # ĐỊNH LUẬT BẪY RỖNG (Zero-GT Invariance Law)
-            # Khung cảnh không có người thật trong 3D -> Hủy 100% dự đoán của AI (ép file 0 byte)
             total_hard_negatives += 1
-            with open(lbl_file, "w", encoding="utf-8") as lf:
-                pass  # empty file
-            rec["zero_defect_boxes"] = []
-            rec["ground_truth_status"] = "VERIFIED_HARD_NEGATIVE_ZERO_GT"
-            verified_records.append(rec)
-            continue
+            # ĐỊNH LUẬT BẪY RỖNG ĐA LỚP:
+            # - Với U8.2 (Bẫy xe lăn rỗng): 0 người (Person=0) nhưng CÓ 1 Xe Lăn (Wheelchair=1)!
+            # - Với U8.4, U8.6, U8.8 (Kiosk, Giường rỗng, Standee): 0 người và 0 xe lăn (File rỗng 0 byte).
+            if case_id == "U8.2":
+                phys_gts = rec.get("ground_truth_annotations", [])
+                for phys in phys_gts:
+                    if phys.get("category_id") == 1 or phys.get("category_name") == "wheelchair":
+                        w_box = phys.get("bbox_xyxy_px", [])
+                        if len(w_box) == 4:
+                            cx1 = max(0.0, min(float(img_w), w_box[0]))
+                            cy1 = max(0.0, min(float(img_h), w_box[1]))
+                            cx2 = max(0.0, min(float(img_w), w_box[2]))
+                            cy2 = max(0.0, min(float(img_h), w_box[3]))
+                            bw = cx2 - cx1
+                            bh = cy2 - cy1
+                            if bw >= 8.0 and bh >= 8.0:
+                                total_wheelchairs_gt += 1
+                                norm_cx = (cx1 + cx2) * 0.5 / img_w
+                                norm_cy = (cy1 + cy2) * 0.5 / img_h
+                                norm_bw = bw / img_w
+                                norm_bh = bh / img_h
+                                final_yolo_lines.append(f"1 {norm_cx:.6f} {norm_cy:.6f} {norm_bw:.6f} {norm_bh:.6f}")
+                                final_gt_boxes.append({
+                                    "category_id": 1,
+                                    "category_name": "wheelchair",
+                                    "bbox_xyxy_px": [cx1, cy1, cx2, cy2],
+                                    "annotation_source": "PHYSICAL_3D_WHEELCHAIR_GROUNDTRUTH",
+                                    "visibility_ratio": phys.get("visibility_ratio", 1.0),
+                                    "subcategory": "wheelchair"
+                                })
+                with open(lbl_file, "w", encoding="utf-8") as lf:
+                    if final_yolo_lines:
+                        lf.write("\n".join(final_yolo_lines) + "\n")
+                rec["zero_defect_boxes"] = final_gt_boxes
+                rec["ground_truth_status"] = "VERIFIED_HARD_NEGATIVE_EMPTY_WHEELCHAIR"
+                verified_records.append(rec)
+                continue
+            else:
+                with open(lbl_file, "w", encoding="utf-8") as lf:
+                    pass  # empty file 0 byte
+                rec["zero_defect_boxes"] = []
+                rec["ground_truth_status"] = "VERIFIED_HARD_NEGATIVE_ZERO_GT"
+                verified_records.append(rec)
+                continue
 
-        # Ca có người -> Chạy YOLOv8x quét sơ bộ
+        # Ca có người -> Chạy YOLOv8x quét sơ bộ người
         # conf=0.15, classes=[0] (person)
         preds = model(str(img_file), conf=0.15, classes=[0], verbose=False)[0]
         ai_boxes = []
@@ -96,6 +139,36 @@ def run_zero_defect_pipeline():
         phys_gts = rec.get("ground_truth_annotations", [])
 
         for phys in phys_gts:
+            cat_id = phys.get("category_id", 0)
+
+            # 1. Nếu là Xe lăn (Wheelchair Class 1)
+            if cat_id == 1 or phys.get("category_name") == "wheelchair":
+                w_box = phys.get("bbox_xyxy_px", [])
+                if len(w_box) == 4:
+                    cx1 = max(0.0, min(float(img_w), w_box[0]))
+                    cy1 = max(0.0, min(float(img_h), w_box[1]))
+                    cx2 = max(0.0, min(float(img_w), w_box[2]))
+                    cy2 = max(0.0, min(float(img_h), w_box[3]))
+                    bw = cx2 - cx1
+                    bh = cy2 - cy1
+                    if bw >= 8.0 and bh >= 8.0:
+                        total_wheelchairs_gt += 1
+                        norm_cx = (cx1 + cx2) * 0.5 / img_w
+                        norm_cy = (cy1 + cy2) * 0.5 / img_h
+                        norm_bw = bw / img_w
+                        norm_bh = bh / img_h
+                        final_yolo_lines.append(f"1 {norm_cx:.6f} {norm_cy:.6f} {norm_bw:.6f} {norm_bh:.6f}")
+                        final_gt_boxes.append({
+                            "category_id": 1,
+                            "category_name": "wheelchair",
+                            "bbox_xyxy_px": [cx1, cy1, cx2, cy2],
+                            "annotation_source": "PHYSICAL_3D_WHEELCHAIR_GROUNDTRUTH",
+                            "visibility_ratio": phys.get("visibility_ratio", 1.0),
+                            "subcategory": "wheelchair"
+                        })
+                continue
+
+            # 2. Nếu là Người (Person Class 0)
             vis_ratio = float(phys.get("visibility_ratio", 1.0))
             if vis_ratio < 0.05 and phys.get("ignore_eval", False):
                 total_ignored_occluded += 1
@@ -135,7 +208,7 @@ def run_zero_defect_pipeline():
                 match_source = f"YOLOv8x_CONF_{best_ai['conf']:.2f}_IOU_{best_score:.2f}"
                 total_ai_matched += 1
             else:
-                # Fallback Định Luật Khung Xương: dùng raycast physical box
+                # Fallback Định Luật Khung Xương: dùng raycast physical box (Đặc biệt hữu dụng cho nằm giường & ngụy trang)
                 chosen_box = [round(phys_box[0], 1), round(phys_box[1], 1), round(phys_box[2], 1), round(phys_box[3], 1)]
                 match_source = "PHYSICAL_RAYCAST_FALLBACK"
                 total_raycast_fallback += 1
@@ -200,32 +273,38 @@ def run_zero_defect_pipeline():
     # Cập nhật manifest_unified.json
     manifest = {
         "dataset_name": "vision_eval_unified",
-        "version": "3.0_zero_defect_gold",
+        "version": "3.1_zero_defect_multiclass_36_cases",
         "total_frames": total_frames,
-        "total_cases": 32,
+        "total_cases": 36,
+        "classes": {
+            0: "person",
+            1: "wheelchair"
+        },
         "resolution": [640, 480],
         "statistics": {
             "total_frames": total_frames,
             "total_hard_negatives_0gt": total_hard_negatives,
             "total_person_groundtruth_boxes": total_persons_gt,
+            "total_wheelchair_groundtruth_boxes": total_wheelchairs_gt,
             "total_ai_matched_boxes": total_ai_matched,
             "total_raycast_fallback_boxes": total_raycast_fallback,
             "total_ignored_occluded_persons": total_ignored_occluded
         },
-        "annotation_pipeline": "dual_pass_hybrid_yolov8x_plus_skeleton3d_raycast",
-        "zero_defect_guarantee": "Zero False Positives on Empty Traps & Full Physical Alignment"
+        "annotation_pipeline": "dual_pass_hybrid_yolov8x_plus_skeleton3d_raycast_multiclass",
+        "zero_defect_guarantee": "Zero False Positives on Empty Traps, Recumbent Bed Patient & Wheelchair Detection"
     }
     with open(manifest_path, "w", encoding="utf-8") as f:
         json.dump(manifest, f, indent=2, ensure_ascii=False)
 
     print("==================================================================")
-    print("✅ HOÀN TẤT QUY TRÌNH GÁN NHÃN 2 VÒNG ZERO-DEFECT!")
+    print("✅ HOÀN TẤT QUY TRÌNH GÁN NHÃN 2 VÒNG ZERO-DEFECT (MULTI-CLASS)!")
     print(f"• Tổng số frames: {total_frames}")
-    print(f"• Số ca bẫy rỗng 0 GT: {total_hard_negatives} frames (Đảm bảo 0 bytes)")
-    print(f"• Tổng số nhãn người Gold: {total_persons_gt} boxes")
+    print(f"• Số ca bẫy rỗng (Hard Negatives): {total_hard_negatives} frames")
+    print(f"• Tổng số nhãn Người (Class 0): {total_persons_gt} boxes")
+    print(f"• Tổng số nhãn Xe Lăn (Class 1): {total_wheelchairs_gt} boxes")
     print(f"• Tỷ lệ SOTA AI bọc viền áo chuẩn: {total_ai_matched} boxes ({total_ai_matched / max(total_persons_gt, 1) * 100:.1f}%)")
-    print(f"• Tỷ lệ Raycast fallback (ngụy trang khó): {total_raycast_fallback} boxes")
-    print(f"• Số người bị che khuất > 80% bỏ qua: {total_ignored_occluded} instances")
+    print(f"• Tỷ lệ Raycast fallback (nằm giường/ngụy trang/xa): {total_raycast_fallback} boxes")
+    print(f"• Số đối tượng che khuất > 95% bỏ qua: {total_ignored_occluded} instances")
     print("==================================================================")
 
 if __name__ == "__main__":

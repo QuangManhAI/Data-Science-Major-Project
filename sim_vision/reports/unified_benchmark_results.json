@@ -1,86 +1,22 @@
 [
   {
     "model_name": "yolov8n.pt (Baseline)",
-    "precision": 0.923,
-    "recall_overall": 0.8647,
+    "precision": 0.9295,
+    "recall_overall": 0.8484,
     "recall_wheelchair": 1.0,
-    "recall_occluded": 0.5208,
-    "fpr_empty": 0.0,
-    "mean_bearing_err_deg": 0.6,
-    "latency_p50_ms": 41.82,
-    "latency_p95_ms": 55.68,
-    "raw_counts": {
-      "tp": 575,
-      "fp": 48,
-      "fn": 90,
-      "tp_wc": 18,
-      "fn_wc": 0,
-      "tp_occ": 75,
-      "fn_occ": 69
-    },
-    "slice_metrics": {
-      "U1_Camouflage": {
-        "tp": 90,
-        "fn": 0,
-        "fp": 0,
-        "frames": 90
-      },
-      "U2_ClinicalPoses": {
-        "tp": 90,
-        "fn": 0,
-        "fp": 0,
-        "frames": 90
-      },
-      "U3_MedicalProps": {
-        "tp": 89,
-        "fn": 44,
-        "fp": 44,
-        "frames": 144
-      },
-      "U5_Kinematics": {
-        "tp": 15,
-        "fn": 3,
-        "fp": 1,
-        "frames": 18
-      },
-      "U6_CrowdSocial": {
-        "tp": 201,
-        "fn": 43,
-        "fp": 3,
-        "frames": 108
-      },
-      "U7_ExtremeOptics": {
-        "tp": 90,
-        "fn": 0,
-        "fp": 0,
-        "frames": 90
-      },
-      "U8_EmptyTraps": {
-        "tp": 0,
-        "fn": 0,
-        "fp": 0,
-        "frames": 36
-      }
-    }
-  },
-  {
-    "model_name": "yolo11n.pt (C2PSA Attention)",
-    "precision": 0.935,
-    "recall_overall": 0.8436,
-    "recall_wheelchair": 1.0,
-    "recall_occluded": 0.4722,
+    "recall_occluded": 0.531,
     "fpr_empty": 0.0,
     "mean_bearing_err_deg": 0.58,
-    "latency_p50_ms": 43.3,
-    "latency_p95_ms": 50.36,
+    "latency_p50_ms": 32.85,
+    "latency_p95_ms": 35.22,
     "raw_counts": {
-      "tp": 561,
-      "fp": 39,
-      "fn": 104,
-      "tp_wc": 18,
+      "tp": 593,
+      "fp": 45,
+      "fn": 106,
+      "tp_wc": 36,
       "fn_wc": 0,
-      "tp_occ": 68,
-      "fn_occ": 76
+      "tp_occ": 77,
+      "fn_occ": 68
     },
     "slice_metrics": {
       "U1_Camouflage": {
@@ -90,15 +26,15 @@
         "frames": 90
       },
       "U2_ClinicalPoses": {
-        "tp": 90,
-        "fn": 0,
-        "fp": 0,
-        "frames": 90
+        "tp": 108,
+        "fn": 18,
+        "fp": 3,
+        "frames": 126
       },
       "U3_MedicalProps": {
-        "tp": 80,
-        "fn": 53,
-        "fp": 34,
+        "tp": 91,
+        "fn": 39,
+        "fp": 39,
         "frames": 144
       },
       "U5_Kinematics": {
@@ -108,71 +44,7 @@
         "frames": 18
       },
       "U6_CrowdSocial": {
-        "tp": 196,
-        "fn": 48,
-        "fp": 5,
-        "frames": 108
-      },
-      "U7_ExtremeOptics": {
-        "tp": 90,
-        "fn": 0,
-        "fp": 0,
-        "frames": 90
-      },
-      "U8_EmptyTraps": {
-        "tp": 0,
-        "fn": 0,
-        "fp": 0,
-        "frames": 36
-      }
-    }
-  },
-  {
-    "model_name": "yolo26n.pt (NMS-Free)",
-    "precision": 0.9136,
-    "recall_overall": 0.8586,
-    "recall_wheelchair": 1.0,
-    "recall_occluded": 0.5069,
-    "fpr_empty": 0.0,
-    "mean_bearing_err_deg": 0.55,
-    "latency_p50_ms": 41.45,
-    "latency_p95_ms": 51.42,
-    "raw_counts": {
-      "tp": 571,
-      "fp": 54,
-      "fn": 94,
-      "tp_wc": 18,
-      "fn_wc": 0,
-      "tp_occ": 73,
-      "fn_occ": 71
-    },
-    "slice_metrics": {
-      "U1_Camouflage": {
-        "tp": 90,
-        "fn": 0,
-        "fp": 0,
-        "frames": 90
-      },
-      "U2_ClinicalPoses": {
-        "tp": 89,
-        "fn": 1,
-        "fp": 1,
-        "frames": 90
-      },
-      "U3_MedicalProps": {
-        "tp": 89,
-        "fn": 44,
-        "fp": 50,
-        "frames": 144
-      },
-      "U5_Kinematics": {
-        "tp": 15,
-        "fn": 3,
-        "fp": 0,
-        "frames": 18
-      },
-      "U6_CrowdSocial": {
-        "tp": 198,
+        "tp": 199,
         "fn": 46,
         "fp": 3,
         "frames": 108
@@ -187,28 +59,220 @@
         "tp": 0,
         "fn": 0,
         "fp": 0,
-        "frames": 36
+        "frames": 72
+      }
+    }
+  },
+  {
+    "model_name": "yolo11n.pt (C2PSA Attention)",
+    "precision": 0.9314,
+    "recall_overall": 0.8355,
+    "recall_wheelchair": 1.0,
+    "recall_occluded": 0.4897,
+    "fpr_empty": 0.0,
+    "mean_bearing_err_deg": 0.57,
+    "latency_p50_ms": 32.65,
+    "latency_p95_ms": 35.16,
+    "raw_counts": {
+      "tp": 584,
+      "fp": 43,
+      "fn": 115,
+      "tp_wc": 36,
+      "fn_wc": 0,
+      "tp_occ": 71,
+      "fn_occ": 74
+    },
+    "slice_metrics": {
+      "U1_Camouflage": {
+        "tp": 89,
+        "fn": 1,
+        "fp": 0,
+        "frames": 90
+      },
+      "U2_ClinicalPoses": {
+        "tp": 108,
+        "fn": 18,
+        "fp": 4,
+        "frames": 126
+      },
+      "U3_MedicalProps": {
+        "tp": 86,
+        "fn": 44,
+        "fp": 38,
+        "frames": 144
+      },
+      "U5_Kinematics": {
+        "tp": 16,
+        "fn": 2,
+        "fp": 0,
+        "frames": 18
+      },
+      "U6_CrowdSocial": {
+        "tp": 195,
+        "fn": 50,
+        "fp": 1,
+        "frames": 108
+      },
+      "U7_ExtremeOptics": {
+        "tp": 90,
+        "fn": 0,
+        "fp": 0,
+        "frames": 90
+      },
+      "U8_EmptyTraps": {
+        "tp": 0,
+        "fn": 0,
+        "fp": 0,
+        "frames": 72
+      }
+    }
+  },
+  {
+    "model_name": "yolo26n.pt (NMS-Free)",
+    "precision": 0.918,
+    "recall_overall": 0.8484,
+    "recall_wheelchair": 1.0,
+    "recall_occluded": 0.531,
+    "fpr_empty": 0.0,
+    "mean_bearing_err_deg": 0.55,
+    "latency_p50_ms": 32.33,
+    "latency_p95_ms": 35.08,
+    "raw_counts": {
+      "tp": 593,
+      "fp": 53,
+      "fn": 106,
+      "tp_wc": 36,
+      "fn_wc": 0,
+      "tp_occ": 77,
+      "fn_occ": 68
+    },
+    "slice_metrics": {
+      "U1_Camouflage": {
+        "tp": 90,
+        "fn": 0,
+        "fp": 0,
+        "frames": 90
+      },
+      "U2_ClinicalPoses": {
+        "tp": 108,
+        "fn": 18,
+        "fp": 4,
+        "frames": 126
+      },
+      "U3_MedicalProps": {
+        "tp": 94,
+        "fn": 36,
+        "fp": 46,
+        "frames": 144
+      },
+      "U5_Kinematics": {
+        "tp": 15,
+        "fn": 3,
+        "fp": 0,
+        "frames": 18
+      },
+      "U6_CrowdSocial": {
+        "tp": 196,
+        "fn": 49,
+        "fp": 3,
+        "frames": 108
+      },
+      "U7_ExtremeOptics": {
+        "tp": 90,
+        "fn": 0,
+        "fp": 0,
+        "frames": 90
+      },
+      "U8_EmptyTraps": {
+        "tp": 0,
+        "fn": 0,
+        "fp": 0,
+        "frames": 72
+      }
+    }
+  },
+  {
+    "model_name": "yolov8x.pt (SOTA 131M)",
+    "precision": 0.9486,
+    "recall_overall": 0.8984,
+    "recall_wheelchair": 1.0,
+    "recall_occluded": 0.731,
+    "fpr_empty": 0.0,
+    "mean_bearing_err_deg": 0.51,
+    "latency_p50_ms": 621.34,
+    "latency_p95_ms": 655.13,
+    "raw_counts": {
+      "tp": 628,
+      "fp": 34,
+      "fn": 71,
+      "tp_wc": 36,
+      "fn_wc": 0,
+      "tp_occ": 106,
+      "fn_occ": 39
+    },
+    "slice_metrics": {
+      "U1_Camouflage": {
+        "tp": 90,
+        "fn": 0,
+        "fp": 0,
+        "frames": 90
+      },
+      "U2_ClinicalPoses": {
+        "tp": 108,
+        "fn": 18,
+        "fp": 6,
+        "frames": 126
+      },
+      "U3_MedicalProps": {
+        "tp": 112,
+        "fn": 18,
+        "fp": 23,
+        "frames": 144
+      },
+      "U5_Kinematics": {
+        "tp": 16,
+        "fn": 2,
+        "fp": 3,
+        "frames": 18
+      },
+      "U6_CrowdSocial": {
+        "tp": 212,
+        "fn": 33,
+        "fp": 2,
+        "frames": 108
+      },
+      "U7_ExtremeOptics": {
+        "tp": 90,
+        "fn": 0,
+        "fp": 0,
+        "frames": 90
+      },
+      "U8_EmptyTraps": {
+        "tp": 0,
+        "fn": 0,
+        "fp": 0,
+        "frames": 72
       }
     }
   },
   {
     "model_name": "intel/person-retail-0013 (OpenVINO)",
-    "precision": 0.9136,
-    "recall_overall": 0.7789,
+    "precision": 0.9007,
+    "recall_overall": 0.7654,
     "recall_wheelchair": 0.9444,
-    "recall_occluded": 0.5069,
-    "fpr_empty": 0.0278,
-    "mean_bearing_err_deg": 0.6,
-    "latency_p50_ms": 9.24,
-    "latency_p95_ms": 10.96,
+    "recall_occluded": 0.5172,
+    "fpr_empty": 0.0417,
+    "mean_bearing_err_deg": 0.53,
+    "latency_p50_ms": 7.8,
+    "latency_p95_ms": 8.86,
     "raw_counts": {
-      "tp": 518,
-      "fp": 49,
-      "fn": 147,
-      "tp_wc": 17,
-      "fn_wc": 1,
-      "tp_occ": 73,
-      "fn_occ": 71
+      "tp": 535,
+      "fp": 59,
+      "fn": 164,
+      "tp_wc": 34,
+      "fn_wc": 2,
+      "tp_occ": 75,
+      "fn_occ": 70
     },
     "slice_metrics": {
       "U1_Camouflage": {
@@ -218,15 +282,15 @@
         "frames": 90
       },
       "U2_ClinicalPoses": {
-        "tp": 79,
-        "fn": 11,
-        "fp": 5,
-        "frames": 90
+        "tp": 97,
+        "fn": 29,
+        "fp": 7,
+        "frames": 126
       },
       "U3_MedicalProps": {
         "tp": 80,
-        "fn": 53,
-        "fp": 32,
+        "fn": 50,
+        "fp": 33,
         "frames": 144
       },
       "U5_Kinematics": {
@@ -236,22 +300,22 @@
         "frames": 18
       },
       "U6_CrowdSocial": {
-        "tp": 182,
-        "fn": 62,
-        "fp": 11,
+        "tp": 180,
+        "fn": 65,
+        "fp": 15,
         "frames": 108
       },
       "U7_ExtremeOptics": {
-        "tp": 81,
-        "fn": 9,
+        "tp": 82,
+        "fn": 8,
         "fp": 0,
         "frames": 90
       },
       "U8_EmptyTraps": {
         "tp": 0,
         "fn": 0,
-        "fp": 1,
-        "frames": 36
+        "fp": 4,
+        "frames": 72
       }
     }
   }

@@ -10,6 +10,7 @@ import asyncio
 import logging
 import os
 import sys
+from pathlib import Path
 
 from websockets.asyncio.server import Server, ServerConnection, serve
 from websockets.exceptions import ConnectionClosed
@@ -75,8 +76,12 @@ async def start_server(detector: Detector, host: str = WS_HOST, port: int = WS_P
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="YOLOv8n person detection WebSocket server")
-    p.add_argument("--model", default="yolov8n.pt", help="đường dẫn yolov8n.pt (không tự tải)")
+    repo_root = Path(__file__).resolve().parent.parent.parent
+    default_model = repo_root / "models/yolo26n/yolo26n.pt"
+    if not default_model.exists():
+        default_model = repo_root / "models/yolov8n/yolov8n.pt"
+    p = argparse.ArgumentParser(description="YOLO person detection WebSocket server (Default: YOLO26n)")
+    p.add_argument("--model", default=str(default_model), help="đường dẫn file model .pt")
     p.add_argument("--port", type=int, default=WS_PORT)
     return p.parse_args(argv)
 
@@ -90,14 +95,19 @@ async def _serve_forever(detector: Detector, port: int) -> None:
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(sys.argv[1:] if argv is None else argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-    # Kiểm tra trước: ultralytics sẽ tự tải model nếu không thấy file, điều này bị cấm.
-    if not os.path.isfile(args.model):
-        print(f"ERROR: model file not found: {args.model}", file=sys.stderr)
-        return 1
+    model_path = args.model
+    if not os.path.isfile(model_path):
+        repo_root = Path(__file__).resolve().parent.parent.parent
+        alt_path = repo_root / model_path
+        if alt_path.is_file():
+            model_path = str(alt_path)
+        else:
+            print(f"ERROR: model file not found: {args.model}", file=sys.stderr)
+            return 1
     from detector import YoloDetector
 
-    detector = YoloDetector(args.model)
-    log.info("loaded model %s", args.model)
+    detector = YoloDetector(model_path)
+    log.info("loaded model %s", model_path)
     try:
         asyncio.run(_serve_forever(detector, args.port))
     except KeyboardInterrupt:

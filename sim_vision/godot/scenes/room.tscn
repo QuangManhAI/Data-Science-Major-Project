@@ -32,7 +32,7 @@
 [ext_resource type="PackedScene" path="res://scenes/props/medical_waste_bin.tscn" id="31"]
 [ext_resource type="PackedScene" path="res://scenes/props/medical_trolley.tscn" id="32"]
 [ext_resource type="PackedScene" path="res://scenes/props/medical_screen.tscn" id="33"]
-[ext_resource type="PackedScene" path="res://scenes/props/elevator_doors.tscn" id="34"]
+[ext_resource type="PackedScene" path="res://scenes/props/elevator_station.tscn" id="34"]
 [ext_resource type="PackedScene" path="res://scenes/props/wc_station.tscn" id="35"]
 [ext_resource type="PackedScene" path="res://scenes/props/medical_wall_board.tscn" id="36"]
 [ext_resource type="PackedScene" uid="uid://ch55mwwagt0xh" path="res://assets/models/chemistry_set/chemistry_set_1k.gltf" id="37"]
@@ -62,6 +62,7 @@
 [ext_resource type="PackedScene" path="res://scenes/props/npc_patient_m05.tscn" id="61"]
 [ext_resource type="PackedScene" path="res://scenes/props/npc_patient_elder_m14.tscn" id="62"]
 [ext_resource type="PackedScene" path="res://scenes/props/npc_patient_f08.tscn" id="63"]
+[ext_resource type="PackedScene" path="res://scenes/room_floor2.tscn" id="64"]
 
 [sub_resource type="StandardMaterial3D" id="mat_floor"]
 albedo_texture = ExtResource("2")
@@ -1118,3 +1119,6 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 9, 2.9, 5.5)
 light_energy = 1.1
 shadow_enabled = true
 omni_range = 8.0
+
+[node name="Floor2" parent="." instance=ExtResource("64")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 50, 0, 0)

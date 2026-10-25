@@ -29,6 +29,7 @@ REWARD_ANSWER = 10.0
 REWARD_CALL_STAFF = 20.0
 REWARD_GUIDE_ARRIVED = 30.0
 REWARD_PATIENT_ENGAGED = 2.0
+REWARD_ELEVATOR_TRANSIT = 10.0
 
 # Dense shaping & safety constants
 SHAPING_PROGRESS_SCALE = 1.5
@@ -66,6 +67,27 @@ DESTINATION_POSITIONS: dict[str, tuple[float, float]] = {
     "nha_ve_sinh": (7.5, 5.5),
     "thang_may": (10.5, 0.0),
     "staff": (-1.8, 3.8),
+    # Floor 2 Anchors (offset X = +50.0m)
+    "201": (42.0, -5.2),
+    "204": (42.0, -5.2),
+    "205": (50.0, -5.2),
+    "210": (58.0, -5.2),
+    "220": (41.0, 5.2),
+    "sanh_t2": (50.0, 5.2),
+    "wc_t2": (59.5, 6.5),
+    "thang_may_t2": (59.0, 4.6),
+}
+
+FLOOR2_DIRECT_SLOTS = {
+    "201",
+    "204",
+    "205",
+    "210",
+    "220",
+    "sanh_t2",
+    "wc_t2",
+    "thang_may_t2",
+    "hanh_lang_t2",
 }
 
 FLOOR1_DIRECT_SLOTS = {
@@ -92,6 +114,8 @@ PATIENT_SCENARIOS: list[tuple[str, str, int]] = [
     ("guide", "bhyt", 1),
     ("guide", "301", 3),        # Floor 3 -> routes to Elevator (thang_may)
     ("guide", "204", 2),        # Floor 2 -> routes to Elevator (thang_may)
+    ("guide", "205", 2),        # Floor 2 Gastroenterology -> Elevator
+    ("guide", "210", 2),        # Floor 2 ENT -> Elevator
     ("call_staff", "", 1),      # Routes to nearest Medical Staff
     ("emergency", "101", 1),    # Routes to nearest Medical Staff
     ("answer", "", 1),          # Verbal answer (+10 R_team)
@@ -150,8 +174,8 @@ class WallBox2D:
         return tmin if 0.0 <= tmin <= max_t else max_t
 
 
-# Exact 24m x 18m hospital walls from sim_vision/godot/scenes/room.tscn
-HOSPITAL_WALLS: tuple[WallBox2D, ...] = (
+# Floor 1 & Floor 2 Hospital Walls (Floor 2 side-by-side offset at X = +50.0m)
+FLOOR1_WALLS: tuple[WallBox2D, ...] = (
     # Outer shell
     WallBox2D(0.0, -9.0, 12.1, 0.15),
     WallBox2D(0.0, 9.0, 12.1, 0.15),
@@ -174,24 +198,54 @@ HOSPITAL_WALLS: tuple[WallBox2D, ...] = (
     WallBox2D(4.0, 5.5, 0.09, 3.5),
 )
 
+FLOOR2_WALLS: tuple[WallBox2D, ...] = tuple(
+    WallBox2D(w.cx + 50.0, w.cz, w.hx, w.hz) for w in FLOOR1_WALLS
+)
 
-def resolve_destination_key(action: str, slot_key: str, floor_num: int = 1) -> str:
-    """Smart Floor-1 routing matching RLEnvBridge.resolve_destination_key."""
+HOSPITAL_WALLS: tuple[WallBox2D, ...] = FLOOR1_WALLS + FLOOR2_WALLS
+
+
+def resolve_final_target(action: str, slot_key: str, dest_floor: int = 1) -> str:
     act = action.strip().lower()
     key = slot_key.strip().lower()
     if act in ("call_staff", "emergency"):
         return "staff"
     if act != "guide":
         return ""
-    if floor_num >= 2:
-        return "thang_may"
-    if len(key) == 3 and key.isdigit() and key[0] in ("2", "3", "4"):
-        return "thang_may"
-    if key in ("bhyt", "thu_ngan"):
+    if key in ("bhyt", "thu_ngan", "uu_tien"):
         return "tiep_don"
+    if key in FLOOR2_DIRECT_SLOTS:
+        return key
+    if len(key) == 3 and key.isdigit() and key[0] == "2":
+        return "205"
     if key in FLOOR1_DIRECT_SLOTS:
         return key
+    if dest_floor >= 2:
+        return "sanh_t2"
     return "tiep_don"
+
+
+def resolve_destination_key(action: str, slot_key: str, dest_floor: int = 1, current_floor: int = 1, floor_num: int | None = None) -> str:
+    if floor_num is not None:
+        dest_floor = floor_num
+    """Smart routing matching RLEnvBridge.resolve_destination_key."""
+    act = action.strip().lower()
+    key = slot_key.strip().lower()
+    if act in ("call_staff", "emergency"):
+        return "staff"
+    if act != "guide":
+        return ""
+    final_target = resolve_final_target(act, key, dest_floor)
+    target_floor = 2 if (final_target in FLOOR2_DIRECT_SLOTS or dest_floor >= 2 or (len(key) == 3 and key.isdigit() and key[0] in ("2", "3", "4"))) else 1
+
+    if current_floor == 1:
+        if target_floor >= 2:
+            return "thang_may"
+        return final_target
+    else:  # current_floor == 2
+        if target_floor == 1:
+            return "thang_may_t2"
+        return final_target
 
 
 def signed_angle_rad(fwd_x: float, fwd_z: float, to_x: float, to_z: float) -> float:
@@ -265,33 +319,38 @@ class HospitalShiftEnv:
         self.curriculum_stage = int(stage)
 
     def _sample_patient_spawn_solo(self) -> tuple[float, float]:
-        """Sample free coordinates strictly in public corridors or lobby (never inside medical rooms)."""
+        """Sample free coordinates strictly in public corridors or lobby on robot's current floor."""
+        x_base = 50.0 if self.robot_x >= 25.0 else 0.0
         for _ in range(250):
             if self.rng.random() < 0.60:
                 # Central and connecting corridors
-                x = float(self.rng.uniform(-10.0, 10.0))
+                x = float(self.rng.uniform(-10.0, 10.0)) + x_base
                 z = float(self.rng.uniform(-1.3, 1.3))
             else:
                 # Main lobby waiting & reception area
-                x = float(self.rng.uniform(-3.2, 3.2))
+                x = float(self.rng.uniform(-3.2, 3.2)) + x_base
                 z = float(self.rng.uniform(2.2, 6.5))
             if all(not w.contains(x, z, margin=0.65) for w in HOSPITAL_WALLS):
                 return x, z
-        return 0.0, 4.0
+        return 0.0 + x_base, 4.0
 
     def _sample_solo_scenario(self) -> None:
         """Sample scenario with 70% escort, 15% question answer, 15% call doctor."""
         r_val = float(self.rng.uniform(0.0, 1.0))
         if r_val < 0.70:
-            # 70% Guide / Escort (to 101, 110, 112, nha_thuoc, tiep_don, thang_may, nha_ve_sinh)
+            # 70% Guide / Escort across Floor 1 & Floor 2
             dest_choices = [
                 ("guide", "101", 1),
                 ("guide", "110", 1),
                 ("guide", "112", 1),
                 ("guide", "nha_thuoc", 1),
                 ("guide", "tiep_don", 1),
-                ("guide", "thang_may", 2),
                 ("guide", "nha_ve_sinh", 1),
+                ("guide", "201", 2),
+                ("guide", "205", 2),
+                ("guide", "210", 2),
+                ("guide", "220", 2),
+                ("guide", "wc_t2", 2),
             ]
             idx = int(self.rng.integers(0, len(dest_choices)))
             self.scenario_action, self.scenario_slot, self.scenario_floor = dest_choices[idx]
@@ -502,30 +561,41 @@ class HospitalShiftEnv:
 
     def _route_through_corridor_goal(self, target_x: float, target_z: float) -> tuple[float, float]:
         """Provide doorway/corridor sub-goal when robot and destination are in different rooms."""
+        x_base = 50.0 if self.robot_x >= 25.0 else 0.0
+        local_rx = self.robot_x - x_base
+        local_tx = target_x - x_base
+
+        # If target is on another floor (e.g. elevator transition needed)
+        target_base = 50.0 if target_x >= 25.0 else 0.0
+        if target_base != x_base:
+            elev_x = 10.5 + x_base
+            elev_z = 0.0 if x_base == 0.0 else 4.6
+            return elev_x, elev_z
+
         # If robot is inside a North room (z < -2.1) and target is outside that room
-        if self.robot_z < -2.1 and (target_z > -1.8 or abs(target_x - self.robot_x) > 3.5):
-            door_x = -8.5 if self.robot_x < -3.0 else (0.0 if self.robot_x < 5.0 else 8.5)
-            if abs(self.robot_x - door_x) > 0.6 or self.robot_z < -1.8:
-                return door_x, -1.2
+        if self.robot_z < -2.1 and (target_z > -1.8 or abs(local_tx - local_rx) > 3.5):
+            door_x = -8.5 if local_rx < -3.0 else (0.0 if local_rx < 5.0 else 8.5)
+            if abs(local_rx - door_x) > 0.6 or self.robot_z < -1.8:
+                return door_x + x_base, -1.2
         # If robot is inside a South room (z > 2.1) and target is outside that room
-        if self.robot_z > 2.1 and (target_z < 1.8 or abs(target_x - self.robot_x) > 3.5):
-            door_x = -7.5 if self.robot_x < -4.0 else (0.0 if self.robot_x <= 4.0 else 7.5)
-            if abs(self.robot_x - door_x) > 0.6 or self.robot_z > 1.8:
-                return door_x, 1.2
+        if self.robot_z > 2.1 and (target_z < 1.8 or abs(local_tx - local_rx) > 3.5):
+            door_x = -7.5 if local_rx < -4.0 else (0.0 if local_rx <= 4.0 else 7.5)
+            if abs(local_rx - door_x) > 0.6 or self.robot_z > 1.8:
+                return door_x + x_base, 1.2
         # If robot is in corridor (-2.1 <= z <= 2.1) and target is in a North room (z < -2.2)
         if -2.1 <= self.robot_z <= 2.1 and target_z < -2.2:
-            door_x = -8.5 if target_x < -3.0 else (0.0 if target_x < 5.0 else 8.5)
-            if abs(self.robot_x - door_x) > 0.8:
-                return door_x, -1.0
+            door_x = -8.5 if local_tx < -3.0 else (0.0 if local_tx < 5.0 else 8.5)
+            if abs(local_rx - door_x) > 0.8:
+                return door_x + x_base, -1.0
             if self.robot_z > -2.1:
-                return door_x, -2.6
+                return door_x + x_base, -2.6
         # If robot is in corridor (-2.1 <= z <= 2.1) and target is in a South room (z > 2.2)
         if -2.1 <= self.robot_z <= 2.1 and target_z > 2.2:
-            door_x = -7.5 if target_x < -4.0 else (0.0 if target_x <= 4.0 else 7.5)
-            if abs(self.robot_x - door_x) > 0.8:
-                return door_x, 1.0
+            door_x = -7.5 if local_tx < -4.0 else (0.0 if local_tx <= 4.0 else 7.5)
+            if abs(local_rx - door_x) > 0.8:
+                return door_x + x_base, 1.0
             if self.robot_z < 2.1:
-                return door_x, 2.6
+                return door_x + x_base, 2.6
         return target_x, target_z
 
     def step(self, action: np.ndarray | list[float] | tuple[float, float]) -> tuple[np.ndarray, float, bool, dict[str, Any]]:
@@ -623,10 +693,25 @@ class HospitalShiftEnv:
             d_robot_dest = math.hypot(dest_x - self.robot_x, dest_z - self.robot_z)
             d_patient_dest = math.hypot(dest_x - self.patient_x, dest_z - self.patient_z)
             if d_robot_dest <= GOAL_ARRIVE_ROBOT_M and d_patient_dest <= GOAL_ARRIVE_PATIENT_M:
-                event = "guide_completed"
-                self.patients_helped += 1
-                self.steps_since_task = 0
-                self._spawn_next_patient()
+                final_target = resolve_final_target(self.scenario_action, self.scenario_slot, self.scenario_floor)
+                # Check if elevator transition is needed to continue to destination floor
+                if self.goal_key in ("thang_may", "thang_may_t2") and final_target != self.goal_key:
+                    event = "elevator_transit"
+                    if self.goal_key == "thang_may":
+                        # Floor 1 -> Floor 2 elevator teleport
+                        self.robot_x += 50.0
+                        self.patient_x += 50.0
+                    else:
+                        # Floor 2 -> Floor 1 elevator teleport
+                        self.robot_x -= 50.0
+                        self.patient_x -= 50.0
+                    self.goal_key = final_target
+                    self.steps_since_task = 0
+                else:
+                    event = "guide_completed"
+                    self.patients_helped += 1
+                    self.steps_since_task = 0
+                    self._spawn_next_patient()
         elif self.task_phase == TaskPhase.CALL_STAFF:
             dest_x, dest_z = DESTINATION_POSITIONS["staff"]
             if math.hypot(dest_x - self.robot_x, dest_z - self.robot_z) <= GOAL_ARRIVE_ROBOT_M:
@@ -641,6 +726,8 @@ class HospitalShiftEnv:
             r_team = REWARD_ANSWER
         elif event == "call_staff":
             r_team = REWARD_CALL_STAFF
+        elif event == "elevator_transit":
+            r_team = REWARD_ELEVATOR_TRANSIT
         elif event == "guide_completed":
             r_team = REWARD_GUIDE_ARRIVED
         elif event == "engaged":

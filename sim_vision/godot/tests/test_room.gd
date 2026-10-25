@@ -16,7 +16,7 @@ func test_has_furniture_and_wall_footprints_inside_hospital() -> void:
 	assert_true(furniture.size() >= 15, "expected >= 15 furniture footprints, got %d" % furniture.size())
 	assert_true(walls.size() >= 8, "expected >= 8 interior wall footprints, got %d" % walls.size())
 	for r: Rect2 in room.get_obstacle_footprints():
-		assert_true(r.position.x >= -12.01 and r.end.x <= 12.01, "x inside hospital: %s" % r)
+		assert_true((r.position.x >= -12.01 and r.end.x <= 12.01) or (r.position.x >= 37.8 and r.end.x <= 62.2), "x inside hospital: %s" % r)
 		assert_true(r.position.y >= -9.01 and r.end.y <= 9.01, "z inside hospital: %s" % r)
 
 

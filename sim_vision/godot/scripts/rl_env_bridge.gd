@@ -41,6 +41,9 @@ const FLOOR1_LOBBY_ALIASES: Array[String] = [
 const FLOOR1_CLINIC_ALIASES: Array[String] = [
 	"120", "125", "130", "135", "140"
 ]
+const FLOOR2_DIRECT_KEYS: Array[String] = [
+	"201", "204", "205", "210", "220", "sanh_t2", "wc_t2", "thang_may_t2", "hanh_lang_t2"
+]
 
 var task_phase: int = TaskPhase.SEARCH_PATIENT
 var active_action: String = ""
@@ -48,6 +51,7 @@ var active_target_key: String = ""
 var active_goal_pos: Vector3 = Vector3.ZERO
 var goal_position: Vector3 = Vector3.ZERO
 var goal_key: String = ""
+var final_target_key: String = ""
 var patients_helped: int = 0
 var cumulative_team_reward: float = 0.0
 var prev_goal_dist: float = -1.0
@@ -62,7 +66,9 @@ func setup(p_robot: Robot, p_room: Room) -> void:
 
 
 func begin_post_dialogue_task(act: String, target_str: String, floor_num: int, _patient: Human = null) -> void:
-	goal_key = resolve_destination_key(act, target_str, floor_num)
+	final_target_key = resolve_final_target(act, target_str, floor_num)
+	var current_floor: int = Room.get_floor(robot_ref.global_position) if robot_ref != null else 1
+	goal_key = resolve_destination_key(act, target_str, floor_num, current_floor)
 	if act == "guide":
 		task_phase = TaskPhase.GUIDE_ESCORT
 		if room_ref != null:
@@ -73,30 +79,48 @@ func begin_post_dialogue_task(act: String, target_str: String, floor_num: int, _
 		goal_position = find_nearest_staff_position(room_ref, from_pos)
 
 
-
-## Ánh xạ (action, target_id, floor_num) sang khóa waypoint thực tế trên Tầng 1:
-## - Phòng/khoa tầng 1 ➔ dẫn trực tiếp tới cửa phòng đó
-## - Phòng/khoa tầng 2–4 ➔ dẫn tới Thang máy ("thang_may")
-## - call_staff / emergency ➔ trả "staff" (tìm Bác sĩ / Điều dưỡng gần nhất)
-static func resolve_destination_key(action_name: String, target_id: String, floor_num: int = 1) -> String:
+## Phân giải phòng đích cuối cùng của bệnh nhân
+static func resolve_final_target(action_name: String, target_id: String, dest_floor: int = 1) -> String:
 	if action_name in ["call_staff", "emergency"]:
 		return "staff"
 	if action_name != "guide":
 		return ""
 	var t: String = target_id.strip_edges().to_lower()
-	if floor_num >= 2:
-		return "thang_may"
-	if t.length() == 3 and (t.begins_with("2") or t.begins_with("3") or t.begins_with("4")):
-		return "thang_may"
-	if t in FLOOR1_DIRECT_KEYS:
-		return t
 	if t in FLOOR1_LOBBY_ALIASES:
 		return "tiep_don"
+	if t in FLOOR2_DIRECT_KEYS:
+		return t
+	if t.begins_with("2"):
+		return "205"
+	if t in FLOOR1_DIRECT_KEYS:
+		return t
 	if t in FLOOR1_CLINIC_ALIASES:
 		return "112"
+	if dest_floor >= 2:
+		return "sanh_t2"
 	if t != "":
-		return "thang_may"
+		return "tiep_don"
 	return "tiep_don"
+
+
+## Ánh xạ đích trung gian theo tầng:
+## - Cùng tầng: dẫn trực tiếp tới phòng đích
+## - Khác tầng: dẫn tới trạm Thang máy của tầng hiện tại
+static func resolve_destination_key(action_name: String, target_id: String, dest_floor: int = 1, current_floor: int = 1) -> String:
+	if action_name in ["call_staff", "emergency"]:
+		return "staff"
+	if action_name != "guide":
+		return ""
+	var final_key: String = resolve_final_target(action_name, target_id, dest_floor)
+	var target_floor: int = 2 if (final_key in FLOOR2_DIRECT_KEYS or dest_floor >= 2 or (target_id.length() == 3 and target_id.begins_with("2"))) else 1
+	if current_floor == 1:
+		if target_floor >= 2:
+			return "thang_may"
+		return final_key
+	else:
+		if target_floor == 1:
+			return "thang_may_t2"
+		return final_key
 
 
 ## Tìm vị trí Nhân viên y tế (MedicalStaffNurse hoặc MedicalStaffDoctor) gần robot nhất.

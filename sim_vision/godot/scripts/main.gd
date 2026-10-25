@@ -29,6 +29,7 @@ const CAMERA_ORBIT_SPEED: float = 2.0
 var _rng := RandomNumberGenerator.new()
 var _controller: Node
 var _rl_bridge: Node = null
+var _is_in_elevator_transit: bool = false
 var _connected: bool = false
 var _last_seen_ms: int = -1             # −1 = chưa thấy người lần nào
 var _last_result_ms: int = -1
@@ -123,12 +124,20 @@ func _process(delta: float) -> void:
 func _physics_process(delta: float) -> void:
 	if _rl_bridge == null:
 		return
+	if _is_in_elevator_transit:
+		return
 	if _rl_bridge.task_phase == RLEnvBridgeScript.TaskPhase.GUIDE_ESCORT:
 		RLEnvBridgeScript.step_escorted_patient(human, robot.global_position, delta)
 		var d_goal: float = Human.flat_distance(robot.global_position, _rl_bridge.goal_position)
 		var d_tether: float = Human.flat_distance(robot.global_position, human.global_position)
 		var d_patient_goal: float = Human.flat_distance(human.global_position, _rl_bridge.goal_position)
 		if d_goal <= RLEnvBridgeScript.GOAL_ARRIVE_ROBOT_M and d_patient_goal <= RLEnvBridgeScript.GOAL_ARRIVE_PATIENT_M:
+			# Kiểm tra chuyển tầng qua thang máy
+			if _rl_bridge.goal_key in ["thang_may", "thang_may_t2"] and _rl_bridge.final_target_key != "" and _rl_bridge.final_target_key != _rl_bridge.goal_key:
+				var cur_fl: int = Room.get_floor(robot.global_position)
+				var dest_fl: int = Room.get_room_floor(_rl_bridge.final_target_key)
+				_execute_elevator_transit(cur_fl, dest_fl)
+				return
 			robot.set_command(0.0, 0.0)
 			_rl_bridge.cumulative_team_reward += RLEnvBridgeScript.REWARD_GUIDE_ARRIVED
 			_rl_bridge.patients_helped += 1
@@ -161,12 +170,120 @@ func _on_dialogue_turn_completed(row: Dictionary) -> void:
 		return
 	var act: String = str(row.get("action", ""))
 	var target_key: String = str(row.get("target", ""))
+	var fl: int = int(row.get("floor", 1))
 	if act == "guide" or act == "call_staff" or act == "emergency":
-		_rl_bridge.begin_post_dialogue_task(act, target_key, 1, human)
+		_rl_bridge.begin_post_dialogue_task(act, target_key, fl, human)
 	elif act in ["answer", "repeat", "refuse", "adjust"]:
 		_rl_bridge.cumulative_team_reward += RLEnvBridgeScript.REWARD_ANSWER
 		_rl_bridge.patients_helped += 1
 		overlay.set_status("Đã hỗ trợ bệnh nhân (R_team=%.0f)" % _rl_bridge.cumulative_team_reward)
+
+
+## Thực hiện chu trình đi thang máy 2 chiều đầy đủ hiệu ứng âm thanh, đèn LED và animation di chuyển
+func _execute_elevator_transit(from_floor: int, to_floor: int) -> void:
+	if _is_in_elevator_transit:
+		return
+	_is_in_elevator_transit = true
+	robot.set_command(0.0, 0.0)
+
+	var station_from: ElevatorStation = room.get_elevator_station(from_floor) if room != null else null
+	var station_to: ElevatorStation = room.get_elevator_station(to_floor) if room != null else null
+
+	if station_from == null or station_to == null:
+		var offset_x: float = 50.0 if to_floor == 2 else -50.0
+		robot.global_position.x += offset_x
+		human.global_position.x += offset_x
+		_rl_bridge.goal_key = _rl_bridge.final_target_key
+		_rl_bridge.goal_position = room.get_room_waypoint(_rl_bridge.final_target_key) if room != null else Vector3.ZERO
+		_is_in_elevator_transit = false
+		return
+
+	var arrow: String = "▲" if to_floor > from_floor else "▼"
+	station_from.set_floor_indicator(from_floor, arrow)
+	station_to.set_floor_indicator(from_floor, arrow)
+	overlay.set_status("Đang gọi thang máy: Tầng %d -> Tầng %d" % [from_floor, to_floor])
+
+	# 1. Mở cửa tầng xuất phát
+	station_from.open_doors()
+
+	var seq := create_tween()
+	seq.tween_interval(0.4)
+
+	# 2. Robot và bệnh nhân bước vào buồng thang máy
+	var cabin_pos_from: Vector3 = station_from.get_cabin_position()
+	var robot_cabin_target: Vector3 = cabin_pos_from + station_from.global_transform.basis * Vector3(0.25, 0.0, 0.0)
+	var human_cabin_target: Vector3 = cabin_pos_from + station_from.global_transform.basis * Vector3(-0.25, 0.0, 0.0)
+
+	seq.tween_callback(func():
+		var move_in := create_tween().set_parallel(true)
+		move_in.tween_property(robot, "global_position", robot_cabin_target, 0.8)
+		move_in.tween_property(human, "global_position", human_cabin_target, 0.8)
+	)
+	seq.tween_interval(0.9)
+
+	# 3. Đóng cửa tầng xuất phát
+	seq.tween_callback(func():
+		station_from.close_doors()
+	)
+	seq.tween_interval(0.5)
+
+	# 4. Hiệu ứng đi thang máy (tiếng hum động cơ + cập nhật đèn LED)
+	seq.tween_callback(func():
+		station_from.start_hum()
+		station_to.start_hum()
+		overlay.set_status("Thang máy đang di chuyển (%s Tầng %d)..." % [("Lên" if to_floor > from_floor else "Xuống"), to_floor])
+	)
+
+	seq.tween_interval(0.7)
+	seq.tween_callback(func():
+		station_from.set_floor_indicator(to_floor, arrow)
+		station_to.set_floor_indicator(to_floor, arrow)
+	)
+	seq.tween_interval(0.8)
+
+	# 5. Đến nơi: Dừng hum, chuông ding-dong báo tầng, teleport sang buồng cabin tầng đích
+	seq.tween_callback(func():
+		station_from.stop_hum()
+		station_to.stop_hum()
+		station_to.play_chime()
+
+		var cabin_pos_to: Vector3 = station_to.get_cabin_position()
+		robot.global_position = cabin_pos_to + station_to.global_transform.basis * Vector3(0.25, 0.0, 0.0)
+		human.global_position = cabin_pos_to + station_to.global_transform.basis * Vector3(-0.25, 0.0, 0.0)
+
+		station_from.set_floor_indicator(to_floor, "")
+		station_to.set_floor_indicator(to_floor, "")
+
+		_update_viewer_camera()
+	)
+	seq.tween_interval(0.4)
+
+	# 6. Mở cửa tầng đích
+	seq.tween_callback(func():
+		station_to.open_doors()
+	)
+	seq.tween_interval(0.4)
+
+	# 7. Robot và bệnh nhân bước ra ngoài hành lang tầng đích
+	var entrance_to: Vector3 = station_to.get_entrance_position()
+	var robot_out_target: Vector3 = entrance_to + station_to.global_transform.basis * Vector3(0.3, 0.0, 0.0)
+	var human_out_target: Vector3 = entrance_to + station_to.global_transform.basis * Vector3(-0.3, 0.0, 0.0)
+
+	seq.tween_callback(func():
+		var move_out := create_tween().set_parallel(true)
+		move_out.tween_property(robot, "global_position", robot_out_target, 0.8)
+		move_out.tween_property(human, "global_position", human_out_target, 0.8)
+	)
+	seq.tween_interval(0.9)
+
+	# 8. Đóng cửa thang máy tầng đích, chuyển goal sang phòng khám cuối cùng
+	seq.tween_callback(func():
+		station_to.close_doors()
+		_rl_bridge.goal_key = _rl_bridge.final_target_key
+		_rl_bridge.goal_position = room.get_room_waypoint(_rl_bridge.final_target_key)
+		_is_in_elevator_transit = false
+		overlay.set_status("Đã đến Tầng %d, tiếp tục dẫn tới: %s" % [to_floor, _rl_bridge.goal_key])
+	)
 
 
 func _update_viewer_camera() -> void:
@@ -174,6 +291,9 @@ func _update_viewer_camera() -> void:
 		return
 	if ceiling_mesh != null:
 		ceiling_mesh.visible = (camera_mode != CameraMode.TOP_DOWN)
+	if room != null:
+		room.set_ceiling_visible(camera_mode != CameraMode.TOP_DOWN)
+	var x_center: float = 50.0 if robot.global_position.x >= 25.0 else 0.0
 	match camera_mode:
 		CameraMode.FOLLOW:
 			var cam_target := robot.global_position + Vector3(0.0, 0.8, 0.0)
@@ -182,7 +302,7 @@ func _update_viewer_camera() -> void:
 			var ox: float = sin(camera_orbit_angle) * orbit_dist
 			var oz: float = cos(camera_orbit_angle) * orbit_dist
 			var cam_pos := cam_target + Vector3(ox, orbit_height, oz)
-			cam_pos.x = clampf(cam_pos.x, -11.5, 11.5)
+			cam_pos.x = clampf(cam_pos.x, x_center - 11.5, x_center + 11.5)
 			cam_pos.y = clampf(cam_pos.y, 0.8, 2.8)
 			cam_pos.z = clampf(cam_pos.z, -8.5, 8.5)
 			if absf(cam_pos.z - cam_target.z) < 0.2 and absf(cam_pos.x - cam_target.x) < 0.2:
@@ -195,15 +315,15 @@ func _update_viewer_camera() -> void:
 		CameraMode.TOP_DOWN:
 			# Nhìn từ trên cao xuống toàn bộ bệnh viện (tự động ẩn trần như RimWorld)
 			viewer_camera.look_at_from_position(
-				Vector3(0.0, 13.0, 1.2),
-				Vector3(0.0, 0.0, 0.0),
+				Vector3(x_center, 13.0, 1.2),
+				Vector3(x_center, 0.0, 0.0),
 				Vector3.UP
 			)
 		CameraMode.LOBBY:
 			# Góc nhìn bao quát sảnh chính đón tiếp ở độ cao 2.3 m bên trong phòng
 			viewer_camera.look_at_from_position(
-				Vector3(-4.0, 2.7, 7.8),
-				Vector3(0.0, 1.2, 5.0),
+				Vector3(x_center - 4.0, 2.7, 7.8),
+				Vector3(x_center, 1.2, 5.0),
 				Vector3.UP
 			)
 	_update_wall_transparency()
@@ -229,6 +349,12 @@ func _cache_interior_walls() -> void:
 	var iw: Node = get_node_or_null(^"Room/InteriorWalls")
 	if iw != null:
 		for child: Node in iw.get_children():
+			var mesh_inst := child as MeshInstance3D
+			if mesh_inst != null and mesh_inst.mesh is BoxMesh:
+				_interior_walls.append(mesh_inst)
+	var iw2: Node = get_node_or_null(^"Room/Floor2/InteriorWalls")
+	if iw2 != null:
+		for child: Node in iw2.get_children():
 			var mesh_inst := child as MeshInstance3D
 			if mesh_inst != null and mesh_inst.mesh is BoxMesh:
 				_interior_walls.append(mesh_inst)

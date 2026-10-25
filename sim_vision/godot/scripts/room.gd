@@ -91,21 +91,113 @@ const ROOMS: Dictionary = {
 		"door": Vector3(0.0, 0.0, 0.0),
 		"waypoint": Vector3(0.0, 0.0, 0.0),
 	},
+	# Các phòng và khu vực Tầng 2 (tâm phòng offset X = +50.0m)
+	"201": {
+		"name": "Phòng chẩn đoán hình ảnh (X-Quang / CT)",
+		"rect": Rect2(Vector2(38.0, -9.0), Vector2(8.0, 7.0)),
+		"door": Vector3(42.0, 0.0, -2.0),
+		"waypoint": Vector3(42.0, 0.0, -5.2),
+	},
+	"204": {
+		"name": "Phòng chẩn đoán hình ảnh (X-Quang / CT)",
+		"rect": Rect2(Vector2(38.0, -9.0), Vector2(8.0, 7.0)),
+		"door": Vector3(42.0, 0.0, -2.0),
+		"waypoint": Vector3(42.0, 0.0, -5.2),
+	},
+	"205": {
+		"name": "Khoa tiêu hóa",
+		"rect": Rect2(Vector2(46.0, -9.0), Vector2(8.0, 7.0)),
+		"door": Vector3(50.0, 0.0, -2.0),
+		"waypoint": Vector3(50.0, 0.0, -5.2),
+	},
+	"210": {
+		"name": "Phòng khám tai mũi họng",
+		"rect": Rect2(Vector2(54.0, -9.0), Vector2(8.0, 7.0)),
+		"door": Vector3(58.0, 0.0, -2.0),
+		"waypoint": Vector3(58.0, 0.0, -5.2),
+	},
+	"220": {
+		"name": "Khoa da liễu",
+		"rect": Rect2(Vector2(38.0, 2.0), Vector2(6.0, 7.0)),
+		"door": Vector3(41.0, 0.0, 2.0),
+		"waypoint": Vector3(41.0, 0.0, 5.2),
+	},
+	"sanh_t2": {
+		"name": "Sảnh chờ tầng 2",
+		"rect": Rect2(Vector2(44.0, 2.0), Vector2(12.0, 7.0)),
+		"door": Vector3(50.0, 0.0, 2.0),
+		"waypoint": Vector3(50.0, 0.0, 5.2),
+	},
+	"wc_t2": {
+		"name": "Nhà vệ sinh tầng 2",
+		"rect": Rect2(Vector2(56.0, 2.0), Vector2(6.0, 7.0)),
+		"door": Vector3(59.0, 0.0, 2.0),
+		"waypoint": Vector3(59.5, 0.0, 6.5),
+	},
+	"thang_may_t2": {
+		"name": "Thang máy tầng 2",
+		"rect": Rect2(Vector2(56.0, 2.0), Vector2(6.0, 7.0)),
+		"door": Vector3(59.0, 0.0, 2.0),
+		"waypoint": Vector3(59.0, 0.0, 4.6),
+	},
+	"hanh_lang_t2": {
+		"name": "Hành lang tầng 2",
+		"rect": Rect2(Vector2(38.0, -2.0), Vector2(24.0, 4.0)),
+		"door": Vector3(50.0, 0.0, 0.0),
+		"waypoint": Vector3(50.0, 0.0, 0.0),
+	},
 }
 
 const CANONICAL_ROOM_KEYS: Array[String] = [
-	"101", "110", "112", "nha_thuoc", "tiep_don", "thang_may", "hanh_lang"
+	"101", "110", "112", "nha_thuoc", "tiep_don", "thang_may", "hanh_lang",
+	"201", "205", "210", "220", "sanh_t2", "wc_t2", "thang_may_t2", "hanh_lang_t2"
 ]
+
+const FLOOR2_SPAWN_RECT := Rect2(Vector2(44.4, -1.8), Vector2(11.2, 10.2))
 
 @onready var _furniture: Node3D = $Furniture
 @onready var _interior_walls: Node3D = get_node_or_null(^"InteriorWalls")
 @onready var _ceiling: MeshInstance3D = get_node_or_null(^"Shell/Ceiling")
+@onready var _floor2_node: Node3D = get_node_or_null(^"Floor2")
 
 
 ## Ẩn hoặc hiện trần nhà (hữu ích cho camera nhìn từ trên xuống TOP_DOWN kiểu RimWorld).
 func set_ceiling_visible(v: bool) -> void:
 	if _ceiling != null:
 		_ceiling.visible = v
+	if _floor2_node != null:
+		var c2: MeshInstance3D = _floor2_node.get_node_or_null(^"Shell/Ceiling")
+		if c2 != null:
+			c2.visible = v
+
+
+## Xác định tầng (1 hoặc 2) dựa trên tọa độ X (Floor 2 bắt đầu từ X >= 25.0)
+static func get_floor(pos: Vector3) -> int:
+	return 2 if pos.x >= 25.0 else 1
+
+
+## Xác định tầng của một mã phòng
+static func get_room_floor(room_key: String) -> int:
+	var k: String = room_key.strip_edges().to_lower()
+	if k in ["201", "204", "205", "210", "220", "sanh_t2", "wc_t2", "thang_may_t2", "hanh_lang_t2"]:
+		return 2
+	return 1
+
+
+## Lấy node ElevatorStation của Tầng 1 hoặc Tầng 2
+func get_elevator_station(floor_num: int) -> ElevatorStation:
+	if floor_num == 2:
+		if _floor2_node != null:
+			return _floor2_node.get_node_or_null(^"Floor2Elevator") as ElevatorStation
+		return get_node_or_null(^"Floor2/Floor2Elevator") as ElevatorStation
+	return get_node_or_null(^"Furniture/HospitalElevator") as ElevatorStation
+
+
+## Điểm ngẫu nhiên trên sàn theo tầng
+func get_free_position_on_floor(floor_num: int, min_clearance: float, rng: RandomNumberGenerator = null) -> Vector3:
+	if floor_num == 2:
+		return _sample_in_rect(FLOOR2_SPAWN_RECT, min_clearance, rng)
+	return get_free_position(min_clearance, rng)
 
 
 func is_ceiling_visible() -> bool:
@@ -177,6 +269,13 @@ func get_obstacle_footprints() -> Array[Rect2]:
 	var rects: Array[Rect2] = _collect_footprints(_furniture)
 	if _interior_walls != null:
 		rects.append_array(_collect_footprints(_interior_walls))
+	if _floor2_node != null:
+		var f2_furn: Node3D = _floor2_node.get_node_or_null(^"Furniture")
+		if f2_furn != null:
+			rects.append_array(_collect_footprints(f2_furn))
+		var f2_walls: Node3D = _floor2_node.get_node_or_null(^"InteriorWalls")
+		if f2_walls != null:
+			rects.append_array(_collect_footprints(f2_walls))
 	return rects
 
 

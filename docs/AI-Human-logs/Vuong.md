@@ -44,6 +44,7 @@
 | [D-028](#d-028--implement-solo-patient-focus-training-environment--godot-3d-solo-mode)                        | Implement Solo Patient Focus training environment & Godot 3D solo mode                          | human                          | accepted |
 | [D-029](#d-029--1000-episode-solo-patient-ppo-training-with-45s-early-stagnation-cutoff)                     | 1000-Episode Solo Patient PPO training with 45s early stagnation cutoff                         | human                          | accepted |
 | [D-030](#d-030--expand-solo-patient-ppo-training-target-to-5000-episodes)                                    | Expand Solo Patient PPO training target to 5000 episodes                                       | human                          | accepted |
+| [D-031](#d-031--hospital-floor-2-expansion-two-way-interactive-elevator-and-multi-floor-rl-navigation) | Hospital Floor 2 expansion, two-way interactive elevator, and multi-floor RL navigation | human-approved via /grill-me | accepted |
 
 ---
 
@@ -456,3 +457,18 @@
 - **Why:** Deepens policy convergence, solidifies complex multi-doorway escorting trajectories, and pushes the policy toward mastering back-to-back patient navigation with near-zero stagnation.
 - **Touches:** `src/training/train_solo_1000ep.py`, `docs/AI-Human-logs/Vuong.md`
 - **Evidence:** Clean resume from Episode 1001 running live under background task `task-3198` on RTX 4060 GPU with verified real-time logging and zero warnings.
+
+### D-031 — Hospital Floor 2 Expansion, Two-Way Interactive Elevator, and Multi-Floor RL Navigation
+- **Status:** accepted
+- **When:** 2026-10-25T21:40:00+07:00
+- **Decided by:** human-approved via `/grill-me` alignment (`floor2_elevator_plan.md`)
+- **Trigger:** "we lack the rooms for floor two, create it, make it a seperate parts, not directly on top of the floor 1, elevator should works a sa teleport to floor 2 both up and down should have animation of going up and down"
+- **Decision:**
+  1. **Side-by-Side Floor 2 Architecture ($X = +50.0\,\text{m}$):** Created `sim_vision/godot/scenes/room_floor2.tscn` ($24\,\text{m} \times 18\,\text{m}$) containing Rooms 201/204 (Imaging/CT/X-ray), 205 (Gastroenterology), 210 (ENT), 220 (Dermatology), Floor 2 Waiting Lobby (`sanh_t2`), Restrooms (`wc_t2`), and Elevator Station 2. Placed side-by-side at $X = +50.0\,\text{m}$ inside `room.tscn` (not stacked vertically) to avoid ceiling culling conflicts and allow seamless camera panning without reloading scenes.
+  2. **Interactive Elevator Station (`elevator_station.tscn`):** Created full 3D cabin station with dual sliding steel doors (`DoorLeft`, `DoorRight`), dynamic 3D LED floor displays ("TẦNG 1 ▲ / TẦNG 2 ▼"), high-fidelity two-tone Ding-Dong chime (`elevator_chime.wav`), and low-frequency motor hum (`elevator_hum.wav`).
+  3. **Two-Stage Multi-Floor Routing & Animation:** In `rl_env_bridge.gd` and `main.gd`, escorting requests across floors (Floor 1 $\leftrightarrow$ Floor 2) dynamically guide to the departure floor elevator entrance $\to$ trigger full animated elevator sequence (doors slide open $\to$ passenger boarding $\to$ doors close $\to$ hum audio & LED arrow update $\to$ coordinate teleportation $\to$ destination chime $\to$ doors slide open $\to$ passenger exit $\to$ doors close) $\to$ update navigation goal to the final clinic on the arrival floor.
+  4. **Multi-Floor RL Training Environment:** In `src/training/hospital_env.py`, generated `FLOOR2_WALLS` offset at $+50.0\,\text{m}$, enabled cross-floor elevator transit simulation with `REWARD_ELEVATOR_TRANSIT = +10.0`, and updated corridor doorway routing so PPO learns both local hallway navigation and cross-floor elevator boarding.
+- **Why:** Solves the core bottleneck where 1-floor-trained models got stuck hitting the east wall when trying to navigate to Floor 2, adds realistic medical transport aesthetics, and keeps 3D physics fully decoupled across floors.
+- **Touches:** `sim_vision/godot/scenes/room.tscn`, `sim_vision/godot/scenes/room_floor2.tscn`, `sim_vision/godot/scenes/props/elevator_station.tscn`, `sim_vision/godot/scripts/elevator_station.gd`, `sim_vision/godot/scripts/room.gd`, `sim_vision/godot/scripts/rl_env_bridge.gd`, `sim_vision/godot/scripts/main.gd`, `src/training/hospital_env.py`, `tests/test_floor2_elevator.py`, `docs/AI-Human-logs/Vuong.md`
+- **Evidence:** 151/151 Godot GUT tests pass; 12/12 pytest unit tests pass (including multi-floor elevator transit test); verified GPU smoke training with warm-start weights from the 100k episode checkpoint.
+

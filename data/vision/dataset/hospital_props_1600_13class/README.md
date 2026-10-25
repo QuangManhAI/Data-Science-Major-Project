@@ -9,7 +9,7 @@ Bộ dữ liệu thị giác nhận diện **13 nhóm Trang thiết bị & Mốc
 - **Tên dataset**: `hospital_props_1600_13class`
 - **Phiên bản**: `1.0_unified_flat` (Định dạng phẳng, chưa chia Train/Val/Test theo yêu cầu người dùng)
 - **Quy mô**: **1,600 frames** (Độ phân giải $640 \times 480$)
-- **Tổng số bounding box**: **~3,500 – 4,200 instances**
+- **Tổng số bounding box**: **2,310 instances** (trung bình 1.44 vật thể/frame)
 - **Cơ chế gán nhãn**: Tự động 100% bằng thuật toán chiếu 3D Physics Mesh / Collision AABB kết hợp Raycast kiểm tra che khuất trong Godot 4.
 - **Mục đích sử dụng**: Phục vụ Dẫn đường ngữ nghĩa (Semantic Wayfinding) và Tránh va chạm vật cản nhạy cảm (Safety Collision Avoidance).
 

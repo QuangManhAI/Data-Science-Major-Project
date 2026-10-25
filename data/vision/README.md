@@ -11,11 +11,11 @@ data/vision/
 │   │   ├── manifest.json                      # Metadata phiên bản v2.2
 │   │   ├── images/                            # 1,313 ảnh JPG chuẩn 640x480
 │   │   └── labels/                            # 1,313 file nhãn TXT (3 classes)
-│   └── hospital_props_1600_13class/           # Bộ dataset 1.6k trang thiết bị & mốc y tế (13 classes)
+│   └── hospital_props_1600_15class/           # Bộ dataset 1.6k trang thiết bị & mốc y tế (15 classes)
 │       ├── README.md
 │       ├── manifest.json
 │       ├── images/                            # 1,600 ảnh JPG
-│       └── labels/                            # 1,600 file nhãn TXT (13 classes)
+│       └── labels/                            # 1,600 file nhãn TXT (15 classes)
 │
 ├── raw/                                       # 📦 DỮ LIỆU THÔ & METADATA GỐC TỪ GODOT
 │   ├── annotations.jsonl                      # Metadata không gian 3D chi tiết (cự ly, toạ độ, góc quay, độ che khuất)
@@ -40,11 +40,12 @@ data/vision/
 │   ├── annotations.zip                        # Nhãn nháp chuyển đổi cho CVAT
 │   └── Hospital_Vision_Gold_1520.zip          # Bản export gốc đã qua con người thẩm định
 │
-└── cvat_props_task_package/                   # 🛠️ GÓI GÁN NHÃN THẨM ĐỊNH TRÊN CVAT (PROPS 13 CLASSES)
-    ├── README_CVAT_SETUP.md                   # Hướng dẫn setup task cho 13 lớp vật thể
-    ├── cvat_labels_schema.json                # Schema 13 lớp đối tượng y tế
+└── cvat_props_task_package/                   # 🛠️ GÓI GÁN NHÃN THẨM ĐỊNH TRÊN CVAT (PROPS 15 CLASSES)
+    ├── README_CVAT_SETUP.md                   # Hướng dẫn setup task cho 15 lớp vật thể
+    ├── cvat_labels_schema.json                # Schema 15 lớp đối tượng y tế
     ├── images.zip                             # 1,600 ảnh (78.4 MB)
-    └── annotations.zip                        # 2,310 boxes chuẩn CVAT YOLO 1.1 (265 KB)
+    ├── annotations.zip                        # Nhãn nháp ban đầu đưa lên CVAT
+    └── Hospital_Props_1600_13Class.zip        # Bản export từ CVAT sau khi kiểm duyệt và gắn nhãn bổ sung (3,496 boxes)
 ```
 
 ---

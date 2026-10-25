@@ -6,7 +6,7 @@ extends Node3D
 @export var robot_camera: Camera3D
 @export var room_node: Node3D
 @export var capture_resolution: Vector2i = Vector2i(640, 480)
-@export var output_root_dir: String = "res://../../data/vision/dataset/hospital_props_1600_13class"
+@export var output_root_dir: String = "res://../../data/vision/dataset/hospital_props_1600_15class"
 @export var target_total_frames: int = 1600
 
 const CLASS_MAP = {

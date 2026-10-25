@@ -17,5 +17,5 @@ script = ExtResource("2")
 robot_camera = NodePath("../RobotCamera")
 room_node = NodePath("../Room")
 capture_resolution = Vector2i(640, 480)
-output_root_dir = "res://../../data/vision/dataset/hospital_props_1600_13class"
+output_root_dir = "res://../../data/vision/dataset/hospital_props_1600_15class"
 target_total_frames = 1600

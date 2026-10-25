@@ -1,0 +1,48 @@
+{
+  "dataset_name": "hospital_props_1600_15class",
+  "version": "2.0_human_verified_cvat",
+  "created_at": "2026-10-25T21:32:00",
+  "total_frames": 1600,
+  "total_instances": 3496,
+  "resolution": [
+    640,
+    480
+  ],
+  "format": "YOLO_normalized_5col",
+  "verified_by": "human_annotator_via_cvat",
+  "classes": {
+    "0": "queue_kiosk",
+    "1": "reception_counter",
+    "2": "sanitizer_stand",
+    "3": "pccc_station",
+    "4": "medical_waste_bin",
+    "5": "water_dispenser",
+    "6": "wc_station",
+    "7": "elevator_doors",
+    "8": "hospital_bed",
+    "9": "stretcher_cart",
+    "10": "iv_stand",
+    "11": "medical_trolley",
+    "12": "vital_monitor",
+    "13": "wheelchair",
+    "14": "hospital_chair"
+  },
+  "class_counts": {
+    "queue_kiosk": 204,
+    "reception_counter": 313,
+    "sanitizer_stand": 277,
+    "pccc_station": 91,
+    "medical_waste_bin": 397,
+    "water_dispenser": 139,
+    "wc_station": 76,
+    "elevator_doors": 72,
+    "hospital_bed": 430,
+    "stretcher_cart": 34,
+    "iv_stand": 181,
+    "medical_trolley": 345,
+    "vital_monitor": 251,
+    "wheelchair": 275,
+    "hospital_chair": 411
+  },
+  "notes": "100% human-verified and augmented on CVAT. Includes 2 new classes added during manual review: wheelchair (275) and hospital_chair (411)."
+}

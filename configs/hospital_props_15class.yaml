@@ -1,0 +1,23 @@
+# Ultralytics YOLO Dataset Configuration for Hospital Assistant Robot - Props & Equipment (15 Classes)
+path: /home/bush/Projects/Data-Science-Major-Project/data/vision/dataset/hospital_props_1600_15class
+train: images
+val: images
+test: images
+
+# 15 Core Hospital Props, Landmarks & Equipment Classes (Human-verified on CVAT)
+names:
+  0: queue_kiosk
+  1: reception_counter
+  2: sanitizer_stand
+  3: pccc_station
+  4: medical_waste_bin
+  5: water_dispenser
+  6: wc_station
+  7: elevator_doors
+  8: hospital_bed
+  9: stretcher_cart
+  10: iv_stand
+  11: medical_trolley
+  12: vital_monitor
+  13: wheelchair
+  14: hospital_chair

@@ -11,7 +11,7 @@ Mỗi bộ dataset được phân tách thành một **thư mục độc lập**
 | Tên Bộ Dataset | Quy Mô | Số Lớp (Classes) | Trạng Thái / Mục Tiêu |
 | :--- | :---: | :---: | :--- |
 | [`hospital_gold_1387_3class/`](file:///home/bush/Projects/Data-Science-Major-Project/data/vision/dataset/hospital_gold_1387_3class) | **1,313 frames** (1,679 boxes) | 3 (`patient`, `doctor`, `wheelchair`) | **Gold Standard** - 100% positive frames người đi lại/đứng/ngồi và xe lăn đã qua CVAT human verification. |
-| [`hospital_props_1600_13class/`](file:///home/bush/Projects/Data-Science-Major-Project/data/vision/dataset/hospital_props_1600_13class) | **1,600 frames** (~3,800 boxes) | 13 (`queue_kiosk`, `reception_counter`, `iv_stand`, `hospital_bed`, ...) | **Equipment & Props Standard** - Trích xuất tự động từ 3D Physics Mesh trong Godot 4 phục vụ dẫn đường và tránh va chạm. |
+| [`hospital_props_1600_15class/`](file:///home/bush/Projects/Data-Science-Major-Project/data/vision/dataset/hospital_props_1600_15class) | **1,600 frames** (3,496 boxes) | 15 (`queue_kiosk`, `reception_counter`, `iv_stand`, `hospital_bed`, `wheelchair`, `hospital_chair`, ...) | **Equipment & Props Standard (CVAT Verified)** - Đã qua thẩm định, chỉnh sửa và gắn bổ sung nhãn tay trên CVAT phục vụ dẫn đường và tránh va chạm. |
 
 ---
 
@@ -25,11 +25,11 @@ data/vision/dataset/
 │   ├── labels/                                # 1,313 file nhãn TXT (3 classes)
 │   ├── manifest.json                          # Metadata & phiên bản dataset v2.2
 │   └── README.md                              # Tài liệu chi tiết dataset
-├── hospital_props_1600_13class/               # Bộ dataset 1.6k trang thiết bị y tế
+├── hospital_props_1600_15class/               # Bộ dataset 1.6k trang thiết bị & mốc y tế (15 classes)
 │   ├── images/                                # 1,600 file ảnh JPG
-│   ├── labels/                                # 1,600 file nhãn TXT (13 classes)
-│   ├── manifest.json                          # Metadata & chỉ mục tọa độ 3D
-│   └── README.md                              # Dataset card chi tiết 13 món đồ
+│   ├── labels/                                # 1,600 file nhãn TXT (15 classes)
+│   ├── manifest.json                          # Metadata & chỉ mục tọa độ
+│   └── README.md                              # Dataset card chi tiết 15 lớp đối tượng
 └── <future_dataset_name>/                     # Dataset mới tiếp theo
     ├── images/
     ├── labels/

@@ -21,7 +21,7 @@ def main():
 
     parser = argparse.ArgumentParser(description="Nhập nhãn đã kiểm duyệt từ CVAT vào Dataset chính thức")
     parser.add_argument("zip_path", type=str, help="Đường dẫn tới file ZIP export từ CVAT")
-    parser.add_argument("--dataset-dir", type=str, default=str(repo_root / "data/vision/dataset/hospital_props_1600_13class"),
+    parser.add_argument("--dataset-dir", type=str, default=str(repo_root / "data/vision/dataset/hospital_props_1600_15class"),
                         help="Thư mục dataset đích cần cập nhật nhãn")
     args = parser.parse_args()
 

@@ -53,19 +53,19 @@ LIDAR_NUM_RAYS = 17
 LIDAR_FOV_DEG = 200.0
 LIDAR_MAX_RANGE = 6.0
 
-# Floor-1 Destination Anchors (matching RLEnvBridge.DESTINATION_POSITIONS)
+# Floor-1 Destination Anchors (matching Room.ROOMS[*].waypoint in sim_vision/godot/scripts/room.gd)
 DESTINATION_POSITIONS: dict[str, tuple[float, float]] = {
-    "101": (-7.0, -5.5),
-    "110": (1.0, -5.5),
-    "112": (9.0, -5.5),
-    "nha_thuoc": (-7.5, 5.5),
-    "tiep_don": (0.0, 4.5),
-    "bhyt": (0.0, 4.5),
-    "thu_ngan": (0.0, 4.5),
-    "cap_cuu": (-7.0, -5.5),
-    "xet_nghiem": (1.0, -5.5),
-    "nha_ve_sinh": (7.5, 5.5),
-    "thang_may": (10.5, 0.0),
+    "101": (-8.0, -5.2),
+    "110": (0.0, -5.2),
+    "112": (8.0, -5.2),
+    "nha_thuoc": (-9.0, 5.2),
+    "tiep_don": (0.0, 5.2),
+    "bhyt": (-1.5, 6.2),
+    "thu_ngan": (1.5, 6.2),
+    "cap_cuu": (-8.0, -5.2),
+    "xet_nghiem": (0.0, -5.2),
+    "nha_ve_sinh": (9.5, 6.5),
+    "thang_may": (9.0, 5.2),
     "staff": (-1.8, 3.8),
     # Floor 2 Anchors (offset X = +50.0m)
     "201": (42.0, -5.2),
@@ -181,26 +181,39 @@ FLOOR1_WALLS: tuple[WallBox2D, ...] = (
     WallBox2D(0.0, 9.0, 12.1, 0.15),
     WallBox2D(-12.0, 0.0, 0.15, 9.1),
     WallBox2D(12.0, 0.0, 0.15, 9.1),
-    # North corridor walls (Z = -2.0) with doorways at X = -8.5, 0.0, 8.5
-    WallBox2D(-10.85, -2.0, 1.15, 0.09),
-    WallBox2D(-4.25, -2.0, 3.05, 0.09),
-    WallBox2D(4.25, -2.0, 3.05, 0.09),
-    WallBox2D(10.85, -2.0, 1.15, 0.09),
-    # South corridor walls (Z = +2.0) with doorways at X = -7.5, 0.0 (wide 3m), 7.5
-    WallBox2D(-10.35, 2.0, 1.65, 0.09),
-    WallBox2D(-4.0, 2.0, 2.3, 0.09),
-    WallBox2D(4.0, 2.0, 2.3, 0.09),
-    WallBox2D(10.35, 2.0, 1.65, 0.09),
-    # North room dividers (X = -3.0, X = +5.0) & South dividers (X = -4.0, X = +4.0)
-    WallBox2D(-3.0, -5.5, 0.09, 3.5),
-    WallBox2D(5.0, -5.5, 0.09, 3.5),
-    WallBox2D(-4.0, 5.5, 0.09, 3.5),
-    WallBox2D(4.0, 5.5, 0.09, 3.5),
+    # North corridor walls (Z = -2.0) with 1.8m doorways at X = -8.0, 0.0, 8.0
+    WallBox2D(-10.45, -2.0, 1.55, 0.1),
+    WallBox2D(-4.0, -2.0, 3.1, 0.1),
+    WallBox2D(4.0, -2.0, 3.1, 0.1),
+    WallBox2D(10.45, -2.0, 1.55, 0.1),
+    # South corridor walls (Z = +2.0) with doorways at X = -9.0, 0.0 (wide 4.4m), 9.0
+    WallBox2D(-10.95, 2.0, 1.05, 0.1),
+    WallBox2D(-5.15, 2.0, 2.95, 0.1),
+    WallBox2D(5.15, 2.0, 2.95, 0.1),
+    WallBox2D(10.95, 2.0, 1.05, 0.1),
+    # North room dividers (X = -4.0, X = +4.0) & South dividers (X = -6.0, X = +6.0)
+    WallBox2D(-4.0, -5.5, 0.1, 3.5),
+    WallBox2D(4.0, -5.5, 0.1, 3.5),
+    WallBox2D(-6.0, 5.5, 0.1, 3.5),
+    WallBox2D(6.0, 5.5, 0.1, 3.5),
 )
 
 FLOOR2_WALLS: tuple[WallBox2D, ...] = tuple(
     WallBox2D(w.cx + 50.0, w.cz, w.hx, w.hz) for w in FLOOR1_WALLS
 )
+
+# Doorway centres (match room.tscn InteriorWalls)
+NORTH_DOOR_XS = (-8.0, 0.0, 8.0)
+SOUTH_DOOR_XS = (-9.0, 0.0, 9.0)
+
+
+def north_door_x(x: float) -> float:
+    return NORTH_DOOR_XS[0] if x < -4.0 else (NORTH_DOOR_XS[1] if x < 4.0 else NORTH_DOOR_XS[2])
+
+
+def south_door_x(x: float) -> float:
+    return SOUTH_DOOR_XS[0] if x < -6.0 else (SOUTH_DOOR_XS[1] if x <= 6.0 else SOUTH_DOOR_XS[2])
+
 
 HOSPITAL_WALLS: tuple[WallBox2D, ...] = FLOOR1_WALLS + FLOOR2_WALLS
 
@@ -574,24 +587,24 @@ class HospitalShiftEnv:
 
         # If robot is inside a North room (z < -2.1) and target is outside that room
         if self.robot_z < -2.1 and (target_z > -1.8 or abs(local_tx - local_rx) > 3.5):
-            door_x = -8.5 if local_rx < -3.0 else (0.0 if local_rx < 5.0 else 8.5)
+            door_x = north_door_x(local_rx)
             if abs(local_rx - door_x) > 0.6 or self.robot_z < -1.8:
                 return door_x + x_base, -1.2
         # If robot is inside a South room (z > 2.1) and target is outside that room
         if self.robot_z > 2.1 and (target_z < 1.8 or abs(local_tx - local_rx) > 3.5):
-            door_x = -7.5 if local_rx < -4.0 else (0.0 if local_rx <= 4.0 else 7.5)
+            door_x = south_door_x(local_rx)
             if abs(local_rx - door_x) > 0.6 or self.robot_z > 1.8:
                 return door_x + x_base, 1.2
         # If robot is in corridor (-2.1 <= z <= 2.1) and target is in a North room (z < -2.2)
         if -2.1 <= self.robot_z <= 2.1 and target_z < -2.2:
-            door_x = -8.5 if local_tx < -3.0 else (0.0 if local_tx < 5.0 else 8.5)
+            door_x = north_door_x(local_tx)
             if abs(local_rx - door_x) > 0.8:
                 return door_x + x_base, -1.0
             if self.robot_z > -2.1:
                 return door_x + x_base, -2.6
         # If robot is in corridor (-2.1 <= z <= 2.1) and target is in a South room (z > 2.2)
         if -2.1 <= self.robot_z <= 2.1 and target_z > 2.2:
-            door_x = -7.5 if local_tx < -4.0 else (0.0 if local_tx <= 4.0 else 7.5)
+            door_x = south_door_x(local_tx)
             if abs(local_rx - door_x) > 0.8:
                 return door_x + x_base, 1.0
             if self.robot_z < 2.1:
@@ -652,10 +665,19 @@ class HospitalShiftEnv:
             dist_p = math.hypot(dx_p, dz_p)
             if dist_p > 1.0:
                 step_p = min(ELDERLY_PATIENT_SPEED * self.dt, dist_p - 0.95)
-                px_new = self.patient_x + (dx_p / dist_p) * step_p
-                pz_new = self.patient_z + (dz_p / dist_p) * step_p
-                if all(not w.contains(px_new, pz_new, margin=0.28) for w in HOSPITAL_WALLS):
-                    self.patient_x, self.patient_z = px_new, pz_new
+                sx = (dx_p / dist_p) * step_p
+                sz = (dz_p / dist_p) * step_p
+                # Full step, else slide along the wall on one axis (so the patient does not jam at door frames)
+                candidates = [(sx, sz)]
+                if abs(sx) > 1e-3:
+                    candidates.append((math.copysign(step_p, sx), 0.0))
+                if abs(sz) > 1e-3:
+                    candidates.append((0.0, math.copysign(step_p, sz)))
+                for cx, cz in candidates:
+                    px_new, pz_new = self.patient_x + cx, self.patient_z + cz
+                    if all(not w.contains(px_new, pz_new, margin=0.28) for w in HOSPITAL_WALLS):
+                        self.patient_x, self.patient_z = px_new, pz_new
+                        break
 
         curr_dist_final = math.hypot(final_dest_x - self.robot_x, final_dest_z - self.robot_z)
         d_tether = (

@@ -14,6 +14,9 @@ const MIN_START_SEPARATION: float = 3.0 # G8.1: robot cách người ≥ 3 m
 const MAX_PLACEMENT_TRIES: int = 100
 const RLEnvBridgeScript = preload("res://scripts/rl_env_bridge.gd")
 const RLControllerScript = preload("res://scripts/rl_controller.gd")
+const RLPolicyClientScript = preload("res://scripts/rl_policy_client.gd")
+const PATIENT_ENGAGE_DIST_M: float = 1.35  # = PATIENT_TALK_DIST_M của env lúc train
+const TASK_TIMEOUT_S: float = 45.0         # = stagnation_timeout_s lúc train: dẫn đường / gọi NV kẹt quá lâu ➔ hủy
 
 @warning_ignore("shadowed_global_identifier")
 @export var seed: int = -1              # −1 = ngẫu nhiên
@@ -30,6 +33,9 @@ var _rng := RandomNumberGenerator.new()
 var _controller: Node
 var _rl_bridge: Node = null
 var _is_in_elevator_transit: bool = false
+var _policy: Node = null                # RLPolicyClient; null khi không ở chế độ RL
+var _policy_accum: float = 0.0
+var _task_elapsed_s: float = 0.0
 var _connected: bool = false
 var _last_seen_ms: int = -1             # −1 = chưa thấy người lần nào
 var _last_result_ms: int = -1
@@ -66,6 +72,10 @@ func _ready() -> void:
 		_rl_bridge.name = "RLEnvBridge"
 		add_child(_rl_bridge)
 		_rl_bridge.setup(robot, room)
+		_policy = RLPolicyClientScript.new()
+		_policy.name = "RLPolicyClient"
+		add_child(_policy)
+		_policy.action_received.connect(_on_policy_action)
 		if dialogue != null:
 			dialogue.turn_completed.connect(_on_dialogue_turn_completed)
 	else:
@@ -117,6 +127,8 @@ func _process(delta: float) -> void:
 		return
 	if _rl_bridge != null and _rl_bridge.task_phase in [RLEnvBridgeScript.TaskPhase.GUIDE_ESCORT, RLEnvBridgeScript.TaskPhase.CALL_STAFF]:
 		return
+	if _policy_active():
+		return
 	if _connected and _last_result_ms >= 0 and now - _last_result_ms > int(Config.LOST_TIMEOUT_S * 1000.0):
 		_apply(_controller.step(state, [], _time_since_seen_s(now)))
 
@@ -126,6 +138,12 @@ func _physics_process(delta: float) -> void:
 		return
 	if _is_in_elevator_transit:
 		return
+	if _rl_bridge.task_phase in [RLEnvBridgeScript.TaskPhase.GUIDE_ESCORT, RLEnvBridgeScript.TaskPhase.CALL_STAFF]:
+		_task_elapsed_s += delta
+		if _task_elapsed_s > TASK_TIMEOUT_S:
+			overlay.set_status("Hủy nhiệm vụ %s: kẹt quá %.0fs" % [_rl_bridge.goal_key, TASK_TIMEOUT_S])
+			reset_positions(true)
+			return
 	if _rl_bridge.task_phase == RLEnvBridgeScript.TaskPhase.GUIDE_ESCORT:
 		RLEnvBridgeScript.step_escorted_patient(human, robot.global_position, delta)
 		var d_goal: float = Human.flat_distance(robot.global_position, _rl_bridge.goal_position)
@@ -145,10 +163,11 @@ func _physics_process(delta: float) -> void:
 			overlay.set_status("Đã dẫn tới: %s (R_team=%.0f)" % [_rl_bridge.goal_key, _rl_bridge.cumulative_team_reward])
 			reset_positions(true)
 			return
-		var cmd_vec: Vector2 = RLControllerScript.step_towards_goal_with_lidar(
-			robot.global_position, robot.rotation.y, _rl_bridge.goal_position, robot.get_lidar_readings(), d_tether, true
-		)
-		robot.set_command(cmd_vec.x, cmd_vec.y)
+		if not _policy_active():
+			var cmd_vec: Vector2 = RLControllerScript.step_towards_goal_with_lidar(
+				robot.global_position, robot.rotation.y, _rl_bridge.goal_position, robot.get_lidar_readings(), d_tether, true
+			)
+			robot.set_command(cmd_vec.x, cmd_vec.y)
 	elif _rl_bridge.task_phase == RLEnvBridgeScript.TaskPhase.CALL_STAFF:
 		var d_goal: float = Human.flat_distance(robot.global_position, _rl_bridge.goal_position)
 		if d_goal <= RLEnvBridgeScript.GOAL_ARRIVE_ROBOT_M:
@@ -159,10 +178,62 @@ func _physics_process(delta: float) -> void:
 			overlay.set_status("Đã báo nhân viên y tế (R_team=%.0f)" % _rl_bridge.cumulative_team_reward)
 			reset_positions(true)
 			return
-		var cmd_vec: Vector2 = RLControllerScript.step_towards_goal_with_lidar(
-			robot.global_position, robot.rotation.y, _rl_bridge.goal_position, robot.get_lidar_readings(), 0.0, false
-		)
-		robot.set_command(cmd_vec.x, cmd_vec.y)
+		if not _policy_active():
+			var cmd_vec: Vector2 = RLControllerScript.step_towards_goal_with_lidar(
+				robot.global_position, robot.rotation.y, _rl_bridge.goal_position, robot.get_lidar_readings(), 0.0, false
+			)
+			robot.set_command(cmd_vec.x, cmd_vec.y)
+	if _policy_active():
+		_step_policy(delta)
+
+
+func _policy_active() -> bool:
+	return _policy != null and _policy.is_server_connected()
+
+
+func _is_search_phase() -> bool:
+	return _rl_bridge.task_phase in [RLEnvBridgeScript.TaskPhase.SEARCH_PATIENT, RLEnvBridgeScript.TaskPhase.APPROACH_PATIENT]
+
+
+## PPO lái robot ở mọi pha ngoài hội thoại; gửi trạng thái mỗi STEP_DT_S như dt lúc train.
+## Pha tìm bệnh nhân: tới ≤ PATIENT_ENGAGE_DIST_M ➔ ARRIVED, dừng chờ NPC bắt đầu hội thoại.
+func _step_policy(delta: float) -> void:
+	if Main.is_dialogue_state(state):
+		return
+	if _is_search_phase():
+		var d_human: float = human_distance()
+		if state == Config.RobotState.ARRIVED:
+			if d_human <= Config.TALK_TRIGGER_DIST + 1.0:
+				robot.set_command(0.0, 0.0)
+				return
+			state = Config.RobotState.SEARCH  # bệnh nhân đi xa trước khi nói ➔ tìm lại
+		elif d_human <= PATIENT_ENGAGE_DIST_M:
+			robot.set_command(0.0, 0.0)
+			state = Config.RobotState.ARRIVED
+			overlay.show_detections([], Config.state_name(state), _connected)
+			return
+	_policy_accum += delta
+	if _policy_accum < RLPolicyClientScript.STEP_DT_S:
+		return
+	_policy_accum = fmod(_policy_accum, RLPolicyClientScript.STEP_DT_S)
+	var search: bool = _is_search_phase()
+	_policy.send_state(
+		robot.global_position, robot.rotation.y, robot.get_real_velocity().length(), robot.omega,
+		robot.get_lidar_readings(), human.global_position,
+		RLEnvBridgeScript.TaskPhase.SEARCH_PATIENT if search else _rl_bridge.task_phase,
+		human.global_position if search else _rl_bridge.goal_position,
+		_rl_bridge.patients_helped
+	)
+
+
+func _on_policy_action(v: float, omega: float, phase: int) -> void:
+	if not _policy_active() or Main.is_dialogue_state(state) or _is_in_elevator_transit:
+		return
+	if _is_search_phase():
+		if state == Config.RobotState.ARRIVED:
+			return
+		state = Config.RobotState.APPROACH if phase == RLEnvBridgeScript.TaskPhase.APPROACH_PATIENT else Config.RobotState.SEARCH
+	robot.set_command(v, omega)
 
 
 func _on_dialogue_turn_completed(row: Dictionary) -> void:
@@ -177,6 +248,8 @@ func _on_dialogue_turn_completed(row: Dictionary) -> void:
 		_rl_bridge.cumulative_team_reward += RLEnvBridgeScript.REWARD_ANSWER
 		_rl_bridge.patients_helped += 1
 		overlay.set_status("Đã hỗ trợ bệnh nhân (R_team=%.0f)" % _rl_bridge.cumulative_team_reward)
+		if _policy_active() and solo_patient_mode:
+			reset_positions(true)  # như env lúc train: trả lời xong ➔ bệnh nhân mới
 
 
 ## Thực hiện chu trình đi thang máy 2 chiều đầy đủ hiệu ứng âm thanh, đèn LED và animation di chuyển
@@ -196,6 +269,7 @@ func _execute_elevator_transit(from_floor: int, to_floor: int) -> void:
 		_rl_bridge.goal_key = _rl_bridge.final_target_key
 		_rl_bridge.goal_position = room.get_room_waypoint(_rl_bridge.final_target_key) if room != null else Vector3.ZERO
 		_is_in_elevator_transit = false
+		_task_elapsed_s = 0.0  # chặng mới sau thang máy
 		return
 
 	var arrow: String = "▲" if to_floor > from_floor else "▼"
@@ -282,6 +356,7 @@ func _execute_elevator_transit(from_floor: int, to_floor: int) -> void:
 		_rl_bridge.goal_key = _rl_bridge.final_target_key
 		_rl_bridge.goal_position = room.get_room_waypoint(_rl_bridge.final_target_key)
 		_is_in_elevator_transit = false
+		_task_elapsed_s = 0.0  # chặng mới sau thang máy
 		overlay.set_status("Đã đến Tầng %d, tiếp tục dẫn tới: %s" % [to_floor, _rl_bridge.goal_key])
 	)
 
@@ -410,6 +485,10 @@ func _clear_wall_transparency() -> void:
 ## Đặt robot và người ở vị trí ngẫu nhiên mới, robot hướng ngẫu nhiên, về SEARCH.
 func reset_positions(is_task_transition: bool = false) -> void:
 	_clear_wall_transparency()
+	if _rl_bridge != null:
+		# Không đặt lại pha thì bệnh nhân vẫn ở GUIDE_ESCORT và cứ đi theo robot sau khi reset
+		_rl_bridge.task_phase = RLEnvBridgeScript.TaskPhase.SEARCH_PATIENT
+	_task_elapsed_s = 0.0
 	if solo_patient_mode and is_task_transition:
 		var human_pos: Vector3 = room.get_free_position(START_CLEARANCE, _rng)
 		human.global_position = human_pos
@@ -504,6 +583,9 @@ func _on_detections(frame_id: int, dets: Array, infer_ms: float) -> void:
 	elif _rl_bridge != null and _rl_bridge.task_phase in [RLEnvBridgeScript.TaskPhase.GUIDE_ESCORT, RLEnvBridgeScript.TaskPhase.CALL_STAFF]:
 		var cur_cmd: Vector2 = robot.get_command() if robot.has_method("get_command") else Vector2(robot.v, robot.omega)
 		cmd = {"state": state, "v": cur_cmd.x, "omega": cur_cmd.y, "target": {}}
+	elif _policy_active():
+		var pol_cmd: Vector2 = robot.get_command()
+		cmd = {"state": state, "v": pol_cmd.x, "omega": pol_cmd.y, "target": {}}
 	else:
 		cmd = _apply(_controller.step(state, dets, _time_since_seen_s(now)))
 	overlay.show_detections(dets, Config.state_name(state), _connected)

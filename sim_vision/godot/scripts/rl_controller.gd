@@ -44,19 +44,19 @@ static func route_through_corridor_goal(robot_pos: Vector3, final_goal: Vector3)
 
 	# Robot đang trong phòng phía Bắc (Z < -2.1) và đích ở ngoài phòng đó
 	if rz < -2.1 and (gz > -1.8 or absf(gx - rx) > 3.5):
-		var door_x: float = -8.5 if rx < -3.0 else (0.0 if rx < 5.0 else 8.5)
+		var door_x: float = -8.0 if rx < -4.0 else (0.0 if rx < 4.0 else 8.0)
 		if absf(rx - door_x) > 0.6 or rz < -1.8:
 			return Vector3(door_x, final_goal.y, -1.2)
 
 	# Robot đang trong phòng phía Nam (Z > 2.1) và đích ở ngoài phòng đó
 	if rz > 2.1 and (gz < 1.8 or absf(gx - rx) > 3.5):
-		var door_x: float = -7.5 if rx < -4.0 else (0.0 if rx <= 4.0 else 7.5)
+		var door_x: float = -9.0 if rx < -6.0 else (0.0 if rx <= 6.0 else 9.0)
 		if absf(rx - door_x) > 0.6 or rz > 1.8:
 			return Vector3(door_x, final_goal.y, 1.2)
 
 	# Robot đang trong hành lang (-2.1 <= Z <= 2.1) và đích ở phòng phía Bắc (Z < -2.2)
 	if rz >= -2.1 and rz <= 2.1 and gz < -2.2:
-		var door_x: float = -8.5 if gx < -3.0 else (0.0 if gx < 5.0 else 8.5)
+		var door_x: float = -8.0 if gx < -4.0 else (0.0 if gx < 4.0 else 8.0)
 		if absf(rx - door_x) > 0.8:
 			return Vector3(door_x, final_goal.y, -1.0)
 		if rz > -2.1:
@@ -64,7 +64,7 @@ static func route_through_corridor_goal(robot_pos: Vector3, final_goal: Vector3)
 
 	# Robot đang trong hành lang (-2.1 <= Z <= 2.1) và đích ở phòng phía Nam (Z > 2.2)
 	if rz >= -2.1 and rz <= 2.1 and gz > 2.2:
-		var door_x: float = -7.5 if gx < -4.0 else (0.0 if gx <= 4.0 else 7.5)
+		var door_x: float = -9.0 if gx < -6.0 else (0.0 if gx <= 6.0 else 9.0)
 		if absf(rx - door_x) > 0.8:
 			return Vector3(door_x, final_goal.y, 1.0)
 		if rz < 2.1:

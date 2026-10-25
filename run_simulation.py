@@ -71,6 +71,19 @@ def find_python() -> Path:
     return Path(sys.executable)
 
 
+def find_tts_python(default: Path) -> Path:
+    """TTS cần venv riêng .venv-tts (gói vieneu); không có thì dùng Python chính."""
+    for c in [
+        PYTHON_DIR / ".venv-tts" / "Scripts" / "python.exe",
+        PYTHON_DIR / ".venv-tts" / "bin" / "python",
+        REPO_ROOT / ".venv-tts" / "Scripts" / "python.exe",
+        REPO_ROOT / ".venv-tts" / "bin" / "python",
+    ]:
+        if c.is_file():
+            return c
+    return default
+
+
 def find_godot(explicit_path: Optional[str] = None) -> Optional[Path]:
     """Find the Godot binary across Windows, macOS, and Linux."""
     if explicit_path and Path(explicit_path).is_file():
@@ -201,7 +214,7 @@ def main() -> None:
         "--rl-checkpoint",
         type=str,
         default=None,
-        help="Optional path to a trained RL checkpoint (.pt) loaded with weights_only=True",
+        help="PPO checkpoint (.pt) served by rl_policy_server.py on port 8768 (default: latest solo run's _last.pt)",
     )
     parser.add_argument(
         "--solo-patient",
@@ -243,9 +256,10 @@ def main() -> None:
     should_run_tts = (args.with_tts or (tts_onnx.is_file() and not args.no_tts)) and not args.no_tts
 
     if should_run_tts:
-        log("[Launcher] Starting TTS server on port 8767 (VieNeu-TTS v3 Turbo)...")
+        tts_py = find_tts_python(py_exe)
+        log(f"[Launcher] Starting TTS server on port 8767 (VieNeu-TTS v3 Turbo) via {tts_py}...")
         tts_proc = subprocess.Popen(
-            [str(py_exe), "-m", "tts.tts_server"],
+            [str(tts_py), "-m", "tts.tts_server"],
             cwd=PYTHON_DIR,
             env=sub_env,
         )
@@ -253,11 +267,23 @@ def main() -> None:
     else:
         log("[Launcher] TTS server disabled/skipped. Simulation will run in subtitle fallback mode.")
 
+    # 4. RL policy server (Port 8768) — PPO checkpoint lái robot trong Godot (--controller rl)
+    rl_proc = None
+    if args.controller == "rl":
+        rl_cmd = [str(py_exe), "rl_policy_server.py"]
+        if args.rl_checkpoint:
+            rl_cmd += ["--checkpoint", str(Path(args.rl_checkpoint).resolve())]
+        log(f"[Launcher] Starting RL policy server on port 8768 ({args.rl_checkpoint or 'default checkpoint'})...")
+        rl_proc = subprocess.Popen(rl_cmd, cwd=PYTHON_DIR, env=sub_env)
+        CHILD_PROCESSES.append(rl_proc)
+
     # Wait for WebSocket servers to be healthy
     ok_yolo = wait_for_ws(8765, desc="YOLO Server", proc=yolo_proc)
     ok_stt = wait_for_ws(8766, desc="STT Server", proc=stt_proc)
     if should_run_tts:
         wait_for_ws(8767, desc="TTS Server", proc=tts_proc)
+    if rl_proc is not None and not wait_for_ws(8768, desc="RL Policy Server", proc=rl_proc):
+        log("[Launcher] WARNING: RL policy server not ready; Godot falls back to the rule-based RL controller.")
 
     if not ok_yolo or not ok_stt:
         log("[Launcher] ERROR: One or more backend servers failed to start.")
@@ -290,14 +316,6 @@ def main() -> None:
         godot_cmd.append(args.scene)
     extra_godot_args: List[str] = []
     if args.controller == "rl":
-        if args.rl_checkpoint:
-            from src.utils.checkpoint_utils import load_checkpoint
-
-            ckpt = load_checkpoint(args.rl_checkpoint)
-            log(
-                f"[Launcher] Loaded RL checkpoint: {args.rl_checkpoint} "
-                f"(epoch={ckpt.get('epoch')}, best_val_acc={ckpt.get('best_val_acc')})"
-            )
         extra_godot_args.append("--controller=rl")
     if args.solo_patient:
         extra_godot_args.append("--solo-patient")

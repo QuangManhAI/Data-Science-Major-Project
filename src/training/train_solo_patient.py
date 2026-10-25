@@ -6,6 +6,8 @@ collision penalties. Supports training from scratch or warm-started weights.
 
 Usage:
     python -m src.training.train_solo_patient --episodes 30000 --no-warmstart
+    python -m src.training.train_solo_patient --episodes 100000 --no-warmstart --device cuda   # NVIDIA
+    python -m src.training.train_solo_patient --episodes 100000 --no-warmstart --device cpu    # Apple Silicon
     python -m src.training.train_solo_patient --episodes 5000
     python -m src.training.train_solo_patient --resume-from experiments/runs/<run_dir> --episodes 30000
 """
@@ -46,6 +48,34 @@ def format_eta(seconds: float) -> str:
     return f"{m:02d}m{s:02d}s"
 
 
+def resolve_device(device_name: str) -> torch.device:
+    """Resolve --device into a torch.device.
+
+    auto picks cuda if available, else cpu. MPS is opt-in only: for this small MLP it
+    benchmarked ~1.8x slower than CPU on an M4.
+    """
+    mps_ok = torch.backends.mps.is_available()
+    if device_name == "cuda":
+        if not torch.cuda.is_available():
+            raise RuntimeError("--device cuda requested but no CUDA device is available.")
+        return torch.device("cuda")
+    if device_name == "mps":
+        if not mps_ok:
+            raise RuntimeError("--device mps requested but Apple MPS is not available.")
+        return torch.device("mps")
+    if device_name == "cpu":
+        return torch.device("cpu")
+    return torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+
+def describe_device(device: torch.device) -> str:
+    if device.type == "cuda":
+        return torch.cuda.get_device_name(0)
+    if device.type == "mps":
+        return "Apple Silicon GPU (MPS)"
+    return "CPU"
+
+
 def run_train_solo_patient(
     episodes: int = 30000,
     warmstart_path: str | Path | None = None,
@@ -69,14 +99,13 @@ def run_train_solo_patient(
 ) -> Path:
     seed_everything(seed)
 
-    if device_name == "cuda":
-        device = torch.device("cuda")
-    elif device_name == "cpu":
-        device = torch.device("cpu")
-    else:
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = resolve_device(device_name)
 
     agent = PPOHospitalAgent(obs_dim=OBS_DIM, act_dim=ACT_DIM).to(device)
+    # Per-step rollout inference (batch=1) is much faster on CPU than on cuda/mps because
+    # every step syncs device->host; the PPO update still runs on `device`.
+    rollout_agent = PPOHospitalAgent(obs_dim=OBS_DIM, act_dim=ACT_DIM)
+    rollout_agent.eval()
 
     total_updates = max(1, episodes // update_freq_episodes)
     optimizer = torch.optim.AdamW(agent.parameters(), lr=lr_init, eps=1e-5, weight_decay=1e-4)
@@ -159,7 +188,7 @@ def run_train_solo_patient(
     print("=" * 86, flush=True)
     print(f" PPO SOLO PATIENT TRAINING -- {episodes} EPISODES (Start Ep: {start_ep})", flush=True)
     print(f" Output Directory    : {run_dir}", flush=True)
-    print(f" Compute Device      : {device} ({torch.cuda.get_device_name(0) if device.type == 'cuda' else 'CPU'})", flush=True)
+    print(f" Compute Device      : {device} ({describe_device(device)}) | Rollout: cpu", flush=True)
     print(f" Stagnation Timeout  : {stagnation_timeout_s:.1f}s ({int(stagnation_timeout_s / 0.2)} steps) | Penalty: {stagnation_penalty:+.1f}", flush=True)
     print(f" PPO Batch Update    : Every {update_freq_episodes} episodes | PPO Epochs: {ppo_epochs} | Batch: {batch_size}", flush=True)
     print(f" Learning Rate       : {lr_init:.1e} -> {lr_min:.1e} (Cosine Annealing)", flush=True)
@@ -200,6 +229,9 @@ def run_train_solo_patient(
     print("EPISODE LOGS (Real-time single-line flush):", flush=True)
     print("-" * 86, flush=True)
 
+    rollout_agent.load_state_dict(agent.state_dict())
+    ep_width = len(str(episodes))
+
     t_start = time.time()
     completed_in_run = 0
 
@@ -231,11 +263,11 @@ def run_train_solo_patient(
 
         while not done:
             teacher_act = env.teacher_action()
-            obs_t = torch.as_tensor(obs, dtype=torch.float32, device=device).unsqueeze(0)
+            obs_t = torch.as_tensor(obs, dtype=torch.float32).unsqueeze(0)
             with torch.no_grad():
-                action_t, logp_t, _, val_t = agent.get_action_and_value(obs_t)
+                action_t, logp_t, _, val_t = rollout_agent.get_action_and_value(obs_t)
 
-            policy_act = action_t.squeeze(0).cpu().numpy()
+            policy_act = action_t.squeeze(0).numpy()
             exec_act = np.clip((1.0 - bc_weight) * policy_act + bc_weight * teacher_act, -1.0, 1.0)
 
             ep_obs.append(obs)
@@ -295,7 +327,7 @@ def run_train_solo_patient(
 
         # Real-time single line flush to terminal
         print(
-            f"[EP {ep:05d}/{episodes:05d}] Tasks: {tasks:2d} | "
+            f"[EP {ep:0{ep_width}d}/{episodes}] Tasks: {tasks:2d} | "
             f"R_team: {r_team:+6.1f} | "
             f"Dur: {duration_s:5.1f}s ({steps:3d} stp) | "
             f"Exit: {exit_reason:<18} | "
@@ -390,6 +422,7 @@ def run_train_solo_patient(
                             optimizer.zero_grad()
 
             scheduler.step()
+            rollout_agent.load_state_dict(agent.state_dict())
 
             # Clear rollout buffer
             batch_obs.clear()
@@ -485,7 +518,7 @@ def main() -> None:
     parser.add_argument("--lr", type=float, default=1e-4, help="Initial learning rate (default: 1e-4)")
     parser.add_argument("--min-lr", type=float, default=3e-5, help="Min learning rate for cosine schedule (default: 3e-5)")
     parser.add_argument("--seed", type=int, default=42, help="Random seed (default: 42)")
-    parser.add_argument("--device", type=str, default="auto", choices=["auto", "cuda", "cpu"], help="Compute device")
+    parser.add_argument("--device", type=str, default="auto", choices=["auto", "cuda", "mps", "cpu"], help="Device for PPO updates (auto: cuda, else cpu); rollout always on CPU")
     parser.add_argument("--smoke", action="store_true", help="Smoke test (10 episodes, update freq 2)")
 
     args = parser.parse_args()

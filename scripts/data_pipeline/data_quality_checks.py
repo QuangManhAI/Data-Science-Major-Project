@@ -21,6 +21,29 @@ def check_dataset(dataset_dir: Path):
     print(f"• Thư mục Dataset: {dataset_dir}")
     print("==================================================================")
 
+    # Đọc manifest.json nếu có để lấy schema classes động
+    valid_classes = {0, 1, 2}
+    class_names = {0: "patient", 1: "doctor", 2: "wheelchair"}
+    manifest_path = dataset_dir / "manifest.json"
+    if manifest_path.exists():
+        try:
+            with open(manifest_path, "r", encoding="utf-8") as mf:
+                m_data = json.load(mf)
+                if "classes" in m_data:
+                    valid_classes = set()
+                    class_names = {}
+                    for k, v in m_data["classes"].items():
+                        try:
+                            cid = int(k)
+                            valid_classes.add(cid)
+                            class_names[cid] = str(v)
+                        except ValueError:
+                            cid = int(v)
+                            valid_classes.add(cid)
+                            class_names[cid] = str(k)
+        except Exception:
+            pass
+
     # Kiểm tra xem đang ở chế độ dataset đơn lẻ (chưa chia) hay đã chia train/val/test
     is_unified = (dataset_dir / "images").exists() and (dataset_dir / "labels").exists()
     splits = ["unified"] if is_unified else ["train", "val", "test"]
@@ -77,8 +100,8 @@ def check_dataset(dataset_dir: Path):
                     errors.append(f"[{split} - {stem}.txt:L{line_idx}] Giá trị không phải số: '{line.strip()}'")
                     continue
 
-                if c_id not in (0, 1, 2):
-                    warnings.append(f"[{split} - {stem}.txt] Class ID lạ: {c_id} (chỉ chấp nhận 0: patient, 1: doctor, 2: wheelchair)")
+                if c_id not in valid_classes:
+                    warnings.append(f"[{split} - {stem}.txt] Class ID lạ: {c_id} (hợp lệ: {sorted(list(valid_classes))})")
 
                 # Bbox Bounds Check
                 if not (0.0 <= xc <= 1.0 and 0.0 <= yc <= 1.0):
@@ -137,7 +160,8 @@ def check_dataset(dataset_dir: Path):
         n_box = s.get("boxes", 0)
         pct = (n_img / total_imgs * 100) if total_imgs > 0 else 0
         classes = s.get("classes", {})
-        print(f"  • {split.upper():<5}: {n_img:4d} ảnh ({pct:5.1f}%) | {n_box:4d} boxes | Patient: {classes.get(0, 0):4d}, Doctor: {classes.get(1, 0):3d}, Wheelchair: {classes.get(2, 0):2d}")
+        class_str = ", ".join([f"{class_names.get(cid, str(cid))}: {cnt}" for cid, cnt in sorted(classes.items())])
+        print(f"  • {split.upper():<5}: {n_img:4d} ảnh ({pct:5.1f}%) | {n_box:4d} boxes | {class_str}")
 
     print(f"  -------------------------------------------------------------")
     print(f"  • TỔNG CỘNG: {total_imgs} ảnh, {total_boxes} boxes đã được kiểm chứng.")

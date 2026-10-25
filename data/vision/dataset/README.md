@@ -8,24 +8,28 @@ Mỗi bộ dataset được phân tách thành một **thư mục độc lập**
 
 ## 📂 Danh Sách Các Bộ Dataset Hiện Có
 
-| Tên Bộ Dataset | Quy Mô | Số Lượng Hộp Nhãn | Số Lớp (Classes) | Trạng Thái / Mục Tiêu |
-| :--- | :---: | :---: | :---: | :--- |
-| [`hospital_gold_1387_3class/`](file:///home/bush/Projects/Data-Science-Major-Project/data/vision/dataset/hospital_gold_1387_3class) | **1,313 frames** | **1,679 boxes** | 3 (`patient`, `doctor`, `wheelchair`) | **Gold Standard** - 100% positive frames người đi lại/đứng/ngồi và xe lăn đã qua CVAT human verification. |
+| Tên Bộ Dataset | Quy Mô | Số Lớp (Classes) | Trạng Thái / Mục Tiêu |
+| :--- | :---: | :---: | :--- |
+| [`hospital_gold_1387_3class/`](file:///home/bush/Projects/Data-Science-Major-Project/data/vision/dataset/hospital_gold_1387_3class) | **1,313 frames** (1,679 boxes) | 3 (`patient`, `doctor`, `wheelchair`) | **Gold Standard** - 100% positive frames người đi lại/đứng/ngồi và xe lăn đã qua CVAT human verification. |
+| [`hospital_props_1600_13class/`](file:///home/bush/Projects/Data-Science-Major-Project/data/vision/dataset/hospital_props_1600_13class) | **1,600 frames** (~3,800 boxes) | 13 (`queue_kiosk`, `reception_counter`, `iv_stand`, `hospital_bed`, ...) | **Equipment & Props Standard** - Trích xuất tự động từ 3D Physics Mesh trong Godot 4 phục vụ dẫn đường và tránh va chạm. |
 
 ---
 
-## 🛠️ Quy Chuẩn Lưu Trữ Dataset Mới (Future Datasets)
-
-Khi tạo hoặc nạp thêm các bộ dataset mới (ví dụ: dataset camera góc trần, dataset camera hồng ngoại ban đêm, dataset phát hiện té ngã, v.v.), hãy tuân thủ cấu trúc thư mục sau:
+## 🛠️ Quy Chuẩn Lưu Trữ Dataset (Multi-Dataset Catalog)
 
 ```text
 data/vision/dataset/
 ├── README.md                                  # Danh mục tổng hợp tất cả datasets
-├── hospital_gold_1387_3class/                 # Bộ dataset 1.3k hiện tại (người & xe lăn)
+├── hospital_gold_1387_3class/                 # Bộ dataset 1.3k người & xe lăn
 │   ├── images/                                # 1,313 file ảnh JPG
-│   ├── labels/                                # 1,313 file nhãn TXT (chuẩn YOLO 3-class)
+│   ├── labels/                                # 1,313 file nhãn TXT (3 classes)
 │   ├── manifest.json                          # Metadata & phiên bản dataset v2.2
 │   └── README.md                              # Tài liệu chi tiết dataset
+├── hospital_props_1600_13class/               # Bộ dataset 1.6k trang thiết bị y tế
+│   ├── images/                                # 1,600 file ảnh JPG
+│   ├── labels/                                # 1,600 file nhãn TXT (13 classes)
+│   ├── manifest.json                          # Metadata & chỉ mục tọa độ 3D
+│   └── README.md                              # Dataset card chi tiết 13 món đồ
 └── <future_dataset_name>/                     # Dataset mới tiếp theo
     ├── images/
     ├── labels/

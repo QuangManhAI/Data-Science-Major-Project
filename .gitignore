@@ -88,6 +88,8 @@ logs/
 !/data/vision/raw/**
 !/data/vision/cvat_task_package/
 !/data/vision/cvat_task_package/**
+!/data/vision/cvat_props_task_package/
+!/data/vision/cvat_props_task_package/**
 /data/vision/**/images/
 /data/vision/**/labels/
 /data/vision/**/*.zip

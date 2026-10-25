@@ -6,11 +6,16 @@ Kiến trúc lưu trữ dữ liệu thị giác được tinh gọn theo nguyên
 data/vision/
 ├── dataset/                                   # 🌟 KHO CHỨA CÁC BỘ DATASET ĐÃ KIỂM ĐỊNH
 │   ├── README.md                              # Danh mục tổng hợp tất cả datasets
-│   └── hospital_gold_1387_3class/             # Bộ dataset 1.3k hiện tại (100% positive frames)
-│       ├── README.md                          # Thẻ mô tả dataset (Dataset Card)
-│       ├── manifest.json                      # Metadata phiên bản v2.2
-│       ├── images/                            # 1,313 ảnh JPG chuẩn 640x480
-│       └── labels/                            # 1,313 file nhãn TXT (chuẩn YOLO 3 classes)
+│   ├── hospital_gold_1387_3class/             # Bộ dataset 1.3k người & xe lăn (100% positive frames)
+│   │   ├── README.md                          # Thẻ mô tả dataset
+│   │   ├── manifest.json                      # Metadata phiên bản v2.2
+│   │   ├── images/                            # 1,313 ảnh JPG chuẩn 640x480
+│   │   └── labels/                            # 1,313 file nhãn TXT (3 classes)
+│   └── hospital_props_1600_13class/           # Bộ dataset 1.6k trang thiết bị & mốc y tế (13 classes)
+│       ├── README.md
+│       ├── manifest.json
+│       ├── images/                            # 1,600 ảnh JPG
+│       └── labels/                            # 1,600 file nhãn TXT (13 classes)
 │
 ├── raw/                                       # 📦 DỮ LIỆU THÔ & METADATA GỐC TỪ GODOT
 │   ├── annotations.jsonl                      # Metadata không gian 3D chi tiết (cự ly, toạ độ, góc quay, độ che khuất)
@@ -28,12 +33,18 @@ data/vision/
 │       ├── images/                            # 133 ảnh (standee, kiosk rỗng, giường trống, frames khuất 100%)
 │       └── labels/                            # 133 file nhãn rỗng (0 byte)
 │
-└── cvat_task_package/                         # 🛠️ GÓI GÁN NHÃN THẨM ĐỊNH TRÊN CVAT
-    ├── README_CVAT_SETUP.md                   # Hướng dẫn setup task trên CVAT local/cloud
-    ├── cvat_labels_schema.json                # Schema 3 lớp đối tượng chuẩn y tế
-    ├── images.zip                             # Gói nén ảnh nạp vào CVAT Task
-    ├── annotations.zip                        # Nhãn nháp chuyển đổi cho CVAT
-    └── Hospital_Vision_Gold_1520.zip          # Bản export gốc đã qua con người thẩm định
+├── cvat_task_package/                         # 🛠️ GÓI GÁN NHÃN THẨM ĐỊNH TRÊN CVAT (HUMAN 3 CLASSES)
+│   ├── README_CVAT_SETUP.md                   # Hướng dẫn setup task trên CVAT local/cloud
+│   ├── cvat_labels_schema.json                # Schema 3 lớp đối tượng chuẩn y tế
+│   ├── images.zip                             # Gói nén ảnh nạp vào CVAT Task
+│   ├── annotations.zip                        # Nhãn nháp chuyển đổi cho CVAT
+│   └── Hospital_Vision_Gold_1520.zip          # Bản export gốc đã qua con người thẩm định
+│
+└── cvat_props_task_package/                   # 🛠️ GÓI GÁN NHÃN THẨM ĐỊNH TRÊN CVAT (PROPS 13 CLASSES)
+    ├── README_CVAT_SETUP.md                   # Hướng dẫn setup task cho 13 lớp vật thể
+    ├── cvat_labels_schema.json                # Schema 13 lớp đối tượng y tế
+    ├── images.zip                             # 1,600 ảnh (78.4 MB)
+    └── annotations.zip                        # 2,310 boxes chuẩn CVAT YOLO 1.1 (265 KB)
 ```
 
 ---

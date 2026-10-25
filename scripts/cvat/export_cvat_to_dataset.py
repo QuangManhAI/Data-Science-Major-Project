@@ -1,42 +1,59 @@
 #!/usr/bin/env python3
 """
 export_cvat_to_dataset.py
-Script nhập ngược (Import) kết quả gán nhãn đã kiểm duyệt từ CVAT về lại Unified Dataset.
+Script nhập ngược (Import) kết quả gán nhãn đã kiểm duyệt từ CVAT về lại Dataset chính thức.
 Hỗ trợ cả 2 định dạng export phổ biến của CVAT:
 1. CVAT for images 1.1 (file `annotations.xml` bên trong file ZIP)
 2. YOLO 1.1 (thư mục `obj_train_data/*.txt` bên trong file ZIP)
-Chuyển đổi nhãn chuẩn sang YOLO (.txt) tại `data/vision/dataset/labels/`
-và di chuyển (MOVE) toàn bộ ảnh tương ứng từ `data/vision/raw/images/` sang `data/vision/dataset/images/`
-(đảm bảo nguyên tắc Zero Duplication - không nhân bản dữ liệu).
 """
 
 import os
 import sys
 import zipfile
 import shutil
+import json
 import xml.etree.ElementTree as ET
 from pathlib import Path
+import argparse
 
 def main():
     repo_root = Path(__file__).resolve().parents[2]
 
-    if len(sys.argv) < 2:
-        print("Sử dụng: python export_cvat_to_dataset.py <đường_dẫn_file_cvat_export.zip>")
-        return
+    parser = argparse.ArgumentParser(description="Nhập nhãn đã kiểm duyệt từ CVAT vào Dataset chính thức")
+    parser.add_argument("zip_path", type=str, help="Đường dẫn tới file ZIP export từ CVAT")
+    parser.add_argument("--dataset-dir", type=str, default=str(repo_root / "data/vision/dataset/hospital_props_1600_13class"),
+                        help="Thư mục dataset đích cần cập nhật nhãn")
+    args = parser.parse_args()
 
-    cvat_zip_path = Path(sys.argv[1]).resolve()
+    cvat_zip_path = Path(args.zip_path).resolve()
     if not cvat_zip_path.exists():
         print(f"❌ Không tìm thấy file: {cvat_zip_path}")
         return
 
-    dataset_dir = repo_root / "data" / "vision" / "dataset"
+    dataset_dir = Path(args.dataset_dir).resolve()
     dataset_img_dir = dataset_dir / "images"
     dataset_lbl_dir = dataset_dir / "labels"
     dataset_img_dir.mkdir(parents=True, exist_ok=True)
     dataset_lbl_dir.mkdir(parents=True, exist_ok=True)
 
-    raw_img_dir = repo_root / "data" / "vision" / "raw" / "images"
-    raw_lbl_dir = repo_root / "data" / "vision" / "raw" / "labels"
+    manifest_path = dataset_dir / "manifest.json"
+    class_map = {}
+    if manifest_path.exists():
+        try:
+            with open(manifest_path, "r", encoding="utf-8") as mf:
+                m_data = json.load(mf)
+                if "classes" in m_data:
+                    for k, v in m_data["classes"].items():
+                        try:
+                            class_map[str(v)] = int(k)
+                        except ValueError:
+                            class_map[str(k)] = int(v)
+        except Exception as e:
+            print(f"⚠️ Không đọc được manifest: {e}")
+
+    # Fallback mặc định nếu không có manifest
+    if not class_map:
+        class_map = {"patient": 0, "doctor": 1, "wheelchair": 2}
 
     temp_extract = repo_root / "data" / "vision" / "_temp_cvat_import"
     if temp_extract.exists():
@@ -46,16 +63,12 @@ def main():
     print("==================================================================")
     print("📥 BẮT ĐẦU NHẬP DỮ LIỆU ĐÃ KIỂM DUYỆT TỪ CVAT VỀ DATASET CHÍNH THỨC")
     print(f"• File CVAT Export: {cvat_zip_path}")
-    print(f"• Đích đến:         {dataset_dir} (images/ & labels/)")
+    print(f"• Đích đến:         {dataset_dir}")
+    print(f"• Classes Map ({len(class_map)} lớp): {class_map}")
     print("==================================================================")
 
     with zipfile.ZipFile(cvat_zip_path, "r") as z:
         z.extractall(temp_extract)
-
-    class_map = {
-        "person": 0,
-        "wheelchair": 1
-    }
 
     imported_frames = 0
     total_boxes = 0
@@ -97,16 +110,6 @@ def main():
             with open(out_lbl, "w", encoding="utf-8") as f:
                 f.write("\n".join(yolo_lines) + ("\n" if yolo_lines else ""))
 
-            # Di chuyển (MOVE) file ảnh từ raw/ sang dataset/
-            src_img = raw_img_dir / f"{stem}.jpg"
-            if src_img.exists():
-                shutil.move(str(src_img), str(dataset_img_dir / f"{stem}.jpg"))
-
-            # Xóa nhãn nháp cũ trong raw/
-            old_raw_lbl = raw_lbl_dir / f"{stem}.txt"
-            if old_raw_lbl.exists():
-                old_raw_lbl.unlink()
-
             imported_frames += 1
 
     else:
@@ -116,33 +119,20 @@ def main():
         for txt_file in txt_files:
             if txt_file.name in ["obj.data", "obj.names", "train.txt"]:
                 continue
-            stem = txt_file.stem
-
             shutil.copy2(txt_file, dataset_lbl_dir / txt_file.name)
-
-            src_img = raw_img_dir / f"{stem}.jpg"
-            if src_img.exists():
-                shutil.move(str(src_img), str(dataset_img_dir / f"{stem}.jpg"))
-
-            old_raw_lbl = raw_lbl_dir / f"{stem}.txt"
-            if old_raw_lbl.exists():
-                old_raw_lbl.unlink()
-
             imported_frames += 1
+
+            with open(txt_file, "r", encoding="utf-8") as tf:
+                for line in tf:
+                    if line.strip():
+                        total_boxes += 1
 
     shutil.rmtree(temp_extract)
 
-    # Nếu file zip ban đầu nằm ngay trong dataset/images/ thì dọn dẹp chuyển về cvat_task_package
-    if cvat_zip_path.parent == dataset_img_dir:
-        archive_dest = repo_root / "data" / "vision" / "cvat_task_package" / cvat_zip_path.name
-        shutil.move(str(cvat_zip_path), str(archive_dest))
-        print(f"📦 Đã di dời file ZIP kiểm duyệt sang: {archive_dest}")
-
     print("\n==================================================================")
-    print(f"✅ ĐÃ NHẬP THÀNH CÔNG {imported_frames} FRAMES ({total_boxes} BOXES ĐÃ DUYỆT) VÀO DATASET!")
-    print(f"• Số ảnh trong dataset/images:  {len(list(dataset_img_dir.glob('*.jpg')))}")
-    print(f"• Số nhãn trong dataset/labels:  {len(list(dataset_lbl_dir.glob('*.txt')))}")
-    print(f"• Số ảnh còn lại trong raw:     {len(list(raw_img_dir.glob('*.jpg')))}")
+    print(f"✅ ĐÃ CẬP NHẬT THÀNH CÔNG {imported_frames} FRAMES ({total_boxes} BOXES ĐÃ DUYỆT) VÀO DATASET!")
+    print(f"• Số ảnh trong dataset: {len(list(dataset_img_dir.glob('*.jpg')))}")
+    print(f"• Số nhãn trong dataset: {len(list(dataset_lbl_dir.glob('*.txt')))}")
     print("==================================================================")
 
 if __name__ == "__main__":

@@ -1,0 +1,80 @@
+[
+  {
+    "name": "queue_kiosk",
+    "color": "#FF5722",
+    "type": "rectangle",
+    "attributes": []
+  },
+  {
+    "name": "reception_counter",
+    "color": "#4CAF50",
+    "type": "rectangle",
+    "attributes": []
+  },
+  {
+    "name": "sanitizer_stand",
+    "color": "#00BCD4",
+    "type": "rectangle",
+    "attributes": []
+  },
+  {
+    "name": "pccc_station",
+    "color": "#F44336",
+    "type": "rectangle",
+    "attributes": []
+  },
+  {
+    "name": "medical_waste_bin",
+    "color": "#FFEB3B",
+    "type": "rectangle",
+    "attributes": []
+  },
+  {
+    "name": "water_dispenser",
+    "color": "#2196F3",
+    "type": "rectangle",
+    "attributes": []
+  },
+  {
+    "name": "wc_station",
+    "color": "#9C27B0",
+    "type": "rectangle",
+    "attributes": []
+  },
+  {
+    "name": "elevator_doors",
+    "color": "#795548",
+    "type": "rectangle",
+    "attributes": []
+  },
+  {
+    "name": "hospital_bed",
+    "color": "#3F51B5",
+    "type": "rectangle",
+    "attributes": []
+  },
+  {
+    "name": "stretcher_cart",
+    "color": "#E91E63",
+    "type": "rectangle",
+    "attributes": []
+  },
+  {
+    "name": "iv_stand",
+    "color": "#607D8B",
+    "type": "rectangle",
+    "attributes": []
+  },
+  {
+    "name": "medical_trolley",
+    "color": "#FF9800",
+    "type": "rectangle",
+    "attributes": []
+  },
+  {
+    "name": "vital_monitor",
+    "color": "#8BC34A",
+    "type": "rectangle",
+    "attributes": []
+  }
+]

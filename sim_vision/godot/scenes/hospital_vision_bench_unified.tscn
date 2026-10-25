@@ -1,4 +1,4 @@
-[gd_scene load_steps=26 format=3]
+[gd_scene load_steps=27 format=3]
 
 [ext_resource type="Script" path="res://scripts/unified_dataset_generator.gd" id="1"]
 [ext_resource type="PackedScene" path="res://scenes/room.tscn" id="2"]
@@ -25,6 +25,7 @@
 [ext_resource type="PackedScene" path="res://scenes/props/queue_display.tscn" id="23"]
 [ext_resource type="PackedScene" path="res://scenes/props/medical_screen.tscn" id="24"]
 [ext_resource type="PackedScene" path="res://scenes/props/medical_trolley.tscn" id="25"]
+[ext_resource type="PackedScene" path="res://scenes/props/npc_patient_child.tscn" id="26"]
 
 [node name="HospitalVisionBenchUnified" type="Node3D"]
 
@@ -62,6 +63,9 @@ badge_text = ""
 badge_text = ""
 
 [node name="patient_m05" parent="ActorsPool" instance=ExtResource("15")]
+badge_text = ""
+
+[node name="child_patient" parent="ActorsPool" instance=ExtResource("26")]
 badge_text = ""
 
 [node name="seated_bench_patient" type="Node3D" parent="ActorsPool"]
@@ -112,7 +116,7 @@ badge_text = ""
 [node name="recumbent_bed_patient" type="Node3D" parent="ActorsPool"]
 
 [node name="PatientBody" parent="ActorsPool/recumbent_bed_patient" instance=ExtResource("14")]
-transform = Transform3D(1, 0, 0, 0, 0.052335974, 0.9986295, 0, -0.9986295, 0.052335974, 0, 0.72, 0.25)
+transform = Transform3D(1, 0, 0, 0, 0.052335974, 0.9986295, 0, -0.9986295, 0.052335974, 0, 0.74, 0.85)
 anim_path = "res://assets/models/human_m06/anims/m_idle_waiting.res"
 badge_text = ""
 

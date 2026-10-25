@@ -77,9 +77,9 @@ async def start_server(detector: Detector, host: str = WS_HOST, port: int = WS_P
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
     repo_root = Path(__file__).resolve().parent.parent.parent
-    default_model = repo_root / "models/yolo26n/yolo26n.pt"
+    default_model = repo_root / "models/yolo26n/yolo26n_hospital_best.pt"
     if not default_model.exists():
-        default_model = repo_root / "models/yolov8n/yolov8n.pt"
+        default_model = repo_root / "models/yolo26n/yolo26n.pt"
     p = argparse.ArgumentParser(description="YOLO person detection WebSocket server (Default: YOLO26n)")
     p.add_argument("--model", default=str(default_model), help="đường dẫn file model .pt")
     p.add_argument("--port", type=int, default=WS_PORT)

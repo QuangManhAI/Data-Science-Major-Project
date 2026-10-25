@@ -1,0 +1,240 @@
+{
+  "name": "hospital_vision_hard_negatives",
+  "total_frames": 133,
+  "description": "133 empty hard-negative frames (0 ground-truth boxes) separated from core positive dataset to prevent false positives and maintain 100% positive density in hospital_gold_1387_3class.",
+  "categories": {
+    "empty_traps": {
+      "count": 114,
+      "cases": [
+        "U8.4",
+        "U8.6",
+        "U8.8"
+      ]
+    },
+    "full_occlusions_or_out_of_fov": {
+      "count": 19,
+      "cases": [
+        "U2.8",
+        "U2.11",
+        "U3.2",
+        "U3.9",
+        "U5.1"
+      ]
+    }
+  },
+  "cases_breakdown": {
+    "U2.11": {
+      "case_id": "U2.11",
+      "group_id": "U2_ClinicalPoses",
+      "name_vi": "Bệnh Nhân Nằm Giường Đa Góc Nhìn",
+      "name_en": "Recumbent Bed Multiangle",
+      "frame_count": 1,
+      "reason": "100% occlusion or out of FOV",
+      "frames": [
+        "U2_11_0007"
+      ]
+    },
+    "U2.8": {
+      "case_id": "U2.8",
+      "group_id": "U2_ClinicalPoses",
+      "name_vi": "Bệnh Nhân Nằm Giường Cấp Cứu",
+      "name_en": "Recumbent Bed Patient",
+      "frame_count": 1,
+      "reason": "100% occlusion or out of FOV",
+      "frames": [
+        "U2_8_0007"
+      ]
+    },
+    "U3.2": {
+      "case_id": "U3.2",
+      "group_id": "U3_MedicalProps",
+      "name_vi": "Khuất Sau Xe Đẩy Monitor Sinh Hiệu",
+      "name_en": "Behind Vital Monitor Cart",
+      "frame_count": 6,
+      "reason": "100% occlusion or out of FOV",
+      "frames": [
+        "U3_2_0001",
+        "U3_2_0002",
+        "U3_2_0003",
+        "U3_2_0004",
+        "U3_2_0005",
+        "U3_2_0006"
+      ]
+    },
+    "U3.9": {
+      "case_id": "U3.9",
+      "group_id": "U3_MedicalProps",
+      "name_vi": "Khuất Sau Vách Rèm Y Tế",
+      "name_en": "Behind Privacy Screen",
+      "frame_count": 4,
+      "reason": "100% occlusion or out of FOV",
+      "frames": [
+        "U3_9_0005",
+        "U3_9_0006",
+        "U3_9_0035",
+        "U3_9_0036"
+      ]
+    },
+    "U5.1": {
+      "case_id": "U5.1",
+      "group_id": "U5_Kinematics",
+      "name_vi": "Tuần Tra Đối Đầu (1.08 m/s)",
+      "name_en": "Patrol Looming Reverse",
+      "frame_count": 7,
+      "reason": "100% occlusion or out of FOV",
+      "frames": [
+        "U5_1_0006",
+        "U5_1_0007",
+        "U5_1_0008",
+        "U5_1_0009",
+        "U5_1_0010",
+        "U5_1_0037",
+        "U5_1_0038"
+      ]
+    },
+    "U8.4": {
+      "case_id": "U8.4",
+      "group_id": "U8_EmptyTraps",
+      "name_vi": "Bẫy Kiosk Bấm Số Rỗng",
+      "name_en": "Empty Kiosk Trap",
+      "frame_count": 38,
+      "reason": "Empty trap prop",
+      "frames": [
+        "U8_4_0001",
+        "U8_4_0002",
+        "U8_4_0003",
+        "U8_4_0004",
+        "U8_4_0005",
+        "U8_4_0006",
+        "U8_4_0007",
+        "U8_4_0008",
+        "U8_4_0009",
+        "U8_4_0010",
+        "U8_4_0011",
+        "U8_4_0012",
+        "U8_4_0013",
+        "U8_4_0014",
+        "U8_4_0015",
+        "U8_4_0016",
+        "U8_4_0017",
+        "U8_4_0018",
+        "U8_4_0019",
+        "U8_4_0020",
+        "U8_4_0021",
+        "U8_4_0022",
+        "U8_4_0023",
+        "U8_4_0024",
+        "U8_4_0025",
+        "U8_4_0026",
+        "U8_4_0027",
+        "U8_4_0028",
+        "U8_4_0029",
+        "U8_4_0030",
+        "U8_4_0031",
+        "U8_4_0032",
+        "U8_4_0033",
+        "U8_4_0034",
+        "U8_4_0035",
+        "U8_4_0036",
+        "U8_4_0037",
+        "U8_4_0038"
+      ]
+    },
+    "U8.6": {
+      "case_id": "U8.6",
+      "group_id": "U8_EmptyTraps",
+      "name_vi": "Bẫy Giường Bệnh Rỗng Không Người",
+      "name_en": "Empty Hospital Bed Trap",
+      "frame_count": 38,
+      "reason": "Empty trap prop",
+      "frames": [
+        "U8_6_0001",
+        "U8_6_0002",
+        "U8_6_0003",
+        "U8_6_0004",
+        "U8_6_0005",
+        "U8_6_0006",
+        "U8_6_0007",
+        "U8_6_0008",
+        "U8_6_0009",
+        "U8_6_0010",
+        "U8_6_0011",
+        "U8_6_0012",
+        "U8_6_0013",
+        "U8_6_0014",
+        "U8_6_0015",
+        "U8_6_0016",
+        "U8_6_0017",
+        "U8_6_0018",
+        "U8_6_0019",
+        "U8_6_0020",
+        "U8_6_0021",
+        "U8_6_0022",
+        "U8_6_0023",
+        "U8_6_0024",
+        "U8_6_0025",
+        "U8_6_0026",
+        "U8_6_0027",
+        "U8_6_0028",
+        "U8_6_0029",
+        "U8_6_0030",
+        "U8_6_0031",
+        "U8_6_0032",
+        "U8_6_0033",
+        "U8_6_0034",
+        "U8_6_0035",
+        "U8_6_0036",
+        "U8_6_0037",
+        "U8_6_0038"
+      ]
+    },
+    "U8.8": {
+      "case_id": "U8.8",
+      "group_id": "U8_EmptyTraps",
+      "name_vi": "Bẫy Standee 2D In Hình Y Tế",
+      "name_en": "Standee 2D Poster Trap",
+      "frame_count": 38,
+      "reason": "Empty trap prop",
+      "frames": [
+        "U8_8_0001",
+        "U8_8_0002",
+        "U8_8_0003",
+        "U8_8_0004",
+        "U8_8_0005",
+        "U8_8_0006",
+        "U8_8_0007",
+        "U8_8_0008",
+        "U8_8_0009",
+        "U8_8_0010",
+        "U8_8_0011",
+        "U8_8_0012",
+        "U8_8_0013",
+        "U8_8_0014",
+        "U8_8_0015",
+        "U8_8_0016",
+        "U8_8_0017",
+        "U8_8_0018",
+        "U8_8_0019",
+        "U8_8_0020",
+        "U8_8_0021",
+        "U8_8_0022",
+        "U8_8_0023",
+        "U8_8_0024",
+        "U8_8_0025",
+        "U8_8_0026",
+        "U8_8_0027",
+        "U8_8_0028",
+        "U8_8_0029",
+        "U8_8_0030",
+        "U8_8_0031",
+        "U8_8_0032",
+        "U8_8_0033",
+        "U8_8_0034",
+        "U8_8_0035",
+        "U8_8_0036",
+        "U8_8_0037",
+        "U8_8_0038"
+      ]
+    }
+  }
+}

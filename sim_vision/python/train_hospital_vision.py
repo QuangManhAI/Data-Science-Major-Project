@@ -7,24 +7,28 @@ trên bộ dữ liệu thị giác bệnh viện chuẩn xác (Hospital Vision G
 
 import argparse
 import sys
+import torch
 from pathlib import Path
 from ultralytics import YOLO
 
 def main():
+    default_device = "0" if torch.cuda.is_available() else "cpu"
+    repo_root = Path(__file__).resolve().parent.parent.parent
+
     parser = argparse.ArgumentParser(description="Huấn luyện mô hình YOLO trên bộ dữ liệu thị giác bệnh viện")
-    parser.add_argument("--model", type=str, default="models/yolo26n/yolo26n.pt", help="Mô hình khởi tạo (mặc định YOLO26n)")
+    parser.add_argument("--model", type=str, default="models/yolo26n/yolo26n.pt", help="Mô hình khởi tạo (mặc định yolo26n)")
+    parser.add_argument("--data", type=str, default=str(repo_root / "configs/hospital_3class.yaml"), help="File cấu hình dataset")
     parser.add_argument("--epochs", type=int, default=30, help="Số epoch huấn luyện")
     parser.add_argument("--batch", type=int, default=16, help="Kích thước batch size")
     parser.add_argument("--imgsz", type=int, default=640, help="Độ phân giải đầu vào (mặc định 640)")
-    parser.add_argument("--device", type=str, default="cpu", help="Thiết bị tính toán ('cpu' hoặc '0', '1' nếu có GPU CUDA)")
-    parser.add_argument("--project", type=str, default="runs/train_hospital", help="Thư mục lưu weights đầu ra")
-    parser.add_argument("--name", type=str, default="yolo26n_hospital_finetuned", help="Tên phiên bản huấn luyện")
+    parser.add_argument("--device", type=str, default=default_device, help=f"Thiết bị tính toán (mặc định '{default_device}')")
+    parser.add_argument("--project", type=str, default="experiments/runs/train_hospital", help="Thư mục lưu weights đầu ra")
+    parser.add_argument("--name", type=str, default="yolo26n_hospital_v1", help="Tên phiên bản huấn luyện")
     args = parser.parse_args()
 
-    repo_root = Path(__file__).resolve().parent.parent.parent
-    data_yaml = repo_root / "data/vision/vision_eval_unified/data.yaml"
+    data_yaml = Path(args.data)
     if not data_yaml.exists():
-        data_yaml = repo_root / "data/vision_eval_unified/data.yaml"
+        data_yaml = repo_root / "configs/hospital_3class.yaml"
 
     if not data_yaml.exists():
         print(f"❌ Lỗi: Không tìm thấy file cấu hình dữ liệu tại {data_yaml}")

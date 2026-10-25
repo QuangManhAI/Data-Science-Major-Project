@@ -1,0 +1,11 @@
+# Ultralytics YOLO Dataset Configuration for Hospital Assistant Robot
+path: /home/bush/Projects/Data-Science-Major-Project/data/vision/dataset/hospital_gold_1387_3class
+train: train/images
+val: val/images
+test: test/images
+
+# 3 Core Clinical Hospital Classes
+names:
+  0: patient
+  1: doctor
+  2: wheelchair

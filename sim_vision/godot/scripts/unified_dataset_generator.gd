@@ -1,5 +1,5 @@
 # unified_dataset_generator.gd
-## BỘ SINH DỮ LIỆU THỊ GIÁC HỢP NHẤT (576 FRAMES VẬT LÝ CHUẨN XÁC 100% - 32 CA GOLD)
+## BỘ SINH DỮ LIỆU THỊ GIÁC HỢP NHẤT (1,520 FRAMES VẬT LÝ CHUẨN XÁC 100% - 40 CA GOLD)
 ## Tích hợp Lưới Dò Tia Vật Lý Đa Điểm (Multi-Raycast 128 Rays) & Skeleton3D & Visibility-Aware Ground Truth
 extends Node3D
 
@@ -17,7 +17,6 @@ extends Node3D
 
 var _rng := RandomNumberGenerator.new()
 var _jsonl_file: FileAccess
-var _jsonl_rich_file: FileAccess
 var _total_saved_frames: int = 0
 var _start_time_msec: int = 0
 
@@ -26,16 +25,23 @@ const clinic_door_anchor := Vector3(-2.8, 0.0, 1.2)
 const reception_anchor := Vector3(2.4, 0.0, -1.5)
 const doorway_110_anchor := Vector3(0.0, 0.0, -2.0)
 
-# Ngân sách 18 frames đại diện cho mỗi ca kiểm thử tĩnh
-const UNIFIED_DISTANCES: Array[float] = [1.0, 2.0, 3.5, 5.5]
-const UNIFIED_CAM_YAWS: Array[float] = [-15.0, 15.0]
+# Ngân sách 38 frames đại diện cho mỗi ca kiểm thử (40 ca x 38 = 1,520 frames)
+const UNIFIED_DISTANCES: Array[float] = [1.0, 1.8, 2.6, 3.8, 5.2, 6.8]
+const UNIFIED_CAM_YAWS: Array[float] = [-20.0, 0.0, 20.0]
 const UNIFIED_CAM_HEIGHTS: Array[float] = [0.85, 1.25]
+
+var is_test_batch: bool = false
 
 func _ready() -> void:
 	DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
 	Engine.max_fps = 0
 	_clean_ambient_room_npcs()
 	var cmd_args: PackedStringArray = OS.get_cmdline_args() + OS.get_cmdline_user_args()
+	for i in range(cmd_args.size()):
+		if cmd_args[i] == "--output-dir" and i + 1 < cmd_args.size():
+			output_root_dir = cmd_args[i + 1]
+		if cmd_args[i] == "--test-batch":
+			is_test_batch = true
 	if auto_start_on_ready or ("--generate-unified-dataset" in cmd_args) or ("--generate-dataset" in cmd_args):
 		call_deferred("run_unified_pipeline")
 
@@ -79,29 +85,29 @@ func run_unified_pipeline() -> void:
 	DirAccess.make_dir_recursive_absolute(abs_lbl_dir)
 
 	var jsonl_path: String = abs_out_dir.path_join("annotations.jsonl")
-	var jsonl_rich_path: String = abs_out_dir.path_join("annotations_rich_5w1h.jsonl")
 	_jsonl_file = FileAccess.open(jsonl_path, FileAccess.WRITE)
-	_jsonl_rich_file = FileAccess.open(jsonl_rich_path, FileAccess.WRITE)
 
 	print("==================================================================")
-	print("[UnifiedGenerator] BẮT ĐẦU SINH BỘ DỮ LIỆU HỢP NHẤT (648 FRAMES CHUẨN XÁC 100% - 36 CA MULTI-CLASS)")
+	print("[UnifiedGenerator] BẮT ĐẦU SINH BỘ DỮ LIỆU HỢP NHẤT (1,520 FRAMES CHUẨN XÁC 100% - 40 CA MULTI-CLASS)")
 	print("[UnifiedGenerator] Thư mục đích: ", abs_out_dir)
 	print("==================================================================")
 
 	_hide_all_entities()
 	_apply_lighting_profile("fluorescent_standard_450lux")
 
-	# Chạy tuần tự 5 nhóm lâm sàng chuẩn xác 100% (36 ca kiểm thử = 648 frames)
-	await _generate_group_u1(abs_img_dir, abs_lbl_dir) # Camouflage (5 ca = 90 frames)
-	await _generate_group_u2(abs_img_dir, abs_lbl_dir) # Clinical Poses (7 ca = 126 frames, bao gồm nằm giường U2.8 & ngồi xe lăn U2.9)
-	await _generate_group_u3(abs_img_dir, abs_lbl_dir) # Medical Props (8 ca = 144 frames)
-	await _generate_group_u6(abs_img_dir, abs_lbl_dir) # Crowd & Social (6 ca = 108 frames)
-	await _generate_group_u5_u7_u8(abs_img_dir, abs_lbl_dir) # Ranges, Kinematics & Traps (10 ca = 180 frames, bao gồm bẫy xe lăn U8.2 & bẫy giường U8.6)
+	if is_test_batch:
+		print("[UnifiedGenerator] >>> CHẾ ĐỘ TEST BATCH: Chỉ sinh nhóm U2 (Lâm sàng: Nằm giường, Xe lăn, Trẻ em, Ngồi ghế)")
+		await _generate_group_u2(abs_img_dir, abs_lbl_dir)
+	else:
+		# Chạy tuần tự 5 nhóm lâm sàng chuẩn xác 100%
+		await _generate_group_u1(abs_img_dir, abs_lbl_dir) # Camouflage
+		await _generate_group_u2(abs_img_dir, abs_lbl_dir) # Clinical Poses (Nằm giường, xe lăn, trẻ em)
+		await _generate_group_u3(abs_img_dir, abs_lbl_dir) # Medical Props
+		await _generate_group_u6(abs_img_dir, abs_lbl_dir) # Crowd & Social
+		await _generate_group_u5_u7_u8(abs_img_dir, abs_lbl_dir) # Ranges, Kinematics & Traps
 
 	_jsonl_file.flush()
 	_jsonl_file.close()
-	_jsonl_rich_file.flush()
-	_jsonl_rich_file.close()
 
 	var elapsed_sec: float = (Time.get_ticks_msec() - _start_time_msec) / 1000.0
 	_write_dataset_manifest(abs_out_dir, elapsed_sec)
@@ -131,6 +137,9 @@ func _compute_actor_ground_truth_raycast(actor_root: Node3D, subcategory: String
 	elif subcategory == "recumbent" or subcategory == "recumbent_bed":
 		h = 0.88
 		r = 0.50
+	elif subcategory == "child":
+		h = 1.02
+		r = 0.22
 
 	var local_pts: Array[Vector3] = []
 	if subcategory == "recumbent" or subcategory == "recumbent_bed":
@@ -351,8 +360,9 @@ func _record_frame(
 	distance_m: float, cam_off: float, cam_h: float
 ) -> void:
 	await get_tree().physics_frame
-	await get_tree().physics_frame
-	await RenderingServer.frame_post_draw
+	await get_tree().process_frame
+	if DisplayServer.get_name() != "headless":
+		await RenderingServer.frame_post_draw
 
 	# 1. Lưu ảnh JPEG
 	var rel_img_path = "images/%s.jpg" % frame_id
@@ -429,16 +439,15 @@ func _record_frame(
 	}
 	var serialized = JSON.stringify(record)
 	_jsonl_file.store_line(serialized)
-	_jsonl_rich_file.store_line(serialized)
 	_total_saved_frames += 1
 
 	if _total_saved_frames % 100 == 0:
 		print("[UnifiedGenerator] Tiến độ: ", _total_saved_frames, " frames...")
 
 # ==============================================================================
-# HÀM PHỤ TRỢ SINH 18 FRAMES ĐẠI DIỆN CHO TỪNG CA
+# HÀM PHỤ TRỢ SINH 38 FRAMES ĐẠI DIỆN CHO TỪNG CA (40 CA x 38 = 1,520 FRAMES)
 # ==============================================================================
-func _generate_18_frames_static(
+func _generate_38_frames_static(
 	abs_img_dir: String, abs_lbl_dir: String,
 	case_id: String, name_vi: String, name_en: String,
 	group_id: String, group_name: String,
@@ -448,7 +457,7 @@ func _generate_18_frames_static(
 	var look_h = 0.65 if (subcat == "recumbent" or subcat == "recumbent_bed") else (0.70 if subcat == "wheelchair" else 0.90)
 	var f_idx = 0
 
-	# 16 frames: 4 dist x 2 yaw x 2 h
+	# 36 frames: 6 dist x 3 yaw x 2 h
 	for dist in UNIFIED_DISTANCES:
 		for yaw in UNIFIED_CAM_YAWS:
 			for cam_h in UNIFIED_CAM_HEIGHTS:
@@ -465,8 +474,12 @@ func _generate_18_frames_static(
 					_position_camera_6dof(anchor, dist, yaw, cam_h, look_h)
 				await _record_frame(abs_img_dir, abs_lbl_dir, fid, case_id, name_vi, name_en, group_id, group_name, false, [actor], [subcat], dist, yaw, cam_h)
 
-	# 2 frames frontal: yaw 0.0 at 2.0m & 3.5m
-	for dist in [2.0, 3.5]:
+	# 2 frames góc bổ sung trung gian (yaw -8.0° ở 1.4m & yaw 8.0° ở 3.2m)
+	var extra_views = [
+		{"d": 1.4, "yaw": -8.0, "h": 1.05},
+		{"d": 3.2, "yaw": 8.0, "h": 1.05}
+	]
+	for ev in extra_views:
 		f_idx += 1
 		var fid = "%s_%04d" % [case_id.replace(".", "_"), f_idx]
 		_hide_all_entities()
@@ -477,10 +490,10 @@ func _generate_18_frames_static(
 			if "walks" in actor: actor.walks = false
 			if "pardon_enabled" in actor: actor.pardon_enabled = false
 			actor.global_position = anchor
-			_position_camera_6dof(anchor, dist, 0.0, 1.15, look_h)
-		await _record_frame(abs_img_dir, abs_lbl_dir, fid, case_id, name_vi, name_en, group_id, group_name, false, [actor], [subcat], dist, 0.0, 1.15)
+			_position_camera_6dof(anchor, ev["d"], ev["yaw"], ev["h"], look_h)
+		await _record_frame(abs_img_dir, abs_lbl_dir, fid, case_id, name_vi, name_en, group_id, group_name, false, [actor], [subcat], ev["d"], ev["yaw"], ev["h"])
 
-func _generate_18_frames_prop_occluded(
+func _generate_38_frames_prop_occluded(
 	abs_img_dir: String, abs_lbl_dir: String,
 	case_id: String, name_vi: String, name_en: String,
 	group_id: String, group_name: String,
@@ -508,7 +521,11 @@ func _generate_18_frames_prop_occluded(
 					_position_camera_6dof(anchor, dist, yaw, cam_h, look_h)
 				await _record_frame(abs_img_dir, abs_lbl_dir, fid, case_id, name_vi, name_en, group_id, group_name, false, [actor], [subcat], dist, yaw, cam_h)
 
-	for dist in [2.0, 3.5]:
+	var extra_views = [
+		{"d": 1.4, "yaw": -8.0, "h": 1.05},
+		{"d": 3.2, "yaw": 8.0, "h": 1.05}
+	]
+	for ev in extra_views:
 		f_idx += 1
 		var fid = "%s_%04d" % [case_id.replace(".", "_"), f_idx]
 		_hide_all_entities()
@@ -520,10 +537,10 @@ func _generate_18_frames_prop_occluded(
 			if "pardon_enabled" in actor: actor.pardon_enabled = false
 			actor.global_position = anchor
 			prop.global_position = anchor + prop_offset
-			_position_camera_6dof(anchor, dist, 0.0, 1.15, look_h)
-		await _record_frame(abs_img_dir, abs_lbl_dir, fid, case_id, name_vi, name_en, group_id, group_name, false, [actor], [subcat], dist, 0.0, 1.15)
+			_position_camera_6dof(anchor, ev["d"], ev["yaw"], ev["h"], look_h)
+		await _record_frame(abs_img_dir, abs_lbl_dir, fid, case_id, name_vi, name_en, group_id, group_name, false, [actor], [subcat], ev["d"], ev["yaw"], ev["h"])
 
-func _generate_18_frames_empty_trap(
+func _generate_38_frames_empty_trap(
 	abs_img_dir: String, abs_lbl_dir: String,
 	case_id: String, name_vi: String, name_en: String,
 	group_id: String, group_name: String,
@@ -545,17 +562,21 @@ func _generate_18_frames_empty_trap(
 					_position_camera_6dof(anchor, dist, yaw, cam_h, 0.75)
 				await _record_frame(abs_img_dir, abs_lbl_dir, fid, case_id, name_vi, name_en, group_id, group_name, true, [], [], dist, yaw, cam_h)
 
-	for dist in [2.0, 3.5]:
+	var extra_views = [
+		{"d": 1.4, "yaw": -8.0, "h": 1.05},
+		{"d": 3.2, "yaw": 8.0, "h": 1.05}
+	]
+	for ev in extra_views:
 		f_idx += 1
 		var fid = "%s_%04d" % [case_id.replace(".", "_"), f_idx]
 		_hide_all_entities()
 		if prop:
 			prop.visible = true
 			prop.global_position = anchor
-			_position_camera_6dof(anchor, dist, 0.0, 1.15, 0.75)
-		await _record_frame(abs_img_dir, abs_lbl_dir, fid, case_id, name_vi, name_en, group_id, group_name, true, [], [], dist, 0.0, 1.15)
+			_position_camera_6dof(anchor, ev["d"], ev["yaw"], ev["h"], 0.75)
+		await _record_frame(abs_img_dir, abs_lbl_dir, fid, case_id, name_vi, name_en, group_id, group_name, true, [], [], ev["d"], ev["yaw"], ev["h"])
 
-func _generate_18_frames_recumbent_bed(
+func _generate_38_frames_recumbent_bed(
 	abs_img_dir: String, abs_lbl_dir: String,
 	case_id: String, name_vi: String, name_en: String,
 	group_id: String, group_name: String,
@@ -565,22 +586,42 @@ func _generate_18_frames_recumbent_bed(
 	var bed_views = [
 		{"desc": "Trực diện chân giường", "d": 2.0, "yaw": 0.0, "h": 1.15, "look_h": 0.68},
 		{"desc": "Trực diện chân giường cự ly gần", "d": 1.3, "yaw": 0.0, "h": 1.05, "look_h": 0.68},
+		{"desc": "Trực diện chân giường cự ly xa", "d": 2.8, "yaw": 0.0, "h": 1.35, "look_h": 0.68},
+		{"desc": "Trực diện chân giường góc cao", "d": 2.2, "yaw": 0.0, "h": 1.65, "look_h": 0.68},
 		{"desc": "Trực diện đầu giường", "d": 2.0, "yaw": 180.0, "h": 1.25, "look_h": 0.68},
-		{"desc": "Trực diện đầu giường cự ly gần", "d": 1.4, "yaw": 180.0, "h": 1.25, "look_h": 0.68},
-		{"desc": "Cạnh sườn trái cự ly chuẩn", "d": 1.6, "yaw": -90.0, "h": 1.15, "look_h": 0.68},
-		{"desc": "Cạnh sườn trái cự ly gần", "d": 1.1, "yaw": -90.0, "h": 0.95, "look_h": 0.68},
+		{"desc": "Trực diện đầu giường cự ly gần", "d": 1.4, "yaw": 180.0, "h": 1.15, "look_h": 0.68},
+		{"desc": "Trực diện đầu giường cự ly xa", "d": 2.8, "yaw": 180.0, "h": 1.40, "look_h": 0.68},
+		{"desc": "Trực diện đầu giường góc cao", "d": 2.2, "yaw": 180.0, "h": 1.65, "look_h": 0.68},
+		{"desc": "Cạnh sườn trái cự ly rất gần", "d": 1.0, "yaw": -90.0, "h": 0.90, "look_h": 0.68},
+		{"desc": "Cạnh sườn trái cự ly gần", "d": 1.3, "yaw": -90.0, "h": 1.05, "look_h": 0.68},
+		{"desc": "Cạnh sườn trái cự ly chuẩn", "d": 1.7, "yaw": -90.0, "h": 1.15, "look_h": 0.68},
+		{"desc": "Cạnh sườn trái cự ly xa", "d": 2.3, "yaw": -90.0, "h": 1.35, "look_h": 0.68},
 		{"desc": "Cạnh sườn trái góc cao", "d": 2.0, "yaw": -90.0, "h": 1.55, "look_h": 0.68},
-		{"desc": "Cạnh sườn phải cự ly chuẩn", "d": 1.6, "yaw": 90.0, "h": 1.15, "look_h": 0.68},
-		{"desc": "Cạnh sườn phải cự ly gần", "d": 1.1, "yaw": 90.0, "h": 0.95, "look_h": 0.68},
+		{"desc": "Cạnh sườn trái góc thấp ngang mép", "d": 1.4, "yaw": -75.0, "h": 0.80, "look_h": 0.68},
+		{"desc": "Cạnh sườn phải cự ly rất gần", "d": 1.0, "yaw": 90.0, "h": 0.90, "look_h": 0.68},
+		{"desc": "Cạnh sườn phải cự ly gần", "d": 1.3, "yaw": 90.0, "h": 1.05, "look_h": 0.68},
+		{"desc": "Cạnh sườn phải cự ly chuẩn", "d": 1.7, "yaw": 90.0, "h": 1.15, "look_h": 0.68},
+		{"desc": "Cạnh sườn phải cự ly xa", "d": 2.3, "yaw": 90.0, "h": 1.35, "look_h": 0.68},
 		{"desc": "Cạnh sườn phải góc cao", "d": 2.0, "yaw": 90.0, "h": 1.55, "look_h": 0.68},
-		{"desc": "Góc chéo 3/4 chân - sườn trái", "d": 1.8, "yaw": -45.0, "h": 1.15, "look_h": 0.68},
-		{"desc": "Góc chéo 3/4 chân - sườn phải", "d": 1.8, "yaw": 45.0, "h": 1.15, "look_h": 0.68},
-		{"desc": "Góc chéo 3/4 đầu - sườn trái", "d": 1.8, "yaw": -135.0, "h": 1.25, "look_h": 0.68},
-		{"desc": "Góc chéo 3/4 đầu - sườn phải", "d": 1.8, "yaw": 135.0, "h": 1.25, "look_h": 0.68},
-		{"desc": "Góc thấp ngang mép giường bên trái", "d": 1.4, "yaw": -75.0, "h": 0.80, "look_h": 0.68},
-		{"desc": "Góc thấp ngang mép giường bên phải", "d": 1.4, "yaw": 75.0, "h": 0.80, "look_h": 0.68},
-		{"desc": "Góc cao nhìn thẳng từ chân giường", "d": 2.2, "yaw": 0.0, "h": 1.65, "look_h": 0.68},
-		{"desc": "Cự ly xa toàn cảnh hành lang bệnh viện", "d": 3.6, "yaw": -25.0, "h": 1.25, "look_h": 0.68}
+		{"desc": "Cạnh sườn phải góc thấp ngang mép", "d": 1.4, "yaw": 75.0, "h": 0.80, "look_h": 0.68},
+		{"desc": "Góc chéo 3/4 chân - sườn trái gần", "d": 1.4, "yaw": -45.0, "h": 1.05, "look_h": 0.68},
+		{"desc": "Góc chéo 3/4 chân - sườn trái chuẩn", "d": 1.9, "yaw": -45.0, "h": 1.15, "look_h": 0.68},
+		{"desc": "Góc chéo 3/4 chân - sườn trái xa", "d": 2.7, "yaw": -45.0, "h": 1.35, "look_h": 0.68},
+		{"desc": "Góc chéo 3/4 chân - sườn phải gần", "d": 1.4, "yaw": 45.0, "h": 1.05, "look_h": 0.68},
+		{"desc": "Góc chéo 3/4 chân - sườn phải chuẩn", "d": 1.9, "yaw": 45.0, "h": 1.15, "look_h": 0.68},
+		{"desc": "Góc chéo 3/4 chân - sườn phải xa", "d": 2.7, "yaw": 45.0, "h": 1.35, "look_h": 0.68},
+		{"desc": "Góc chéo 3/4 đầu - sườn trái gần", "d": 1.4, "yaw": -135.0, "h": 1.15, "look_h": 0.68},
+		{"desc": "Góc chéo 3/4 đầu - sườn trái chuẩn", "d": 1.9, "yaw": -135.0, "h": 1.25, "look_h": 0.68},
+		{"desc": "Góc chéo 3/4 đầu - sườn trái xa", "d": 2.7, "yaw": -135.0, "h": 1.45, "look_h": 0.68},
+		{"desc": "Góc chéo 3/4 đầu - sườn phải gần", "d": 1.4, "yaw": 135.0, "h": 1.15, "look_h": 0.68},
+		{"desc": "Góc chéo 3/4 đầu - sườn phải chuẩn", "d": 1.9, "yaw": 135.0, "h": 1.25, "look_h": 0.68},
+		{"desc": "Góc chéo 3/4 đầu - sườn phải xa", "d": 2.7, "yaw": 135.0, "h": 1.45, "look_h": 0.68},
+		{"desc": "Góc chéo hẹp chân - sườn trái", "d": 1.8, "yaw": -25.0, "h": 1.10, "look_h": 0.68},
+		{"desc": "Góc chéo hẹp chân - sườn phải", "d": 1.8, "yaw": 25.0, "h": 1.10, "look_h": 0.68},
+		{"desc": "Góc chéo hẹp đầu - sườn trái", "d": 1.8, "yaw": -155.0, "h": 1.25, "look_h": 0.68},
+		{"desc": "Góc chéo hẹp đầu - sườn phải", "d": 1.8, "yaw": 155.0, "h": 1.25, "look_h": 0.68},
+		{"desc": "Cự ly xa toàn cảnh hành lang trái", "d": 3.6, "yaw": -25.0, "h": 1.25, "look_h": 0.68},
+		{"desc": "Cự ly xa toàn cảnh hành lang phải", "d": 3.6, "yaw": 25.0, "h": 1.25, "look_h": 0.68}
 	]
 
 	for f_idx in range(bed_views.size()):
@@ -597,7 +638,7 @@ func _generate_18_frames_recumbent_bed(
 			_position_camera_6dof(anchor, v["d"], v["yaw"], v["h"], v["look_h"])
 		await _record_frame(abs_img_dir, abs_lbl_dir, fid, case_id, name_vi, name_en, group_id, group_name, false, [actor], ["recumbent"], v["d"], v["yaw"], v["h"])
 
-func _generate_18_frames_empty_hospital_bed(
+func _generate_38_frames_empty_hospital_bed(
 	abs_img_dir: String, abs_lbl_dir: String,
 	case_id: String, name_vi: String, name_en: String,
 	group_id: String, group_name: String,
@@ -608,22 +649,42 @@ func _generate_18_frames_empty_hospital_bed(
 	var bed_views = [
 		{"desc": "Trực diện chân giường rỗng", "d": 2.0, "yaw": 0.0, "h": 1.15, "look_h": 0.68},
 		{"desc": "Trực diện chân giường rỗng cự ly gần", "d": 1.3, "yaw": 0.0, "h": 1.05, "look_h": 0.68},
+		{"desc": "Trực diện chân giường rỗng cự ly xa", "d": 2.8, "yaw": 0.0, "h": 1.35, "look_h": 0.68},
+		{"desc": "Trực diện chân giường rỗng góc cao", "d": 2.2, "yaw": 0.0, "h": 1.65, "look_h": 0.68},
 		{"desc": "Trực diện đầu giường rỗng", "d": 2.0, "yaw": 180.0, "h": 1.25, "look_h": 0.68},
-		{"desc": "Trực diện đầu giường rỗng cự ly gần", "d": 1.4, "yaw": 180.0, "h": 1.25, "look_h": 0.68},
-		{"desc": "Cạnh sườn trái giường rỗng cự ly chuẩn", "d": 1.6, "yaw": -90.0, "h": 1.15, "look_h": 0.68},
-		{"desc": "Cạnh sườn trái giường rỗng cự ly gần", "d": 1.1, "yaw": -90.0, "h": 0.95, "look_h": 0.68},
+		{"desc": "Trực diện đầu giường rỗng cự ly gần", "d": 1.4, "yaw": 180.0, "h": 1.15, "look_h": 0.68},
+		{"desc": "Trực diện đầu giường rỗng cự ly xa", "d": 2.8, "yaw": 180.0, "h": 1.40, "look_h": 0.68},
+		{"desc": "Trực diện đầu giường rỗng góc cao", "d": 2.2, "yaw": 180.0, "h": 1.65, "look_h": 0.68},
+		{"desc": "Cạnh sườn trái giường rỗng cự ly rất gần", "d": 1.0, "yaw": -90.0, "h": 0.90, "look_h": 0.68},
+		{"desc": "Cạnh sườn trái giường rỗng cự ly gần", "d": 1.3, "yaw": -90.0, "h": 1.05, "look_h": 0.68},
+		{"desc": "Cạnh sườn trái giường rỗng cự ly chuẩn", "d": 1.7, "yaw": -90.0, "h": 1.15, "look_h": 0.68},
+		{"desc": "Cạnh sườn trái giường rỗng cự ly xa", "d": 2.3, "yaw": -90.0, "h": 1.35, "look_h": 0.68},
 		{"desc": "Cạnh sườn trái giường rỗng góc cao", "d": 2.0, "yaw": -90.0, "h": 1.55, "look_h": 0.68},
-		{"desc": "Cạnh sườn phải giường rỗng cự ly chuẩn", "d": 1.6, "yaw": 90.0, "h": 1.15, "look_h": 0.68},
-		{"desc": "Cạnh sườn phải giường rỗng cự ly gần", "d": 1.1, "yaw": 90.0, "h": 0.95, "look_h": 0.68},
+		{"desc": "Cạnh sườn trái giường rỗng góc thấp ngang mép", "d": 1.4, "yaw": -75.0, "h": 0.80, "look_h": 0.68},
+		{"desc": "Cạnh sườn phải giường rỗng cự ly rất gần", "d": 1.0, "yaw": 90.0, "h": 0.90, "look_h": 0.68},
+		{"desc": "Cạnh sườn phải giường rỗng cự ly gần", "d": 1.3, "yaw": 90.0, "h": 1.05, "look_h": 0.68},
+		{"desc": "Cạnh sườn phải giường rỗng cự ly chuẩn", "d": 1.7, "yaw": 90.0, "h": 1.15, "look_h": 0.68},
+		{"desc": "Cạnh sườn phải giường rỗng cự ly xa", "d": 2.3, "yaw": 90.0, "h": 1.35, "look_h": 0.68},
 		{"desc": "Cạnh sườn phải giường rỗng góc cao", "d": 2.0, "yaw": 90.0, "h": 1.55, "look_h": 0.68},
-		{"desc": "Góc chéo 3/4 chân - sườn trái giường rỗng", "d": 1.8, "yaw": -45.0, "h": 1.15, "look_h": 0.68},
-		{"desc": "Góc chéo 3/4 chân - sườn phải giường rỗng", "d": 1.8, "yaw": 45.0, "h": 1.15, "look_h": 0.68},
-		{"desc": "Góc chéo 3/4 đầu - sườn trái giường rỗng", "d": 1.8, "yaw": -135.0, "h": 1.25, "look_h": 0.68},
-		{"desc": "Góc chéo 3/4 đầu - sườn phải giường rỗng", "d": 1.8, "yaw": 135.0, "h": 1.25, "look_h": 0.68},
-		{"desc": "Góc thấp ngang mép giường rỗng bên trái", "d": 1.4, "yaw": -75.0, "h": 0.80, "look_h": 0.68},
-		{"desc": "Góc thấp ngang mép giường rỗng bên phải", "d": 1.4, "yaw": 75.0, "h": 0.80, "look_h": 0.68},
-		{"desc": "Góc cao nhìn thẳng từ chân giường rỗng", "d": 2.2, "yaw": 0.0, "h": 1.65, "look_h": 0.68},
-		{"desc": "Cự ly xa toàn cảnh giường rỗng", "d": 3.6, "yaw": -25.0, "h": 1.25, "look_h": 0.68}
+		{"desc": "Cạnh sườn phải giường rỗng góc thấp ngang mép", "d": 1.4, "yaw": 75.0, "h": 0.80, "look_h": 0.68},
+		{"desc": "Góc chéo 3/4 chân - sườn trái giường rỗng gần", "d": 1.4, "yaw": -45.0, "h": 1.05, "look_h": 0.68},
+		{"desc": "Góc chéo 3/4 chân - sườn trái giường rỗng chuẩn", "d": 1.9, "yaw": -45.0, "h": 1.15, "look_h": 0.68},
+		{"desc": "Góc chéo 3/4 chân - sườn trái giường rỗng xa", "d": 2.7, "yaw": -45.0, "h": 1.35, "look_h": 0.68},
+		{"desc": "Góc chéo 3/4 chân - sườn phải giường rỗng gần", "d": 1.4, "yaw": 45.0, "h": 1.05, "look_h": 0.68},
+		{"desc": "Góc chéo 3/4 chân - sườn phải giường rỗng chuẩn", "d": 1.9, "yaw": 45.0, "h": 1.15, "look_h": 0.68},
+		{"desc": "Góc chéo 3/4 chân - sườn phải giường rỗng xa", "d": 2.7, "yaw": 45.0, "h": 1.35, "look_h": 0.68},
+		{"desc": "Góc chéo 3/4 đầu - sườn trái giường rỗng gần", "d": 1.4, "yaw": -135.0, "h": 1.15, "look_h": 0.68},
+		{"desc": "Góc chéo 3/4 đầu - sườn trái giường rỗng chuẩn", "d": 1.9, "yaw": -135.0, "h": 1.25, "look_h": 0.68},
+		{"desc": "Góc chéo 3/4 đầu - sườn trái giường rỗng xa", "d": 2.7, "yaw": -135.0, "h": 1.45, "look_h": 0.68},
+		{"desc": "Góc chéo 3/4 đầu - sườn phải giường rỗng gần", "d": 1.4, "yaw": 135.0, "h": 1.15, "look_h": 0.68},
+		{"desc": "Góc chéo 3/4 đầu - sườn phải giường rỗng chuẩn", "d": 1.9, "yaw": 135.0, "h": 1.25, "look_h": 0.68},
+		{"desc": "Góc chéo 3/4 đầu - sườn phải giường rỗng xa", "d": 2.7, "yaw": 135.0, "h": 1.45, "look_h": 0.68},
+		{"desc": "Góc chéo hẹp chân - sườn trái giường rỗng", "d": 1.8, "yaw": -25.0, "h": 1.10, "look_h": 0.68},
+		{"desc": "Góc chéo hẹp chân - sườn phải giường rỗng", "d": 1.8, "yaw": 25.0, "h": 1.10, "look_h": 0.68},
+		{"desc": "Góc chéo hẹp đầu - sườn trái giường rỗng", "d": 1.8, "yaw": -155.0, "h": 1.25, "look_h": 0.68},
+		{"desc": "Góc chéo hẹp đầu - sườn phải giường rỗng", "d": 1.8, "yaw": 155.0, "h": 1.25, "look_h": 0.68},
+		{"desc": "Cự ly xa toàn cảnh giường rỗng trái", "d": 3.6, "yaw": -25.0, "h": 1.25, "look_h": 0.68},
+		{"desc": "Cự ly xa toàn cảnh giường rỗng phải", "d": 3.6, "yaw": 25.0, "h": 1.25, "look_h": 0.68}
 	]
 
 	for f_idx in range(bed_views.size()):
@@ -636,23 +697,23 @@ func _generate_18_frames_empty_hospital_bed(
 			_position_camera_6dof(anchor, v["d"], v["yaw"], v["h"], v["look_h"])
 		await _record_frame(abs_img_dir, abs_lbl_dir, fid, case_id, name_vi, name_en, group_id, group_name, true, [], [], v["d"], v["yaw"], v["h"])
 
-func _generate_18_frames_kinematics(
+func _generate_38_frames_kinematics(
 	abs_img_dir: String, abs_lbl_dir: String,
 	case_id: String, name_vi: String, name_en: String,
 	group_id: String, group_name: String,
 	actor_name: String, mode: String
 ) -> void:
 	var actor = _get_actor(actor_name)
-	for step in range(18):
-		var t = float(step) / 17.0
+	for step in range(38):
+		var t = float(step) / 37.0
 		var fid = "%s_%04d" % [case_id.replace(".", "_"), step + 1]
 		_hide_all_entities()
 
 		# Robot Camera cố định tại (0, 1.15, 2.0) nhìn dọc hành lang về (0, 0.90, 0.0)
 		_position_camera_6dof(corridor_anchor, 2.0, 0.0, 1.15, 0.90)
 
-		# Bác sĩ tuần tra đối đầu tiếp cận trực diện từ 4.5m đến 1.0m trước camera
-		var dist_ahead = lerpf(4.5, 1.0, t)
+		# Bác sĩ tuần tra đối đầu tiếp cận trực diện từ 5.5m đến 0.9m trước camera
+		var dist_ahead = lerpf(5.5, 0.9, t)
 		var pos = Vector3(0.0, 0.0, 2.0 - dist_ahead)
 
 		if actor:
@@ -665,18 +726,18 @@ func _generate_18_frames_kinematics(
 			actor.rotation = Vector3(0, 0, 0)
 		await _record_frame(abs_img_dir, abs_lbl_dir, fid, case_id, name_vi, name_en, group_id, group_name, false, [actor], ["standing"], dist_ahead, 0.0, 1.15)
 
-func _generate_18_frames_crowd(
+func _generate_38_frames_crowd(
 	abs_img_dir: String, abs_lbl_dir: String,
 	case_id: String, name_vi: String, name_en: String,
 	group_id: String, group_name: String,
 	actors: Array, subcats: Array, offsets: Array
 ) -> void:
-	for f_idx in range(18):
+	for f_idx in range(38):
 		var fid = "%s_%04d" % [case_id.replace(".", "_"), f_idx + 1]
 		_hide_all_entities()
-		var dist = UNIFIED_DISTANCES[f_idx % 4]
-		var yaw = UNIFIED_CAM_YAWS[(f_idx / 4) % 2]
-		var cam_h = UNIFIED_CAM_HEIGHTS[(f_idx / 8) % 2]
+		var dist = UNIFIED_DISTANCES[f_idx % UNIFIED_DISTANCES.size()]
+		var yaw = UNIFIED_CAM_YAWS[(f_idx / 2) % UNIFIED_CAM_YAWS.size()]
+		var cam_h = UNIFIED_CAM_HEIGHTS[(f_idx / 6) % UNIFIED_CAM_HEIGHTS.size()]
 
 		var active_list: Array = []
 		for i in range(actors.size()):
@@ -694,10 +755,10 @@ func _generate_18_frames_crowd(
 		await _record_frame(abs_img_dir, abs_lbl_dir, fid, case_id, name_vi, name_en, group_id, group_name, false, active_list, subcats, dist, yaw, cam_h)
 
 # ==============================================================================
-# 7 NHÓM LÂM SÀNG VẬT LÝ CHUẨN XÁC 100% (36 CA GOLD)
+# 7 NHÓM LÂM SÀNG VẬT LÝ CHUẨN XÁC 100% (40 CA GOLD)
 # ==============================================================================
 
-# U1: Ngụy trang & Tương phản thấp (5 ca)
+# U1: Ngụy trang & Tương phản thấp (5 ca x 38 = 190 frames)
 func _generate_group_u1(img_dir: String, lbl_dir: String) -> void:
 	var cases = [
 		{"id": "U1.1", "vi": "Bác Sĩ Blouse Trắng Trùng Màu Tường", "en": "Doctor White Blouse Camouflage", "act": "doctor_male"},
@@ -707,9 +768,9 @@ func _generate_group_u1(img_dir: String, lbl_dir: String) -> void:
 		{"id": "U1.6", "vi": "Bệnh Nhân Nữ Áo Khoác Dài", "en": "Female Patient Long Coat", "act": "patient_f08"}
 	]
 	for c in cases:
-		await _generate_18_frames_static(img_dir, lbl_dir, c["id"], c["vi"], c["en"], "U1_Camouflage", "Ngụy trang & Tương phản thấp", c["act"], "standing", corridor_anchor)
+		await _generate_38_frames_static(img_dir, lbl_dir, c["id"], c["vi"], c["en"], "U1_Camouflage", "Ngụy trang & Tương phản thấp", c["act"], "standing", corridor_anchor)
 
-# U2: Tư thế lâm sàng & Ngồi ghế băng thật, xe lăn, nằm giường (7 ca)
+# U2: Tư thế lâm sàng & Ngồi ghế băng thật, xe lăn, nằm giường, trẻ em (9 ca x 38 = 342 frames)
 func _generate_group_u2(img_dir: String, lbl_dir: String) -> void:
 	var cases = [
 		{"id": "U2.1", "vi": "Ngồi Ghế Băng Dài Tựa Lưng", "en": "Waiting Bench Seated", "act": "seated_bench_patient", "sub": "seated"},
@@ -718,15 +779,17 @@ func _generate_group_u2(img_dir: String, lbl_dir: String) -> void:
 		{"id": "U2.7", "vi": "Cụ Già Lưng Còng Chống Gậy", "en": "Elderly Stooped Cane", "act": "elder_m03", "sub": "elderly_cane"},
 		{"id": "U2.4", "vi": "Bác Sĩ Cúi Đầu Xem Hồ Sơ Bệnh Án", "en": "Doctor Reviewing Clipboard", "act": "doctor_clipboard", "sub": "standing"},
 		{"id": "U2.8", "vi": "Bệnh Nhân Nằm Giường Cấp Cứu", "en": "Recumbent Bed Patient", "act": "recumbent_bed_patient", "sub": "recumbent"},
-		{"id": "U2.9", "vi": "Bệnh Nhân Ngồi Xe Lăn Y Tế", "en": "Wheelchair Patient", "act": "wheelchair_patient", "sub": "wheelchair"}
+		{"id": "U2.11", "vi": "Bệnh Nhân Nằm Giường Đa Góc Nhìn", "en": "Recumbent Bed Multiangle", "act": "recumbent_bed_patient", "sub": "recumbent"},
+		{"id": "U2.9", "vi": "Bệnh Nhân Ngồi Xe Lăn Y Tế", "en": "Wheelchair Patient", "act": "wheelchair_patient", "sub": "wheelchair"},
+		{"id": "U2.10", "vi": "Bệnh Nhi Đứng Chờ Khám (4 Tuổi)", "en": "Pediatric Child Standing", "act": "child_patient", "sub": "child"}
 	]
 	for c in cases:
-		if c["id"] == "U2.8":
-			await _generate_18_frames_recumbent_bed(img_dir, lbl_dir, c["id"], c["vi"], c["en"], "U2_ClinicalPoses", "Tư thế lâm sàng & Ngồi xe/giường", c["act"], corridor_anchor)
+		if c["id"] in ["U2.8", "U2.11"]:
+			await _generate_38_frames_recumbent_bed(img_dir, lbl_dir, c["id"], c["vi"], c["en"], "U2_ClinicalPoses", "Tư thế lâm sàng & Ngồi xe/giường", c["act"], corridor_anchor)
 		else:
-			await _generate_18_frames_static(img_dir, lbl_dir, c["id"], c["vi"], c["en"], "U2_ClinicalPoses", "Tư thế lâm sàng & Ngồi xe/giường", c["act"], c["sub"], corridor_anchor)
+			await _generate_38_frames_static(img_dir, lbl_dir, c["id"], c["vi"], c["en"], "U2_ClinicalPoses", "Tư thế lâm sàng & Ngồi xe/giường", c["act"], c["sub"], corridor_anchor)
 
-# U3: Che khuất bởi đạo cụ khối hộp chuẩn (8 ca)
+# U3: Che khuất bởi đạo cụ khối hộp chuẩn (8 ca x 38 = 304 frames)
 func _generate_group_u3(img_dir: String, lbl_dir: String) -> void:
 	var cases = [
 		{"id": "U3.1", "vi": "Đứng Sau Cột Truyền Dịch Inox 3cm", "en": "Behind IV Stand Pole", "act": "patient_m02", "prop": "iv_stand", "off": Vector3(0, 0, 0.35)},
@@ -739,9 +802,9 @@ func _generate_group_u3(img_dir: String, lbl_dir: String) -> void:
 		{"id": "U3.2", "vi": "Khuất Sau Xe Đẩy Monitor Sinh Hiệu", "en": "Behind Vital Monitor Cart", "act": "doctor_male", "prop": "vital_monitor", "off": Vector3(0.18, 0, 0.38)}
 	]
 	for c in cases:
-		await _generate_18_frames_prop_occluded(img_dir, lbl_dir, c["id"], c["vi"], c["en"], "U3_MedicalProps", "Che khuất bởi đạo cụ y tế", c["act"], "standing", c["prop"], c["off"], corridor_anchor)
+		await _generate_38_frames_prop_occluded(img_dir, lbl_dir, c["id"], c["vi"], c["en"], "U3_MedicalProps", "Che khuất bởi đạo cụ y tế", c["act"], "standing", c["prop"], c["off"], corridor_anchor)
 
-# U6: Mật độ đám đông & Tương tác xã hội (6 ca)
+# U6: Mật độ đám đông & Tương tác xã hội (8 ca x 38 = 304 frames)
 func _generate_group_u6(img_dir: String, lbl_dir: String) -> void:
 	var cases = [
 		{"id": "U6.1", "vi": "Hai Cụ Già Ngồi Ghế Băng", "en": "Two Elderly Seated", "acts": ["elder_f09", "elder_m03"], "subs": ["seated", "seated"], "offs": [Vector3(-0.3, 0, 0), Vector3(0.3, 0, 0)]},
@@ -749,28 +812,30 @@ func _generate_group_u6(img_dir: String, lbl_dir: String) -> void:
 		{"id": "U6.3", "vi": "Hàng Chờ 3 Người Kiosk", "en": "Queue 3 Patients Sequence", "acts": ["patient_m05", "elder_m14", "patient_f08"], "subs": ["standing", "standing", "standing"], "offs": [Vector3(0, 0, 0), Vector3(0, 0, -0.8), Vector3(0.1, 0, -1.6)]},
 		{"id": "U6.4", "vi": "Thảo Luận 180° vs 0°", "en": "Consultation Facing", "acts": ["doctor_male", "patient_m02"], "subs": ["standing", "standing"], "offs": [Vector3(-0.25, 0, 0), Vector3(0.25, 0, 0)]},
 		{"id": "U6.5", "vi": "Dìu Cụ Già Đi Chậm", "en": "Guided Walking Pair", "acts": ["elder_f09", "nurse_female"], "subs": ["standing", "standing"], "offs": [Vector3(-0.2, 0, 0), Vector3(0.2, 0, 0)]},
+		{"id": "U6.6", "vi": "Bệnh Nhi Đi Cùng Mẹ", "en": "Mother and Child Pair", "acts": ["child_patient", "patient_f02"], "subs": ["child", "standing"], "offs": [Vector3(-0.25, 0, 0), Vector3(0.25, 0, 0)]},
+		{"id": "U6.8", "vi": "Bệnh Nhi Được Mẹ Bế Trên Tay", "en": "Mother Carrying Sick Child", "acts": ["patient_f02", "child_patient"], "subs": ["standing", "child"], "offs": [Vector3(0, 0, 0), Vector3(0.06, 0.62, 0.18)]},
 		{"id": "U6.7", "vi": "Cụm 4 Người Tụ Tập", "en": "Gathering Group 4", "acts": ["doctor_male", "nurse_female", "patient_m05"], "subs": ["standing", "standing", "standing"], "offs": [Vector3(-0.4, 0, 0), Vector3(0.4, 0, 0), Vector3(0, 0, -0.6)]}
 	]
 	for c in cases:
-		await _generate_18_frames_crowd(img_dir, lbl_dir, c["id"], c["vi"], c["en"], "U6_CrowdSocial", "Mật độ đông & Xã hội", c["acts"], c["subs"], c["offs"])
+		await _generate_38_frames_crowd(img_dir, lbl_dir, c["id"], c["vi"], c["en"], "U6_CrowdSocial", "Mật độ đông & Xã hội", c["acts"], c["subs"], c["offs"])
 
-# U5 + U7 + U8: Cự ly, Động học & Bẫy 0 GT (8 ca)
+# U5 + U7 + U8: Cự ly, Động học & Bẫy 0 GT (10 ca x 38 = 380 frames)
 func _generate_group_u5_u7_u8(img_dir: String, lbl_dir: String) -> void:
-	# 1. Ca cự ly & mép biên FOV (5 ca)
+	# 1. Ca cự ly & mép biên FOV (5 ca x 38 = 190 frames)
 	var fov_cases = [
 		{"id": "U7.2", "vi": "Cận Cảnh An Toàn 0.9m", "en": "Close Safe Range 0.9m", "d": 0.9, "cam_yaw": 0.0},
 		{"id": "U7.3", "vi": "Cự Ly Chuẩn 2.5m", "en": "Standard Range 2.5m", "d": 2.5, "cam_yaw": 0.0},
 		{"id": "U7.4", "vi": "Cự Ly Xa 6.0m", "en": "Far Range 6.0m", "d": 6.0, "cam_yaw": 0.0},
-		{"id": "U7.5", "vi": "Cắt Mép Trái Khung Hình FOV", "en": "FOV Left Edge Truncation", "d": 2.0, "cam_yaw": -24.0},
-		{"id": "U7.6", "vi": "Cắt Mép Phải Khung Hình FOV", "en": "FOV Right Edge Truncation", "d": 2.0, "cam_yaw": 24.0}
+		{"id": "U7.5", "vi": "Cắt Mép Trái Khung Hình FOV", "en": "FOV Left Edge Truncation", "d": 2.2, "cam_yaw": -18.0},
+		{"id": "U7.6", "vi": "Cắt Mép Phải Khung Hình FOV", "en": "FOV Right Edge Truncation", "d": 2.2, "cam_yaw": 18.0}
 	]
 	var actor = _get_actor("patient_m02")
 	for c in fov_cases:
-		for step in range(18):
+		for step in range(38):
 			var fid = "%s_%04d" % [c["id"].replace(".", "_"), step + 1]
 			_hide_all_entities()
-			var dist = c["d"] + (step % 3) * 0.4
-			var yaw = c["cam_yaw"] + ((step / 3) % 3 - 1) * 4.0
+			var dist = c["d"] + (step % 5) * 0.3
+			var yaw = c["cam_yaw"] + ((step / 5) % 3 - 1) * 2.0
 			var cam_h = 0.85 if (step % 2 == 0) else 1.25
 			if actor:
 				actor.visible = true
@@ -782,14 +847,14 @@ func _generate_group_u5_u7_u8(img_dir: String, lbl_dir: String) -> void:
 				_position_camera_6dof(corridor_anchor, dist, yaw, cam_h, 0.90)
 			await _record_frame(img_dir, lbl_dir, fid, c["id"], c["vi"], c["en"], "U7_ExtremeOptics", "Quang học & Mép biên", false, [actor], ["standing"], dist, yaw, cam_h)
 
-	# 2. Ca động học tuần tra đối đầu (1 ca)
-	await _generate_18_frames_kinematics(img_dir, lbl_dir, "U5.1", "Tuần Tra Đối Đầu (1.08 m/s)", "Patrol Looming Reverse", "U5_Kinematics", "Động học & Né tránh", "doctor_male", "looming")
+	# 2. Ca động học tuần tra đối đầu (1 ca x 38 = 38 frames)
+	await _generate_38_frames_kinematics(img_dir, lbl_dir, "U5.1", "Tuần Tra Đối Đầu (1.08 m/s)", "Patrol Looming Reverse", "U5_Kinematics", "Động học & Né tránh", "doctor_male", "looming")
 
-	# 3. Ca bẫy rỗng 0 GT người (4 ca: standee, kiosk, xe lăn rỗng, giường bệnh rỗng)
-	await _generate_18_frames_empty_trap(img_dir, lbl_dir, "U8.8", "Bẫy Standee 2D In Hình Y Tế", "Standee 2D Poster Trap", "U8_EmptyTraps", "Bẫy phòng rỗng & Đạo cụ", "empty_info_standee", corridor_anchor)
-	await _generate_18_frames_empty_trap(img_dir, lbl_dir, "U8.4", "Bẫy Kiosk Bấm Số Rỗng", "Empty Kiosk Trap", "U8_EmptyTraps", "Bẫy phòng rỗng & Đạo cụ", "empty_queue_kiosk", corridor_anchor)
-	await _generate_18_frames_empty_trap(img_dir, lbl_dir, "U8.2", "Bẫy Xe Lăn Rỗng Không Người", "Empty Wheelchair Trap", "U8_EmptyTraps", "Bẫy phòng rỗng & Đạo cụ", "empty_wheelchair", corridor_anchor)
-	await _generate_18_frames_empty_hospital_bed(img_dir, lbl_dir, "U8.6", "Bẫy Giường Bệnh Rỗng Không Người", "Empty Hospital Bed Trap", "U8_EmptyTraps", "Bẫy phòng rỗng & Đạo cụ", "empty_hospital_bed", corridor_anchor)
+	# 3. Ca bẫy rỗng 0 GT người (4 ca x 38 = 152 frames)
+	await _generate_38_frames_empty_trap(img_dir, lbl_dir, "U8.8", "Bẫy Standee 2D In Hình Y Tế", "Standee 2D Poster Trap", "U8_EmptyTraps", "Bẫy phòng rỗng & Đạo cụ", "empty_info_standee", corridor_anchor)
+	await _generate_38_frames_empty_trap(img_dir, lbl_dir, "U8.4", "Bẫy Kiosk Bấm Số Rỗng", "Empty Kiosk Trap", "U8_EmptyTraps", "Bẫy phòng rỗng & Đạo cụ", "empty_queue_kiosk", corridor_anchor)
+	await _generate_38_frames_empty_trap(img_dir, lbl_dir, "U8.2", "Bẫy Xe Lăn Rỗng Không Người", "Empty Wheelchair Trap", "U8_EmptyTraps", "Bẫy phòng rỗng & Đạo cụ", "empty_wheelchair", corridor_anchor)
+	await _generate_38_frames_empty_hospital_bed(img_dir, lbl_dir, "U8.6", "Bẫy Giường Bệnh Rỗng Không Người", "Empty Hospital Bed Trap", "U8_EmptyTraps", "Bẫy phòng rỗng & Đạo cụ", "empty_hospital_bed", corridor_anchor)
 
 # ==============================================================================
 # TIỆN ÍCH TÌM KIẾM NODE & ÁNH SÁNG
@@ -819,16 +884,16 @@ func _apply_lighting_profile(profile_name: String) -> void:
 		elif profile_name == "warm_clinic_3000k":
 			main_dir_light.light_energy = 1.1
 			main_dir_light.light_color = Color(1.0, 0.85, 0.65)
-		else: # fluorescent standard 450 lux
-			main_dir_light.light_energy = 1.0
-			main_dir_light.light_color = Color(1.0, 0.98, 0.95)
+		else: # fluorescent standard 450 lux - cân bằng độ sáng chống lóa
+			main_dir_light.light_energy = 0.85
+			main_dir_light.light_color = Color(0.96, 0.96, 0.96)
 
 func _write_dataset_manifest(abs_out_dir: String, elapsed_sec: float) -> void:
 	var manifest = {
 		"dataset_name": "vision_eval_unified",
-		"version": "3.1_zero_defect_36_cases_multiclass",
+		"version": "4.0_phase1_gold_1520_frames",
 		"total_frames": _total_saved_frames,
-		"total_cases": 36,
+		"total_cases": 40,
 		"classes": {
 			0: "person",
 			1: "wheelchair"

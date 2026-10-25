@@ -1,0 +1,26 @@
+{
+	"bounding_box_convention": "visible_bounding_box_yolo_normalized",
+	"classes": {
+		"0": "person",
+		"1": "wheelchair"
+	},
+	"dataset_name": "vision_eval_unified",
+	"generation_time_sec": 59.9,
+	"groups": [
+		"U1_Camouflage",
+		"U2_ClinicalPoses",
+		"U3_MedicalProps",
+		"U6_CrowdSocial",
+		"U7_ExtremeOptics",
+		"U5_Kinematics",
+		"U8_EmptyTraps"
+	],
+	"raycast_occlusion_grid": "128_rays_physics_space_state_and_skeleton3d",
+	"resolution": [
+		640,
+		480
+	],
+	"total_cases": 40,
+	"total_frames": 1520,
+	"version": "4.0_phase1_gold_1520_frames"
+}

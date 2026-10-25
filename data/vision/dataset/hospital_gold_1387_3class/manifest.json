@@ -1,0 +1,22 @@
+{
+  "dataset_name": "Hospital_Vision_Gold_Core_Positive",
+  "version": "2.1_clinical_positive_only",
+  "created_at": "2026-10-25T07:34:00Z",
+  "verification_source": "CVAT Human Verified + Clinical Actor Mapping",
+  "total_frames": 1387,
+  "total_instances": 1753,
+  "classes": {
+    "0": "patient",
+    "1": "doctor",
+    "2": "wheelchair"
+  },
+  "class_breakdown": {
+    "patient": 1242,
+    "doctor": 435,
+    "wheelchair": 76
+  },
+  "resolution": [640, 480],
+  "format": "YOLO_normalized_5col",
+  "quality_assurance_status": "PASS_ZERO_DEFECT_100PCT_POSITIVE",
+  "notes": "133 empty/hard negative frames (standee, kiosk, empty bed) have been moved to data/vision/raw/hard_negatives/"
+}

@@ -5,6 +5,7 @@ extends Node3D
 ## cửa mở ngay lập tức: tắt collision_layer và CollisionShape3D để RayCast3D/dẫn đường RL không bị kẹt,
 ## đồng thời trượt cánh cửa vào hốc tường trong `slide_duration_s` (0.25 s).
 ## Tự động đóng lại sau `close_delay_s` (1.5 s) kể từ khi vùng cảm biến trống.
+## `robot_can_open = false` (cửa chính ra ngoài): chỉ người mở được, robot coi như tường ➔ không rời tòa nhà.
 
 signal door_state_changed(opened: bool)
 
@@ -12,6 +13,7 @@ signal door_state_changed(opened: bool)
 @export var slide_duration_s: float = 0.25
 @export var close_delay_s: float = 1.5
 @export var door_label: String = ""
+@export var robot_can_open: bool = true
 
 var is_open: bool = false
 var _collision_disabled: bool = false
@@ -24,14 +26,18 @@ var _occupants: Dictionary = {}
 @onready var _trigger_area: Area3D = $TriggerArea
 @onready var _status_mat: StandardMaterial3D = null
 @onready var _header_label: Label3D = get_node_or_null(^"Frame/HeaderSign/Label")
+@onready var _header_label_back: Label3D = get_node_or_null(^"Frame/HeaderSign/LabelBack")
 
 
 func _ready() -> void:
+	add_to_group(&"sliding_doors")
 	if _trigger_area != null:
 		_trigger_area.body_entered.connect(_on_body_entered)
 		_trigger_area.body_exited.connect(_on_body_exited)
-	if _header_label != null and not door_label.is_empty():
-		_header_label.text = door_label
+	if not door_label.is_empty():
+		for label: Label3D in [_header_label, _header_label_back]:
+			if label != null:
+				label.text = door_label
 	var indicator := get_node_or_null(^"Frame/StatusLight") as MeshInstance3D
 	if indicator != null and indicator.mesh != null:
 		_status_mat = indicator.get_active_material(0) as StandardMaterial3D
@@ -65,7 +71,7 @@ static func is_valid_opener(body: Node) -> bool:
 
 
 func _on_body_entered(body: Node3D) -> void:
-	if not SlidingDoor.is_valid_opener(body):
+	if not SlidingDoor.is_valid_opener(body) or (not robot_can_open and body is Robot):
 		return
 	_occupants[body.get_instance_id()] = true
 	_close_timer = 0.0

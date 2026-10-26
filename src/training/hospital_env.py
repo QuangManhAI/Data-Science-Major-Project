@@ -16,6 +16,9 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+from scipy import ndimage
+from scipy.sparse import csr_matrix
+from scipy.sparse.csgraph import dijkstra
 
 from src.models.ppo_agent import OBS_DIM, OMEGA_MAX, V_MAX
 
@@ -40,6 +43,8 @@ BONUS_TETHER_GOOD = 0.03
 PENALTY_TETHER_STRETCH = -0.08
 PENALTY_STEP_TIME = -0.01
 PENALTY_COLLISION = -5.0
+PENALTY_PROXIMITY = -0.1   # per step, ramps up as the nearest LiDAR hit closes from 0.65 m to the 0.40 m collision line
+PROXIMITY_LIDAR_M = 0.65
 
 # Physical thresholds (meters & m/s)
 TETHER_IDEAL_M = 1.6
@@ -55,7 +60,21 @@ ESCORT_STOP_DIST_M = 0.9       # patient stops this close behind the robot
 ESCORT_CRUMB_SPACING_M = 0.25  # robot path is sampled every 0.25 m
 ESCORT_CRUMB_REACH_M = 0.3     # crumb counts as reached within 0.3 m
 ESCORT_TRAIL_JUMP_M = 5.0      # robot teleported (elevator) -> restart trail
-STAGNATION_PROGRESS_M = 1.0    # getting this much closer to the active goal resets the stagnation clock
+STAGNATION_PROGRESS_M = 1.0    # getting this much closer (along the path) to the active goal resets the stagnation clock
+ROBOT_BOUND_X_M = 11.6         # robot centre stays inside the building shell (|x - x_base|, |z|)
+ROBOT_BOUND_Z_M = 8.6
+ROBOT_RADIUS_M = 0.32
+
+# Geodesic navigation: shortest paths on a grid of walls + furniture inflated by the robot radius
+NAV_CELL_M = 0.2
+NAV_INFLATE_M = 0.34           # hard limit: robot collision radius 0.32 + 2 cm
+NAV_COMFORT_M = 0.8            # soft limit: cells with less clearance than this cost extra...
+NAV_CLEARANCE_COST = 3.0       # ...up to (1 + 3)x per metre at the hard limit, so paths keep to the middle of passages
+NAV_LOOKAHEAD_M = 2.0          # sub-goal = farthest point this far along the path still in straight-line sight...
+NAV_SIGHT_CLEARANCE_M = 0.55   # ...where the straight segment keeps this clearance (no cutting door frames)
+NAV_APPROACH_REACH_M = 1.0     # patient spawns need a reachable cell this close (talk distance is 1.35 m)
+NAV_FIELD_CACHE = 128
+DOCK_START_PROB = 0.75         # shifts usually start at the robot dock inside the main entrance
 ESCORT_WALK_SPEED = 0.52
 
 LIDAR_NUM_RAYS = 17
@@ -198,10 +217,16 @@ HOSPITAL_NPCS: tuple[dict[str, Any], ...] = tuple(_LAYOUT_DATA.get("npcs", []))
 # NPC behaviour (match HospitalNpc in sim_vision/godot/scripts/hospital_npc.gd)
 NPC_PARDON_TRIGGER_DIST = 1.4
 NPC_PARDON_CLEAR_DIST = 1.85
-NPC_PARDON_SIDESTEP_M = 0.55
 NPC_PARDON_MIN_ROBOT_V = 0.05
-NPC_PARDON_LANE_HALF_W = 0.9
+NPC_PARDON_LANE_HALF_W = 0.75       # only NPCs actually blocking the robot's swept lane step aside
+NPC_PARDON_LANE_CLEAR_M = 0.8       # ...to this lateral distance from the robot's line
+NPC_PARDON_FLIP_MAX_LATERAL = 0.3   # other side only when near the lane centre (never cross in front of the robot)
 NPC_PARDON_CLEARANCE_M = 0.35
+NPC_PARDON_MAX_S = 4.0              # give up a side-step after 4 s (e.g. it ended up in a doorway the robot needs)...
+NPC_PARDON_COOLDOWN_S = 3.0         # ...and walk on for 3 s before side-stepping again
+NPC_DOORWAY_KEEP_CLEAR_M = 1.2      # side-step spots never block a doorway (the robot's path may turn into it)
+NPC_PERSONAL_SPACE_M = 0.9          # NPCs never step closer than this (centre to centre) to the robot; they wait...
+NPC_BLOCKED_TURN_S = 2.0            # ...and a patrolling NPC kept waiting this long turns back to its other waypoint
 
 
 def _load_layout(data: dict[str, Any]) -> tuple[tuple[WallBox2D, ...], list[str]]:
@@ -282,21 +307,165 @@ def _derive_doors() -> dict[tuple[int, str], tuple[tuple[float, ...], tuple[floa
     return doors
 
 
+# Doorways of the corridor walls; Godot's fallback controller (rl_controller.gd DOORS) must match
 _DOORS = _derive_doors()
 
-
-def _door_x(x: float, side: str) -> float:
-    """Doorway of the room column containing global x (north = z < -2 rooms, south = z > +2 rooms)."""
-    centres, dividers = _DOORS[(floor_of(x), side)]
-    return centres[sum(1 for d in dividers if d < x)]
-
-
-def north_door_x(x: float) -> float:
-    return _door_x(x, "north")
+def _near_doorway(x: float, z: float, radius: float) -> bool:
+    """Within `radius` of a corridor doorway centre (doors sit on the corridor walls at z = -2 / +2)."""
+    return any(
+        math.hypot(x - c, z - (-2.0 if side == "north" else 2.0)) < radius
+        for (floor, side), (centres, _) in _DOORS.items() if floor == floor_of(x)
+        for c in centres
+    )
 
 
-def south_door_x(x: float) -> float:
-    return _door_x(x, "south")
+# Robot dock just inside the main entrance (west end of the floor-1 corridor), facing into the corridor
+ROBOT_DOCK: tuple[float, float, float] = (
+    float(_LAYOUT_DATA["robot_dock"]["x"]), float(_LAYOUT_DATA["robot_dock"]["z"]), float(_LAYOUT_DATA["robot_dock"]["yaw"]),
+)
+
+_NAV_NEIGHBOURS = tuple((di, dj) for di in (-1, 0, 1) for dj in (-1, 0, 1) if di or dj)
+
+
+class NavGrid:
+    """Clearance-weighted shortest-path fields for one floor: 8-connected grid without corner cutting."""
+
+    def __init__(self, floor: int) -> None:
+        self.x_base = 50.0 if floor == 2 else 0.0
+        self.x0, self.z0 = self.x_base - 12.0, -9.0
+        self.nx = int(round(24.0 / NAV_CELL_M)) + 1
+        self.nz = int(round(18.0 / NAV_CELL_M)) + 1
+        self.xs = self.x0 + np.arange(self.nx) * NAV_CELL_M
+        self.zs = self.z0 + np.arange(self.nz) * NAV_CELL_M
+        gx, gz = np.meshgrid(self.xs, self.zs, indexing="ij")
+        clearance = np.full(gx.shape, np.inf)
+        for bx0, bx1, bz0, bz1 in _OBSTACLES[floor]:
+            dx = np.maximum(np.maximum(bx0 - gx, gx - bx1), 0.0)
+            dz = np.maximum(np.maximum(bz0 - gz, gz - bz1), 0.0)
+            clearance = np.minimum(clearance, np.hypot(dx, dz))
+        blocked = (clearance <= NAV_INFLATE_M) | (np.abs(gx - self.x_base) > ROBOT_BOUND_X_M) | (np.abs(gz) > ROBOT_BOUND_Z_M)
+        tight = np.clip((NAV_COMFORT_M - clearance) / (NAV_COMFORT_M - NAV_INFLATE_M), 0.0, 1.0)
+        self.cost = 1.0 + NAV_CLEARANCE_COST * tight
+        self.clearance = clearance
+        # Keep the component that holds the corridor centre: everything the robot can actually drive to
+        labels, _ = ndimage.label(~blocked, structure=np.ones((3, 3), dtype=bool))
+        self.free = labels == labels[self.cell(self.x_base, 0.0)]
+        dist_to_free, (self.snap_i, self.snap_j) = ndimage.distance_transform_edt(~self.free, return_indices=True)
+        self.approachable = dist_to_free * NAV_CELL_M <= NAV_APPROACH_REACH_M
+        self.graph = self._build_graph()
+        self._fields: collections.OrderedDict[int, np.ndarray] = collections.OrderedDict()
+
+    def _build_graph(self) -> csr_matrix:
+        f, c, k = self.free, NAV_CELL_M, self.cost
+        d = c * math.sqrt(2.0)
+        idx = np.arange(self.nx * self.nz).reshape(self.nx, self.nz)
+        rows, cols, weights = [], [], []
+        edges = (
+            (f[:-1, :] & f[1:, :], (slice(None, -1), slice(None)), (slice(1, None), slice(None)), c),
+            (f[:, :-1] & f[:, 1:], (slice(None), slice(None, -1)), (slice(None), slice(1, None)), c),
+            (f[:-1, :-1] & f[1:, 1:] & f[1:, :-1] & f[:-1, 1:], (slice(None, -1), slice(None, -1)), (slice(1, None), slice(1, None)), d),
+            (f[:-1, 1:] & f[1:, :-1] & f[1:, 1:] & f[:-1, :-1], (slice(None, -1), slice(1, None)), (slice(1, None), slice(None, -1)), d),
+        )
+        for mask, a, b, length in edges:
+            rows.append(idx[a][mask])
+            cols.append(idx[b][mask])
+            weights.append(length * 0.5 * (k[a][mask] + k[b][mask]))
+        n = self.nx * self.nz
+        return csr_matrix((np.concatenate(weights), (np.concatenate(rows), np.concatenate(cols))), shape=(n, n))
+
+    def cell(self, x: float, z: float) -> tuple[int, int]:
+        i = min(max(int(round((x - self.x0) / NAV_CELL_M)), 0), self.nx - 1)
+        j = min(max(int(round((z - self.z0) / NAV_CELL_M)), 0), self.nz - 1)
+        return i, j
+
+    def snap(self, x: float, z: float) -> tuple[int, int]:
+        """Nearest drivable cell."""
+        i, j = self.cell(x, z)
+        return int(self.snap_i[i, j]), int(self.snap_j[i, j])
+
+    def is_approachable(self, x: float, z: float) -> bool:
+        return bool(self.approachable[self.cell(x, z)])
+
+    def field(self, tx: float, tz: float) -> np.ndarray:
+        """Path length from every cell to the target's nearest drivable cell (inf = unreachable)."""
+        i, j = self.snap(tx, tz)
+        key = i * self.nz + j
+        fld = self._fields.get(key)
+        if fld is None:
+            fld = dijkstra(self.graph, directed=False, indices=key).reshape(self.nx, self.nz)
+            self._fields[key] = fld
+            if len(self._fields) > NAV_FIELD_CACHE:
+                self._fields.popitem(last=False)
+        else:
+            self._fields.move_to_end(key)
+        return fld
+
+    def _entry(self, fld: np.ndarray, x: float, z: float) -> tuple[float, int, int]:
+        """Best grid cell to join the path from (x, z): min over the 3x3 block of field + straight hop."""
+        i, j = self.cell(x, z)
+        i0, i1, j0, j1 = max(i - 1, 0), min(i + 2, self.nx), max(j - 1, 0), min(j + 2, self.nz)
+        block = fld[i0:i1, j0:j1] + np.hypot(self.xs[i0:i1, None] - x, self.zs[None, j0:j1] - z)
+        k = int(np.argmin(block))
+        bi, bj = i0 + k // (j1 - j0), j0 + k % (j1 - j0)
+        if math.isfinite(block.flat[k]):
+            return float(block.flat[k]), bi, bj
+        si, sj = self.snap(x, z)  # inside an inflated obstacle margin: hop to the nearest drivable cell
+        return float(fld[si, sj] + math.hypot(self.xs[si] - x, self.zs[sj] - z)), si, sj
+
+    def distance(self, fld: np.ndarray, x: float, z: float) -> float:
+        return self._entry(fld, x, z)[0]
+
+    def _visible(self, x: float, z: float, px: float, pz: float, need: float) -> bool:
+        """Straight segment keeps `need` clearance on drivable cells (ignoring the first 0.3 m around the robot)."""
+        length = math.hypot(px - x, pz - z)
+        if length <= 0.3:
+            return True
+        ts = np.arange(0.3, length, 0.1) / length
+        ii = np.clip(np.rint((x + ts * (px - x) - self.x0) / NAV_CELL_M).astype(int), 0, self.nx - 1)
+        jj = np.clip(np.rint((z + ts * (pz - z) - self.z0) / NAV_CELL_M).astype(int), 0, self.nz - 1)
+        return bool((self.free[ii, jj] & (self.clearance[ii, jj] >= need)).all())
+
+    def subgoal(self, fld: np.ndarray, x: float, z: float, tx: float, tz: float) -> tuple[float, float]:
+        """Walk down the distance field up to NAV_LOOKAHEAD_M; return the farthest point still in sight."""
+        _, i, j = self._entry(fld, x, z)
+        path = [(i, j)]
+        travelled = 0.0
+        while travelled < NAV_LOOKAHEAD_M and fld[i, j] > 1e-6:
+            # Shortest-path predecessor: neighbour minimising field + step (and strictly downhill)
+            best, best_cost, best_step = None, math.inf, 0.0
+            for di, dj in _NAV_NEIGHBOURS:
+                ii, jj = i + di, j + dj
+                if not (0 <= ii < self.nx and 0 <= jj < self.nz) or fld[ii, jj] >= fld[i, j]:
+                    continue
+                if di and dj and not (self.free[ii, j] and self.free[i, jj]):
+                    continue
+                step = NAV_CELL_M * (math.sqrt(2.0) if di and dj else 1.0)
+                cost = fld[ii, jj] + step * 0.5 * (self.cost[i, j] + self.cost[ii, jj])
+                if cost < best_cost:
+                    best, best_cost, best_step = (ii, jj), cost, step
+            if best is None:
+                break
+            i, j = best
+            travelled += best_step
+            path.append(best)
+        if fld[i, j] <= 1e-6:
+            return tx, tz  # target within the look-ahead
+        for pi, pj in reversed(path[1:]):
+            need = min(NAV_SIGHT_CLEARANCE_M, float(self.clearance[pi, pj]))
+            if self._visible(x, z, self.xs[pi], self.zs[pj], need):
+                return float(self.xs[pi]), float(self.zs[pj])
+        pi, pj = path[min(1, len(path) - 1)]
+        return float(self.xs[pi]), float(self.zs[pj])
+
+
+_NAV_GRIDS: dict[int, NavGrid] = {}
+
+
+def nav_grid(floor: int) -> NavGrid:
+    grid = _NAV_GRIDS.get(floor)
+    if grid is None:
+        grid = _NAV_GRIDS[floor] = NavGrid(floor)
+    return grid
 
 
 
@@ -404,8 +573,10 @@ class HospitalShiftEnv:
         self.scenario_floor = 1
 
         self.goal_key = "101"
-        self.goal_x = 0.0
+        self.goal_x = 0.0  # navigation sub-goal (point along the shortest path to the active target)
         self.goal_z = 0.0
+        self.nav_remaining = 0.0  # shortest-path length to the active target (to this floor's elevator if cross-floor)
+        self.staff_goal: tuple[float, float] = DESTINATION_POSITIONS["staff"]  # CALL_STAFF target, fixed at task start
         self.task_phase = TaskPhase.SEARCH_PATIENT
 
         # Patrolling doctor in central corridor (only active in Full mode Stage 2)
@@ -428,6 +599,14 @@ class HospitalShiftEnv:
     def _near_npc(self, x: float, z: float, clearance: float) -> bool:
         return any(abs(x - n["x"]) <= n["half_x"] + clearance and abs(z - n["z"]) <= n["half_z"] + clearance for n in self.npcs)
 
+    def _npc_blocks_move(self, x: float, z: float) -> bool:
+        """Robot step into an NPC's margin; stepping away from an NPC that walked into it is always allowed."""
+        return any(
+            abs(x - n["x"]) <= n["half_x"] + ROBOT_RADIUS_M and abs(z - n["z"]) <= n["half_z"] + ROBOT_RADIUS_M
+            and math.hypot(x - n["x"], z - n["z"]) < math.hypot(self.robot_x - n["x"], self.robot_z - n["z"])
+            for n in self.npcs
+        )
+
     def _npc_boxes(self) -> np.ndarray:
         if not self.npcs:
             return np.zeros((0, 4))
@@ -440,6 +619,38 @@ class HospitalShiftEnv:
             return np.concatenate([_OBSTACLES[1], self._npc_boxes()])
         return _OBSTACLES[floor]
 
+    def _nearest_staff_position(self) -> tuple[float, float]:
+        """Nurse / doctor closest (straight line) to the robot, like RLEnvBridge.find_nearest_staff_position."""
+        staff = [n for n in (self.npcs or HOSPITAL_NPCS) if n["role"] in ("nurse", "doctor")]
+        if not staff:
+            return DESTINATION_POSITIONS["staff"]
+        n = min(staff, key=lambda n: math.hypot(n["x"] - self.robot_x, n["z"] - self.robot_z))
+        return n["x"], n["z"]
+
+    def _nav_final_target(self) -> tuple[float, float]:
+        if self.task_phase in (TaskPhase.SEARCH_PATIENT, TaskPhase.APPROACH_PATIENT):
+            return self.patient_x, self.patient_z
+        if self.task_phase == TaskPhase.CALL_STAFF:
+            return self.staff_goal
+        return DESTINATION_POSITIONS.get(self.goal_key, (0.0, 4.5))
+
+    def _nav_field(self, tx: float, tz: float) -> tuple[NavGrid, np.ndarray, float, float]:
+        """Distance field on the robot's floor; a target on another floor routes to this floor's elevator."""
+        floor = floor_of(self.robot_x)
+        if floor_of(tx) != floor:
+            tx, tz = ELEVATOR_POSITIONS[floor]
+        grid = nav_grid(floor)
+        return grid, grid.field(tx, tz), tx, tz
+
+    def set_nav_target(self, tx: float, tz: float) -> None:
+        """Sub-goal along the shortest path to (tx, tz) and the remaining path length (observation goal features)."""
+        grid, fld, tx, tz = self._nav_field(tx, tz)
+        self.nav_remaining = grid.distance(fld, self.robot_x, self.robot_z)
+        self.goal_x, self.goal_z = grid.subgoal(fld, self.robot_x, self.robot_z, tx, tz)
+
+    def _update_nav(self) -> None:
+        self.set_nav_target(*self._nav_final_target())
+
     def _step_npcs(self) -> None:
         """Waypoint patrols + pardon side-step, mirroring HospitalNpc._physics_process."""
         fwd_x, fwd_z = -math.sin(self.robot_yaw), -math.cos(self.robot_yaw)
@@ -447,20 +658,29 @@ class HospitalShiftEnv:
             if n["seated"]:
                 continue
             d_robot = math.hypot(n["x"] - self.robot_x, n["z"] - self.robot_z)
-            if n["pardon_enabled"] and not n["pardoning"] and d_robot <= NPC_PARDON_TRIGGER_DIST:
+            n["cooldown"] = max(0.0, n["cooldown"] - self.dt)
+            if n["pardoning"]:
+                n["pardon_t"] += self.dt
+            if n["pardon_enabled"] and not n["pardoning"] and n["cooldown"] <= 0.0 and d_robot <= NPC_PARDON_TRIGGER_DIST:
                 rel_x, rel_z = n["x"] - self.robot_x, n["z"] - self.robot_z
                 ahead = rel_x * fwd_x + rel_z * fwd_z
                 lateral = rel_x * (-fwd_z) + rel_z * fwd_x
                 if abs(self.robot_v) >= NPC_PARDON_MIN_ROBOT_V and ahead > -0.2 and abs(lateral) < NPC_PARDON_LANE_HALF_W:
                     side = 1.0 if lateral >= 0.0 else -1.0
-                    for sgn in (side, -side):
-                        tx = n["x"] + (-fwd_z) * NPC_PARDON_SIDESTEP_M * sgn
-                        tz = n["z"] + fwd_x * NPC_PARDON_SIDESTEP_M * sgn
-                        if not is_blocked(tx, tz, NPC_PARDON_CLEARANCE_M):
-                            n["pardoning"], n["target"] = True, (tx, tz)
+                    sides = (side, -side) if abs(lateral) < NPC_PARDON_FLIP_MAX_LATERAL else (side,)
+                    for sgn in sides:
+                        shift = sgn * NPC_PARDON_LANE_CLEAR_M - lateral
+                        tx = n["x"] + (-fwd_z) * shift
+                        tz = n["z"] + fwd_x * shift
+                        mx, mz = (n["x"] + tx) / 2.0, (n["z"] + tz) / 2.0
+                        if (not is_blocked(tx, tz, NPC_PARDON_CLEARANCE_M) and not is_blocked(mx, mz, 0.25)
+                                and not _near_doorway(tx, tz, NPC_DOORWAY_KEEP_CLEAR_M)):
+                            n["pardoning"], n["target"], n["pardon_t"] = True, (tx, tz), 0.0
                             break
             elif n["pardoning"] and d_robot >= NPC_PARDON_CLEAR_DIST:
                 n["pardoning"] = False
+            elif n["pardoning"] and n["pardon_t"] >= NPC_PARDON_MAX_S:
+                n["pardoning"], n["cooldown"] = False, NPC_PARDON_COOLDOWN_S
             if n["pardoning"]:
                 target = n["target"]
             elif n["walks"]:
@@ -474,8 +694,16 @@ class HospitalShiftEnv:
             d = math.hypot(dx, dz)
             step = min(n["walk_speed"] * self.dt, d)
             if d > 1e-6:
-                n["x"] += dx / d * step
-                n["z"] += dz / d * step
+                nx, nz = n["x"] + dx / d * step, n["z"] + dz / d * step
+                d_next = math.hypot(nx - self.robot_x, nz - self.robot_z)
+                if d_next < NPC_PERSONAL_SPACE_M and d_next < d_robot:
+                    n["blocked_t"] += self.dt  # people wait rather than walk into the robot
+                    if n["walks"] and not n["pardoning"] and n["blocked_t"] >= NPC_BLOCKED_TURN_S:
+                        n["wp_index"] = (n["wp_index"] + 1) % len(n["waypoints"])
+                        n["blocked_t"] = 0.0
+                    continue
+                n["blocked_t"] = 0.0
+                n["x"], n["z"] = nx, nz
 
     def _sample_patient_spawn_solo(self) -> tuple[float, float]:
         """Sample free coordinates strictly in public corridors or lobby on robot's current floor."""
@@ -489,7 +717,7 @@ class HospitalShiftEnv:
                 # Main lobby waiting & reception area
                 x = float(self.rng.uniform(-3.2, 3.2)) + x_base
                 z = float(self.rng.uniform(2.2, 6.5))
-            if not is_blocked(x, z, 0.65) and not self._near_npc(x, z, 0.8):
+            if not is_blocked(x, z, 0.65) and not self._near_npc(x, z, 0.8) and nav_grid(floor_of(x)).is_approachable(x, z):
                 return x, z
         return 0.0 + x_base, 4.0
 
@@ -595,25 +823,26 @@ class HospitalShiftEnv:
 
         if self.solo_like:
             self.npcs = [
-                {**n, "home": (n["x"], n["z"]), "wp_index": 0, "pardoning": False, "target": None}
+                {**n, "home": (n["x"], n["z"]), "wp_index": 0, "pardoning": False, "target": None, "pardon_t": 0.0, "cooldown": 0.0, "blocked_t": 0.0}
                 for n in HOSPITAL_NPCS
             ] if self.env_mode == "full" else []
-            # 1. Spawn patient in corridor / lobby
-            self.patient_x, self.patient_z = self._sample_patient_spawn_solo()
-
-            # 2. Spawn robot independently across the hospital corridors/lobby
-            # so the robot must actively SEARCH, navigate corridors, and find the patient
-            robot_placed = False
-            for _ in range(150):
-                rx, rz = self._sample_patient_spawn_solo()
-                if math.hypot(rx - self.patient_x, rz - self.patient_z) >= 3.5:
-                    self.robot_x, self.robot_z = rx, rz
-                    robot_placed = True
-                    break
-            if not robot_placed:
+            if self.rng.random() < DOCK_START_PROB:
+                # Shift starts at the robot dock by the main entrance; patient somewhere in the corridor / lobby
+                self.robot_x, self.robot_z, self.robot_yaw = ROBOT_DOCK
+                for _ in range(150):
+                    self.patient_x, self.patient_z = self._sample_patient_spawn_solo()
+                    if math.hypot(self.patient_x - self.robot_x, self.patient_z - self.robot_z) >= 3.5:
+                        break
+            else:
+                # Mid-shift start: robot anywhere in the corridors / lobby, must actively search for the patient
                 self.robot_x, self.robot_z = 0.0, 0.0
-
-            self.robot_yaw = float(self.rng.uniform(-math.pi, math.pi))
+                self.patient_x, self.patient_z = self._sample_patient_spawn_solo()
+                for _ in range(150):
+                    rx, rz = self._sample_patient_spawn_solo()
+                    if math.hypot(rx - self.patient_x, rz - self.patient_z) >= 3.5:
+                        self.robot_x, self.robot_z = rx, rz
+                        break
+                self.robot_yaw = float(self.rng.uniform(-math.pi, math.pi))
             self.robot_v = 0.0
             self.robot_omega = 0.0
 
@@ -621,8 +850,7 @@ class HospitalShiftEnv:
             self._sample_solo_scenario()
             self.task_phase = TaskPhase.SEARCH_PATIENT
             self.goal_key = "patient"
-            self.goal_x = self.patient_x
-            self.goal_z = self.patient_z
+            self._update_nav()
             return self._get_obs()
 
         self.robot_x, self.robot_z = self._sample_free_point(
@@ -633,6 +861,7 @@ class HospitalShiftEnv:
         self.robot_omega = 0.0
 
         self._spawn_next_patient()
+        self._update_nav()
         return self._get_obs()
 
     def compute_lidar(self) -> np.ndarray:
@@ -693,14 +922,14 @@ class HospitalShiftEnv:
         phase_idx = int(np.clip(int(self.task_phase), 0, 3))
         obs[21 + phase_idx] = 1.0
 
+        # Heading to the path sub-goal; distance = remaining shortest-path length to the active target
         to_gx = self.goal_x - self.robot_x
         to_gz = self.goal_z - self.robot_z
-        d_goal = math.hypot(to_gx, to_gz)
         fwd_x = -math.sin(self.robot_yaw)
         fwd_z = -math.cos(self.robot_yaw)
         angle_goal = signed_angle_rad(fwd_x, fwd_z, to_gx, to_gz)
 
-        obs[25] = float(np.clip(d_goal / 25.0, 0.0, 1.0))
+        obs[25] = float(np.clip(self.nav_remaining / 25.0, 0.0, 1.0))
         obs[26] = math.sin(angle_goal)
         obs[27] = math.cos(angle_goal)
 
@@ -713,39 +942,6 @@ class HospitalShiftEnv:
         obs[29] = float(np.clip(self.robot_v / V_MAX, -1.0, 1.0))
         obs[30] = float(np.clip(self.robot_omega / OMEGA_MAX, -1.0, 1.0))
         return obs
-
-    def _route_through_corridor_goal(self, target_x: float, target_z: float) -> tuple[float, float]:
-        """Provide doorway/corridor sub-goal when robot and destination are in different rooms."""
-        rx, rz = self.robot_x, self.robot_z
-        # Target on another floor -> head (through doors) for this floor's elevator
-        if floor_of(target_x) != floor_of(rx):
-            target_x, target_z = ELEVATOR_POSITIONS[floor_of(rx)]
-
-        # Robot inside a North room (z < -2.1) and target outside that room
-        if rz < -2.1 and (target_z > -1.8 or north_door_x(target_x) != north_door_x(rx)):
-            door_x = north_door_x(rx)
-            if abs(rx - door_x) > 0.6 or rz < -1.8:
-                return door_x, -1.2
-        # Robot inside a South room (z > 2.1) and target outside that room
-        if rz > 2.1 and (target_z < 1.8 or south_door_x(target_x) != south_door_x(rx)):
-            door_x = south_door_x(rx)
-            if abs(rx - door_x) > 0.6 or rz > 1.8:
-                return door_x, 1.2
-        # Robot in corridor (-2.1 <= z <= 2.1) and target in a North room (z < -2.2)
-        if -2.1 <= rz <= 2.1 and target_z < -2.2:
-            door_x = north_door_x(target_x)
-            if abs(rx - door_x) > 0.8:
-                return door_x, 0.0  # travel along the corridor centreline (furniture lines the walls)
-            if rz > -2.1:
-                return door_x, -2.6
-        # Robot in corridor (-2.1 <= z <= 2.1) and target in a South room (z > 2.2)
-        if -2.1 <= rz <= 2.1 and target_z > 2.2:
-            door_x = south_door_x(target_x)
-            if abs(rx - door_x) > 0.8:
-                return door_x, 0.0
-            if rz < 2.1:
-                return door_x, 2.6
-        return target_x, target_z
 
     def _step_escorted_patient(self) -> None:
         """Patient walks along the robot's breadcrumb trail (not a straight line through door frames)."""
@@ -791,17 +987,9 @@ class HospitalShiftEnv:
         v = float(np.clip((a_v + 1.0) * 0.5 * v_limit, 0.0, v_limit))
         omega = float(np.clip(a_omega * OMEGA_MAX, -OMEGA_MAX, OMEGA_MAX))
 
-        # Assistive navigational prior blended with policy residual so PPO learns smooth
-        # obstacle avoidance + elderly tether speed regulation rapidly
-        final_dest_x, final_dest_z = (
-            (self.patient_x, self.patient_z)
-            if self.task_phase in (TaskPhase.SEARCH_PATIENT, TaskPhase.APPROACH_PATIENT)
-            else DESTINATION_POSITIONS.get(self.goal_key, (0.0, 4.5))
-        )
-        sub_gx, sub_gz = self._route_through_corridor_goal(final_dest_x, final_dest_z)
-        self.goal_x, self.goal_z = sub_gx, sub_gz
-
-        prev_dist_final = math.hypot(final_dest_x - self.robot_x, final_dest_z - self.robot_z)
+        # Progress is measured along the shortest path (detours around furniture are not punished)
+        nav, nav_fld, _, _ = self._nav_field(*self._nav_final_target())
+        prev_dist_final = nav.distance(nav_fld, self.robot_x, self.robot_z)
 
         # Integrate robot kinematics with wall collision check
         self.robot_yaw = ((self.robot_yaw + omega * self.dt + math.pi) % (2.0 * math.pi)) - math.pi
@@ -812,10 +1000,10 @@ class HospitalShiftEnv:
 
         def free(px: float, pz: float) -> bool:
             return (
-                abs(px - x_base) <= 11.6
-                and abs(pz) <= 8.6
-                and not is_blocked(px, pz, 0.32)
-                and not self._near_npc(px, pz, 0.32)
+                abs(px - x_base) <= ROBOT_BOUND_X_M
+                and abs(pz) <= ROBOT_BOUND_Z_M
+                and not is_blocked(px, pz, ROBOT_RADIUS_M)
+                and not self._npc_blocks_move(px, pz)
             )
 
         # Blocked full step -> slide along the wall on one axis (like Godot move_and_slide)
@@ -856,7 +1044,7 @@ class HospitalShiftEnv:
         else:
             self.escort_trail.clear()
 
-        curr_dist_final = math.hypot(final_dest_x - self.robot_x, final_dest_z - self.robot_z)
+        curr_dist_final = nav.distance(nav_fld, self.robot_x, self.robot_z)
         d_tether = (
             math.hypot(self.patient_x - self.robot_x, self.patient_z - self.robot_z)
             if self.task_phase == TaskPhase.GUIDE_ESCORT
@@ -871,7 +1059,7 @@ class HospitalShiftEnv:
         if escorting:
             active_x, _ = DESTINATION_POSITIONS.get(self.goal_key, (0.0, 4.5))
         elif self.task_phase == TaskPhase.CALL_STAFF:
-            active_x, _ = DESTINATION_POSITIONS["staff"]
+            active_x, _ = self.staff_goal
         else:
             active_x = self.patient_x
         robot_floor = floor_of(self.robot_x)
@@ -903,6 +1091,7 @@ class HospitalShiftEnv:
                     event = "engaged"
                     self.task_phase = TaskPhase.CALL_STAFF
                     self.goal_key = "staff"
+                    self.staff_goal = self._nearest_staff_position()
                     self.steps_since_task = 0
                 else:
                     event = "answer"
@@ -934,7 +1123,7 @@ class HospitalShiftEnv:
                     self.steps_since_task = 0
                     self._spawn_next_patient()
         elif self.task_phase == TaskPhase.CALL_STAFF:
-            dest_x, dest_z = DESTINATION_POSITIONS["staff"]
+            dest_x, dest_z = self.staff_goal
             if math.hypot(dest_x - self.robot_x, dest_z - self.robot_z) <= GOAL_ARRIVE_ROBOT_M:
                 event = "call_staff"
                 self.patients_helped += 1
@@ -968,6 +1157,8 @@ class HospitalShiftEnv:
         if collided:
             r_safety += PENALTY_COLLISION
             self.collisions += 1
+        elif min_lidar_m < PROXIMITY_LIDAR_M:
+            r_safety += PENALTY_PROXIMITY * (PROXIMITY_LIDAR_M - min_lidar_m) / (PROXIMITY_LIDAR_M - COLLISION_LIDAR_M)
 
         # Directional alignment bonus to encourage facing the active sub-goal
         fwd_x = -math.sin(self.robot_yaw)
@@ -975,15 +1166,13 @@ class HospitalShiftEnv:
         angle_sub = signed_angle_rad(fwd_x, fwd_z, self.goal_x - self.robot_x, self.goal_z - self.robot_z)
         r_align = 0.04 * math.cos(angle_sub) if self.robot_v > 0.05 else 0.0
 
-        # Stagnation = no real progress toward the active goal (long elevator/escort legs are not stagnation)
+        # Next observation's sub-goal / path length (after phase changes and elevator rides)
+        self._update_nav()
+
+        # Stagnation = no real progress along the path to the active goal (long elevator/escort legs are not stagnation)
         if event:
             self.best_goal_dist = None
-        prog_x, prog_z = (
-            (self.patient_x, self.patient_z)
-            if self.task_phase in (TaskPhase.SEARCH_PATIENT, TaskPhase.APPROACH_PATIENT)
-            else DESTINATION_POSITIONS.get(self.goal_key, (0.0, 4.5))
-        )
-        d_prog = math.hypot(prog_x - self.robot_x, prog_z - self.robot_z)
+        d_prog = self.nav_remaining
         if self.best_goal_dist is None:
             self.best_goal_dist = d_prog
         elif d_prog < self.best_goal_dist - STAGNATION_PROGRESS_M:
@@ -1021,13 +1210,8 @@ class HospitalShiftEnv:
 
     def teacher_action(self) -> np.ndarray:
         """Compute LiDAR-aware teacher action in [-1, 1]^2 matching RLController."""
-        final_dest_x, final_dest_z = (
-            (self.patient_x, self.patient_z)
-            if self.task_phase in (TaskPhase.SEARCH_PATIENT, TaskPhase.APPROACH_PATIENT)
-            else DESTINATION_POSITIONS.get(self.goal_key, (0.0, 4.5))
-        )
-        gx, gz = self._route_through_corridor_goal(final_dest_x, final_dest_z)
-        dist = math.hypot(gx - self.robot_x, gz - self.robot_z)
+        gx, gz = self.goal_x, self.goal_z
+        dist = self.nav_remaining
         d_tether = (
             math.hypot(self.patient_x - self.robot_x, self.patient_z - self.robot_z)
             if self.task_phase == TaskPhase.GUIDE_ESCORT

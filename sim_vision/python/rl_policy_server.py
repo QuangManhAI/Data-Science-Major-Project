@@ -9,7 +9,7 @@ Request : {"type": "rl_state", "id": int, "robot": [x, z, yaw, v, omega], "lidar
           task_id đổi (bệnh nhân mới) ➔ bỏ chốt APPROACH, về SEARCH như env lúc train.
 Response: {"type": "rl_action", "id": int, "v": float, "omega": float, "a": [a_v, a_omega], "phase": int}
 
-Chạy: python rl_policy_server.py --checkpoint <path/to/PPOHospital-solo_last.pt> [--port 8768]
+Chạy: python rl_policy_server.py [--checkpoint experiments/checkpoints/PPOHospital-full_strongest.pt] [--port 8768]
 """
 
 from __future__ import annotations
@@ -37,9 +37,8 @@ log = logging.getLogger("rl_policy_server")
 
 RL_WS_HOST = "127.0.0.1"
 RL_WS_PORT = 8768
-DEFAULT_CHECKPOINT = (
-    "experiments/runs/20261024_231201_PPOHospital-solo-patient/checkpoints/PPOHospital-solo_last.pt"
-)
+# Strongest full-mode policy (8 NPCs, grid planner, dock start); .pt files are git-ignored, copy it in when cloning
+DEFAULT_CHECKPOINT = "experiments/checkpoints/PPOHospital-full_strongest.pt"
 
 
 class PolicyRunner:
@@ -74,7 +73,7 @@ class PolicyRunner:
             if env.task_phase not in (TaskPhase.SEARCH_PATIENT, TaskPhase.APPROACH_PATIENT):
                 env.task_phase = TaskPhase.SEARCH_PATIENT
             final_x, final_z = env.patient_x, env.patient_z
-        env.goal_x, env.goal_z = env._route_through_corridor_goal(final_x, final_z)
+        env.set_nav_target(final_x, final_z)  # sub-goal + path length on the same grid planner as training
 
         obs = env._get_obs()
         if self.lidar_source == "godot":

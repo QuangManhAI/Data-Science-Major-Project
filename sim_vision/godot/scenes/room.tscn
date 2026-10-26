@@ -249,6 +249,54 @@ ssao_enabled = true
 sdfgi_enabled = true
 sdfgi_use_occlusion = true
 
+[sub_resource type="BoxMesh" id="mesh_WallWestSeg"]
+material = SubResource("mat_wall")
+size = Vector3(0.2, 3.2, 8.02)
+
+[sub_resource type="BoxShape3D" id="shape_WallWestSeg"]
+size = Vector3(0.2, 3.2, 8.02)
+
+[sub_resource type="BoxMesh" id="mesh_DadoWestSeg"]
+material = SubResource("mat_wall_dado")
+size = Vector3(0.23, 1.05, 8.02)
+
+[sub_resource type="BoxMesh" id="mesh_EntranceLintel"]
+material = SubResource("mat_wall")
+size = Vector3(0.2, 0.4, 1.96)
+
+[sub_resource type="StandardMaterial3D" id="mat_entrance_plaza"]
+albedo_color = Color(0.6, 0.6, 0.58, 1)
+roughness = 0.92
+
+[sub_resource type="BoxMesh" id="mesh_EntrancePlaza"]
+material = SubResource("mat_entrance_plaza")
+size = Vector3(6, 0.1, 9)
+
+[sub_resource type="StandardMaterial3D" id="mat_entrance_canopy"]
+albedo_color = Color(0.16, 0.56, 0.62, 1)
+metallic = 0.3
+roughness = 0.4
+
+[sub_resource type="BoxMesh" id="mesh_EntranceCanopy"]
+material = SubResource("mat_entrance_canopy")
+size = Vector3(2.6, 0.12, 4)
+
+[sub_resource type="BoxMesh" id="mesh_EntrancePillar"]
+material = SubResource("mat_entrance_canopy")
+size = Vector3(0.14, 3, 0.14)
+
+[sub_resource type="StandardMaterial3D" id="mat_robot_dock"]
+albedo_color = Color(0.1, 0.55, 0.78, 1)
+emission_enabled = true
+emission = Color(0.1, 0.55, 0.78, 1)
+emission_energy_multiplier = 0.6
+
+[sub_resource type="CylinderMesh" id="mesh_RobotDock"]
+material = SubResource("mat_robot_dock")
+top_radius = 0.45
+bottom_radius = 0.45
+height = 0.01
+
 [node name="Room" type="Node3D" unique_id=820841306]
 script = ExtResource("1")
 
@@ -294,17 +342,33 @@ mesh = SubResource("mesh_DadoNS_Full")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 12.1, 1.6, 0)
 shape = SubResource("shape_WallEast")
 
-[node name="WallWest" type="MeshInstance3D" parent="Shell" unique_id=1738621414]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -12.1, 1.6, 0)
-mesh = SubResource("mesh_WallEast")
+[node name="WallWestNorth" type="MeshInstance3D" parent="Shell" unique_id=1738621414]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -12.1, 1.6, -4.99)
+mesh = SubResource("mesh_WallWestSeg")
 
-[node name="WallWestDado" type="MeshInstance3D" parent="Shell" unique_id=180268489]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -12.1, 0.525, 0)
-mesh = SubResource("mesh_DadoNS_Full")
+[node name="WallWestNorthDado" type="MeshInstance3D" parent="Shell" unique_id=180268489]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -12.1, 0.525, -4.99)
+mesh = SubResource("mesh_DadoWestSeg")
 
-[node name="WallWestCollision" type="CollisionShape3D" parent="Shell" unique_id=539558000]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -12.1, 1.6, 0)
-shape = SubResource("shape_WallEast")
+[node name="WallWestNorthCollision" type="CollisionShape3D" parent="Shell" unique_id=539558000]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -12.1, 1.6, -4.99)
+shape = SubResource("shape_WallWestSeg")
+
+[node name="WallWestSouth" type="MeshInstance3D" parent="Shell" unique_id=1738621415]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -12.1, 1.6, 4.99)
+mesh = SubResource("mesh_WallWestSeg")
+
+[node name="WallWestSouthDado" type="MeshInstance3D" parent="Shell" unique_id=180268490]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -12.1, 0.525, 4.99)
+mesh = SubResource("mesh_DadoWestSeg")
+
+[node name="WallWestSouthCollision" type="CollisionShape3D" parent="Shell" unique_id=539558001]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -12.1, 1.6, 4.99)
+shape = SubResource("shape_WallWestSeg")
+
+[node name="WallWestLintel" type="MeshInstance3D" parent="Shell" unique_id=539558002]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -12.1, 3, 0)
+mesh = SubResource("mesh_EntranceLintel")
 
 [node name="WallNorthLeft" type="MeshInstance3D" parent="Shell" unique_id=1964142294]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7.1, 1.6, -9.1)
@@ -464,6 +528,51 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 9, 0, 2)
 open_offset = Vector3(-1.75, 0, 0)
 door_label = "THANG MÁY - NHÀ VỆ SINH"
 
+[node name="Door_Entrance" parent="Doors" unique_id=1458427190 instance=ExtResource("25")]
+transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, -12.1, 0, 0)
+door_label = "LỐI VÀO CHÍNH"
+robot_can_open = false
+
+[node name="Entrance" type="Node3D" parent="." unique_id=1458427191]
+
+[node name="Plaza" type="MeshInstance3D" parent="Entrance" unique_id=1458427192]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -15.2, -0.05, 0)
+mesh = SubResource("mesh_EntrancePlaza")
+
+[node name="Canopy" type="MeshInstance3D" parent="Entrance" unique_id=1458427193]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -13.5, 3.06, 0)
+mesh = SubResource("mesh_EntranceCanopy")
+
+[node name="PillarNorth" type="MeshInstance3D" parent="Entrance" unique_id=1458427194]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -14.6, 1.5, -1.85)
+mesh = SubResource("mesh_EntrancePillar")
+
+[node name="PillarSouth" type="MeshInstance3D" parent="Entrance" unique_id=1458427195]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -14.6, 1.5, 1.85)
+mesh = SubResource("mesh_EntrancePillar")
+
+[node name="SignOutside" type="Label3D" parent="Entrance" unique_id=1458427196]
+transform = Transform3D(-4.371139e-08, 0, -1, 0, 1, 0, 1, 0, -4.371139e-08, -14.82, 3.35, 0)
+pixel_size = 0.004
+text = "BỆNH VIỆN - LỐI VÀO CHÍNH"
+font_size = 64
+outline_size = 10
+modulate = Color(0.1, 0.45, 0.6, 1)
+
+[node name="RobotDock" type="Marker3D" parent="Entrance" unique_id=1458427197]
+transform = Transform3D(-4.371139e-08, 0, -1, 0, 1, 0, 1, 0, -4.371139e-08, -10.6, 0, 0)
+
+[node name="Pad" type="MeshInstance3D" parent="Entrance/RobotDock" unique_id=1458427198]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.006, 0)
+mesh = SubResource("mesh_RobotDock")
+
+[node name="Label" type="Label3D" parent="Entrance/RobotDock" unique_id=1458427199]
+transform = Transform3D(1, 0, 0, 0, -4.371139e-08, 1, 0, -1, -4.371139e-08, 0, 0.015, 0.62)
+pixel_size = 0.003
+text = "TRẠM ROBOT"
+font_size = 48
+outline_size = 6
+
 [node name="Signs" type="Node3D" parent="." unique_id=1101121971]
 
 [node name="CorridorSignCenter" parent="Signs" unique_id=1354824617 instance=ExtResource("29")]
@@ -601,7 +710,7 @@ transform = Transform3D(-1, 0, -8.74228e-08, 0, 1, 0, 8.74228e-08, 0, -1, -5.2, 
 transform = Transform3D(-1, 0, -8.74228e-08, 0, 1, 0, 8.74228e-08, 0, -1, 4.8, 0, 1.48)
 
 [node name="CorridorWetFloorSign" type="StaticBody3D" parent="Furniture" unique_id=1966366713]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -11, 0, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -11, 0, -1.5)
 
 [node name="Model" parent="Furniture/CorridorWetFloorSign" unique_id=477453543 instance=ExtResource("21")]
 

@@ -9,7 +9,6 @@ const WALK_SPEED: float = 0.5     # m/s (G4.1)
 const ARRIVE_TOL: float = 0.05    # m, coi như đã tới waypoint
 const PARDON_TRIGGER_DIST: float = 1.4
 const PARDON_CLEAR_DIST: float = 1.85
-const PARDON_SIDESTEP_M: float = 0.55
 
 @export var walks: bool = false
 @export var waypoints: Array[Vector3] = []

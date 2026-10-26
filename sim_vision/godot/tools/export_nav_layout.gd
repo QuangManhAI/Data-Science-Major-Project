@@ -1,7 +1,8 @@
 extends SceneTree
 ## Xuất bản đồ va chạm 2D (tường + đồ đạc, cả 2 tầng) và danh sách NPC (chế độ đầy đủ) cho env RL Python.
 ## Chỉ lấy hộp va chạm cắt ngang độ cao tia LiDAR (Robot.LIDAR_HEIGHT_Y); bỏ sàn/trần,
-## cửa trượt tự mở (SlidingDoor) và NPC (HospitalNpc, động / bị tắt ở chế độ solo).
+## cửa trượt tự mở cho robot (SlidingDoor) và NPC (HospitalNpc, động / bị tắt ở chế độ solo).
+## Cửa chính (robot_can_open = false) giữ lại: với robot nó là tường. Kèm trạm robot (Entrance/RobotDock).
 ##
 ## Chạy: godot --headless --path sim_vision/godot -s res://tools/export_nav_layout.gd
 ## Ghi: src/training/hospital_layout.json (đường dẫn tính từ gốc repo)
@@ -18,7 +19,10 @@ func _init() -> void:
 	for node: Node in room.find_children("*", "CollisionShape3D", true, false):
 		var cs := node as CollisionShape3D
 		var box := cs.shape as BoxShape3D
-		if cs.disabled or box == null or _has_ancestor_of(cs, ["SlidingDoor", "HospitalNpc"]):
+		if cs.disabled or box == null or cs.get_parent() is Area3D or _find_ancestor_of(cs, ["HospitalNpc"]) != null:
+			continue
+		var door := _find_ancestor_of(cs, ["SlidingDoor"]) as SlidingDoor
+		if door != null and door.robot_can_open:
 			continue
 		var h: Vector3 = box.size / 2.0
 		var lo := Vector3(INF, INF, INF)
@@ -57,7 +61,15 @@ func _init() -> void:
 			"walk_speed": npc.walk_speed, "pardon_enabled": npc.pardon_enabled,
 		})
 
-	var out := {"source": "sim_vision/godot/scenes/room.tscn", "lidar_height_y": Robot.LIDAR_HEIGHT_Y, "rects": rects, "npcs": npcs}
+	var dock := room.get_node(^"Entrance/RobotDock") as Node3D
+	var robot_dock := {
+		"x": snappedf(dock.global_position.x, 0.001), "z": snappedf(dock.global_position.z, 0.001),
+		"yaw": snappedf(dock.global_rotation.y, 0.0001),
+	}
+	var out := {
+		"source": "sim_vision/godot/scenes/room.tscn", "lidar_height_y": Robot.LIDAR_HEIGHT_Y,
+		"robot_dock": robot_dock, "rects": rects, "npcs": npcs,
+	}
 	var path: String = ProjectSettings.globalize_path(OUT_PATH)
 	var f := FileAccess.open(path, FileAccess.WRITE)
 	f.store_string(JSON.stringify(out, "  ") + "\n")
@@ -66,11 +78,11 @@ func _init() -> void:
 	quit()
 
 
-static func _has_ancestor_of(node: Node, class_names: Array[String]) -> bool:
+static func _find_ancestor_of(node: Node, class_names: Array[String]) -> Node:
 	var p: Node = node.get_parent()
 	while p != null:
 		var script: Script = p.get_script()
 		if script != null and script.get_global_name() in class_names:
-			return true
+			return p
 		p = p.get_parent()
-	return false
+	return null

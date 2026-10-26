@@ -11,6 +11,7 @@ enum CameraMode { FOLLOW, TOP_DOWN, LOBBY }
 
 const START_CLEARANCE: float = 0.6      # G8.1: get_free_position(0.6)
 const MIN_START_SEPARATION: float = 3.0 # G8.1: robot cách người ≥ 3 m
+const DOCK_START_SEPARATION: float = 3.5  # đầu ca: bệnh nhân cách trạm robot ≥ 3.5 m (như env lúc train)
 const MAX_PLACEMENT_TRIES: int = 100
 const RLEnvBridgeScript = preload("res://scripts/rl_env_bridge.gd")
 const RLControllerScript = preload("res://scripts/rl_controller.gd")
@@ -146,13 +147,14 @@ func _physics_process(delta: float) -> void:
 	if not Main.is_dialogue_state(state) and state != Config.RobotState.ARRIVED:
 		_task_elapsed_s += delta
 		var task_target: Vector3 = human.global_position if _is_search_phase() else _rl_bridge.goal_position
-		var d_task: float = Human.flat_distance(robot.global_position, task_target)
+		var d_task: float = Human.flat_distance(robot.global_position, _leg_target(task_target))
 		if _task_best_dist < 0.0 or d_task < _task_best_dist - TASK_PROGRESS_M:
 			_task_best_dist = d_task
 			_task_elapsed_s = 0.0
 		if _task_elapsed_s > TASK_TIMEOUT_S:
 			overlay.set_status("Hủy nhiệm vụ %s: kẹt quá %.0fs" % [_rl_bridge.goal_key, TASK_TIMEOUT_S])
-			reset_positions(true)
+			# Như kết thúc episode lúc train: đặt lại cả robot; chỉ dời bệnh nhân thì robot kẹt góc quay vòng mãi
+			reset_positions(false)
 			return
 	if _rl_bridge.task_phase == RLEnvBridgeScript.TaskPhase.GUIDE_ESCORT:
 		RLEnvBridgeScript.step_escorted_patient(human, robot.global_position, delta, _rl_bridge.escort_trail)
@@ -179,6 +181,13 @@ func _physics_process(delta: float) -> void:
 			)
 			robot.set_command(cmd_vec.x, cmd_vec.y)
 	elif _rl_bridge.task_phase == RLEnvBridgeScript.TaskPhase.CALL_STAFF:
+		# Nhân viên ở tầng khác (tầng 2 không có nhân viên) ➔ robot đi thang máy một mình, bệnh nhân chờ tại chỗ
+		var robot_floor: int = Room.get_floor(robot.global_position)
+		var staff_floor: int = Room.get_floor(_rl_bridge.goal_position)
+		if staff_floor != robot_floor \
+				and Human.flat_distance(robot.global_position, _leg_target(_rl_bridge.goal_position)) <= RLEnvBridgeScript.GOAL_ARRIVE_ROBOT_M:
+			_execute_elevator_transit(robot_floor, staff_floor, false)
+			return
 		var d_goal: float = Human.flat_distance(robot.global_position, _rl_bridge.goal_position)
 		if d_goal <= RLEnvBridgeScript.GOAL_ARRIVE_ROBOT_M:
 			robot.set_command(0.0, 0.0)
@@ -195,6 +204,14 @@ func _physics_process(delta: float) -> void:
 			robot.set_command(cmd_vec.x, cmd_vec.y)
 	if _policy_active():
 		_step_policy(delta)
+
+
+## Đích của chặng hiện tại: đích ở tầng khác ➔ thang máy tầng robot đang đứng (như env lúc train).
+func _leg_target(target: Vector3) -> Vector3:
+	var robot_floor: int = Room.get_floor(robot.global_position)
+	if room == null or Room.get_floor(target) == robot_floor:
+		return target
+	return room.get_room_waypoint("thang_may" if robot_floor == 1 else "thang_may_t2")
 
 
 func _policy_active() -> bool:
@@ -282,7 +299,8 @@ func _on_dialogue_turn_completed(row: Dictionary) -> void:
 
 
 ## Thực hiện chu trình đi thang máy 2 chiều đầy đủ hiệu ứng âm thanh, đèn LED và animation di chuyển
-func _execute_elevator_transit(from_floor: int, to_floor: int) -> void:
+## Đi thang máy; `with_patient = false` (gọi nhân viên) ➔ robot đi một mình và giữ nguyên đích.
+func _execute_elevator_transit(from_floor: int, to_floor: int, with_patient: bool = true) -> void:
 	if _is_in_elevator_transit:
 		return
 	_is_in_elevator_transit = true
@@ -294,9 +312,10 @@ func _execute_elevator_transit(from_floor: int, to_floor: int) -> void:
 	if station_from == null or station_to == null:
 		var offset_x: float = 50.0 if to_floor == 2 else -50.0
 		robot.global_position.x += offset_x
-		human.global_position.x += offset_x
-		_rl_bridge.goal_key = _rl_bridge.final_target_key
-		_rl_bridge.goal_position = room.get_room_waypoint(_rl_bridge.final_target_key) if room != null else Vector3.ZERO
+		if with_patient:
+			human.global_position.x += offset_x
+			_rl_bridge.goal_key = _rl_bridge.final_target_key
+			_rl_bridge.goal_position = room.get_room_waypoint(_rl_bridge.final_target_key) if room != null else Vector3.ZERO
 		_is_in_elevator_transit = false
 		_task_elapsed_s = 0.0  # chặng mới sau thang máy
 		_task_best_dist = -1.0
@@ -321,7 +340,8 @@ func _execute_elevator_transit(from_floor: int, to_floor: int) -> void:
 	seq.tween_callback(func():
 		var move_in := create_tween().set_parallel(true)
 		move_in.tween_property(robot, "global_position", robot_cabin_target, 0.8)
-		move_in.tween_property(human, "global_position", human_cabin_target, 0.8)
+		if with_patient:
+			move_in.tween_property(human, "global_position", human_cabin_target, 0.8)
 	)
 	seq.tween_interval(0.9)
 
@@ -353,7 +373,8 @@ func _execute_elevator_transit(from_floor: int, to_floor: int) -> void:
 
 		var cabin_pos_to: Vector3 = station_to.get_cabin_position()
 		robot.global_position = cabin_pos_to + station_to.global_transform.basis * Vector3(0.25, 0.0, 0.0)
-		human.global_position = cabin_pos_to + station_to.global_transform.basis * Vector3(-0.25, 0.0, 0.0)
+		if with_patient:
+			human.global_position = cabin_pos_to + station_to.global_transform.basis * Vector3(-0.25, 0.0, 0.0)
 
 		station_from.set_floor_indicator(to_floor, "")
 		station_to.set_floor_indicator(to_floor, "")
@@ -376,19 +397,21 @@ func _execute_elevator_transit(from_floor: int, to_floor: int) -> void:
 	seq.tween_callback(func():
 		var move_out := create_tween().set_parallel(true)
 		move_out.tween_property(robot, "global_position", robot_out_target, 0.8)
-		move_out.tween_property(human, "global_position", human_out_target, 0.8)
+		if with_patient:
+			move_out.tween_property(human, "global_position", human_out_target, 0.8)
 	)
 	seq.tween_interval(0.9)
 
 	# 8. Đóng cửa thang máy tầng đích, chuyển goal sang phòng khám cuối cùng
 	seq.tween_callback(func():
 		station_to.close_doors()
-		_rl_bridge.goal_key = _rl_bridge.final_target_key
-		_rl_bridge.goal_position = room.get_room_waypoint(_rl_bridge.final_target_key)
+		if with_patient:
+			_rl_bridge.goal_key = _rl_bridge.final_target_key
+			_rl_bridge.goal_position = room.get_room_waypoint(_rl_bridge.final_target_key)
 		_is_in_elevator_transit = false
 		_task_elapsed_s = 0.0  # chặng mới sau thang máy
 		_task_best_dist = -1.0
-		overlay.set_status("Đã đến Tầng %d, tiếp tục dẫn tới: %s" % [to_floor, _rl_bridge.goal_key])
+		overlay.set_status("Đã đến Tầng %d, tiếp tục tới: %s" % [to_floor, _rl_bridge.goal_key])
 	)
 
 
@@ -525,12 +548,13 @@ func reset_positions(is_task_transition: bool = false) -> void:
 	_arrived_wait_s = 0.0
 	human.end_escort()
 	if is_task_transition:
-		# Bệnh nhân mới ở chỗ trống cách robot ≥ MIN_START_SEPARATION; robot giữ nguyên vị trí (cả 2 chế độ)
-		var human_pos: Vector3 = room.get_free_position(START_CLEARANCE, _rng)
+		# Bệnh nhân mới (cùng tầng với robot, vùng như lúc train) cách robot ≥ MIN_START_SEPARATION; robot giữ nguyên vị trí
+		var floor_num: int = Room.get_floor(robot.global_position)
+		var human_pos: Vector3 = room.get_patient_spawn_position(floor_num, _rng)
 		for i: int in MAX_PLACEMENT_TRIES:
 			if Human.flat_distance(human_pos, robot.global_position) >= MIN_START_SEPARATION:
 				break
-			human_pos = room.get_free_position(START_CLEARANCE, _rng)
+			human_pos = room.get_patient_spawn_position(floor_num, _rng)
 		human.global_position = human_pos
 		human.rotation.y = _rng.randf_range(-PI, PI)
 	elif solo_patient_mode:
@@ -687,22 +711,22 @@ static func apply_safety(cmd: Dictionary, dist_human: float, dist_obstacle: floa
 	return out
 
 
-## Vị trí ban đầu: robot và người đều lấy từ room.get_free_position(START_CLEARANCE),
-## cách nhau ≥ MIN_START_SEPARATION; hướng robot và người ngẫu nhiên. Cùng rng.seed ➔ cùng kết quả.
+## Vị trí đầu ca: robot ở trạm cạnh cửa chính (quay vào hành lang), bệnh nhân ở hành lang / sảnh
+## (room.get_patient_spawn_position) cách robot ≥ DOCK_START_SEPARATION. Cùng rng.seed ➔ cùng kết quả.
 static func pick_start_positions(r: Room, rng: RandomNumberGenerator) -> Dictionary:
-	var robot_pos := Vector3.ZERO
+	var dock: Dictionary = r.get_robot_dock()
+	var robot_pos: Vector3 = dock["position"]
 	var human_pos := Vector3.ZERO
 	var ok: bool = false
 	for i: int in MAX_PLACEMENT_TRIES:
-		robot_pos = r.get_free_position(START_CLEARANCE, rng)
-		human_pos = r.get_free_position(START_CLEARANCE, rng)
-		if Human.flat_distance(robot_pos, human_pos) >= MIN_START_SEPARATION:
+		human_pos = r.get_patient_spawn_position(1, rng)
+		if Human.flat_distance(robot_pos, human_pos) >= DOCK_START_SEPARATION:
 			ok = true
 			break
 	if not ok:
-		push_error("Main.pick_start_positions: no pair ≥ %.1f m apart" % MIN_START_SEPARATION)
+		push_error("Main.pick_start_positions: no patient spot ≥ %.1f m from the dock" % DOCK_START_SEPARATION)
 	return {"robot": robot_pos, "human": human_pos,
-			"robot_yaw": rng.randf_range(-PI, PI), "human_yaw": rng.randf_range(-PI, PI)}
+			"robot_yaw": float(dock["yaw"]), "human_yaw": rng.randf_range(-PI, PI)}
 
 
 ## Vị trí bắt đầu solo: Bệnh nhân ở hành lang/sảnh, robot ở gần (2.0–3.5m) hướng mặt vào bệnh nhân.

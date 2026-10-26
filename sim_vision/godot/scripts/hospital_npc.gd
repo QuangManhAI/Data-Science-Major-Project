@@ -9,10 +9,16 @@ const WALK_ANIM_RES: String = "res://assets/models/human_m06/anims/walk.res"
 const ARRIVE_TOL: float = 0.05
 const PARDON_TRIGGER_DIST: float = 1.4
 const PARDON_CLEAR_DIST: float = 1.85
-const PARDON_SIDESTEP_M: float = 0.55
 const PARDON_MIN_ROBOT_V: float = 0.05    # robot đứng yên (vd. tới nói chuyện) ➔ không né
-const PARDON_LANE_HALF_W: float = 0.9     # chỉ né khi đứng trong làn đường robot sắp đi qua
+const PARDON_LANE_HALF_W: float = 0.75    # chỉ né khi chắn làn robot (bán kính robot 0.32 + nửa thân 0.25 + dư)
+const PARDON_LANE_CLEAR_M: float = 0.8    # né tới cách đường đi của robot 0.8 m (ra hẳn ngoài làn)
+const PARDON_FLIP_MAX_LATERAL: float = 0.3  # chỉ né sang phía bên kia khi đứng gần giữa làn (không băng qua đầu robot)
 const PARDON_CLEARANCE_M: float = 0.35    # khoảng trống cần có sau điểm né
+const PARDON_MAX_S: float = 4.0           # né quá 4 s (vd. lỡ đứng chắn cửa robot cần qua) ➔ đi tiếp lộ trình...
+const PARDON_COOLDOWN_S: float = 3.0      # ...và 3 s sau mới được né lại
+const PARDON_DOORWAY_KEEP_CLEAR_M: float = 1.2  # điểm né không chắn cửa (đường robot có thể rẽ vào cửa)
+const PERSONAL_SPACE_M: float = 0.9       # không bước lại gần tâm robot hơn 0.9 m; đứng chờ...
+const BLOCKED_TURN_S: float = 2.0         # ...chờ quá 2 s khi đi tuần ➔ quay đầu về điểm tuần còn lại
 
 @export var tex_dir: String = "res://assets/models/medical_f01/textures"
 @export var anim_path: String = "res://assets/models/human_m06/anims/f_idle.res"
@@ -39,6 +45,9 @@ var _home_yaw: float = 0.0
 var _anchor_pos: Vector3 = Vector3.ZERO
 var _is_pardoning: bool = false
 var _pardon_target: Vector3 = Vector3.ZERO
+var _pardon_elapsed_s: float = 0.0
+var _pardon_cooldown_s: float = 0.0
+var _blocked_s: float = 0.0
 
 
 func _ready() -> void:
@@ -119,19 +128,26 @@ func _physics_process(delta: float) -> void:
 
 	if pardon_enabled and robot_ref != null and is_instance_valid(robot_ref):
 		var dist_robot: float = Human.flat_distance(global_position, robot_ref.global_position)
-		if not _is_pardoning and dist_robot <= PARDON_TRIGGER_DIST \
+		_pardon_cooldown_s = maxf(0.0, _pardon_cooldown_s - delta)
+		if _is_pardoning:
+			_pardon_elapsed_s += delta
+		if not _is_pardoning and _pardon_cooldown_s <= 0.0 and dist_robot <= PARDON_TRIGGER_DIST \
 				and HospitalNpc.should_pardon(global_position, robot_ref):
 			var target: Variant = HospitalNpc.pick_clear_pardon_target(self, _anchor_pos, robot_ref)
 			if target != null:
 				_is_pardoning = true
 				_pardon_target = target
+				_pardon_elapsed_s = 0.0
 		elif _is_pardoning and dist_robot >= PARDON_CLEAR_DIST:
 			_is_pardoning = false
+		elif _is_pardoning and _pardon_elapsed_s >= PARDON_MAX_S:
+			_is_pardoning = false
+			_pardon_cooldown_s = PARDON_COOLDOWN_S
 
 	if _is_pardoning:
 		var d_target: float = Human.flat_distance(global_position, _pardon_target)
 		if d_target > ARRIVE_TOL:
-			_move_step_towards(_pardon_target, walk_speed * delta)
+			_move_step_towards(_pardon_target, walk_speed * delta, delta)
 		else:
 			_play_anim(&"npc/loop")
 			if robot_ref != null and is_instance_valid(robot_ref):
@@ -146,12 +162,15 @@ func _physics_process(delta: float) -> void:
 		if Human.flat_distance(global_position, target) <= ARRIVE_TOL:
 			_wp_index = Human.next_waypoint_index(_wp_index, waypoints.size())
 			target = waypoints[_wp_index]
-		_move_step_towards(target, walk_speed * delta)
+		_move_step_towards(target, walk_speed * delta, delta)
+		if _blocked_s >= BLOCKED_TURN_S:
+			_wp_index = Human.next_waypoint_index(_wp_index, waypoints.size())
+			_blocked_s = 0.0
 		_anchor_pos = global_position
 	else:
 		var d_home: float = Human.flat_distance(global_position, _home_pos)
 		if d_home > ARRIVE_TOL:
-			_move_step_towards(_home_pos, walk_speed * delta)
+			_move_step_towards(_home_pos, walk_speed * delta, delta)
 		else:
 			global_position = _home_pos
 			rotation.y = _home_yaw
@@ -162,8 +181,16 @@ func _can_walk() -> bool:
 	return not is_seated and walks and waypoints.size() >= 2
 
 
-func _move_step_towards(target: Vector3, max_step: float) -> void:
+## Bước về `target`; bước làm NPC lại gần robot dưới PERSONAL_SPACE_M ➔ đứng chờ (cộng dồn _blocked_s).
+func _move_step_towards(target: Vector3, max_step: float, delta: float = 0.0) -> void:
 	var next_pos: Vector3 = Human.step_towards(global_position, target, max_step)
+	if robot_ref != null and is_instance_valid(robot_ref):
+		var d_next: float = Human.flat_distance(next_pos, robot_ref.global_position)
+		if d_next < PERSONAL_SPACE_M and d_next < Human.flat_distance(global_position, robot_ref.global_position):
+			_blocked_s += delta
+			_play_anim(&"npc/loop")
+			return
+	_blocked_s = 0.0
 	var dir := Vector3(next_pos.x - global_position.x, 0.0, next_pos.z - global_position.z)
 	if dir.length() > 1e-5:
 		rotation.y = atan2(dir.x, dir.z)
@@ -194,7 +221,7 @@ static func should_pardon(npc_pos: Vector3, robot: Node3D) -> bool:
 
 
 ## Điểm né còn trống (tia vật lý từ NPC tới điểm né + PARDON_CLEARANCE_M không chạm tường/đồ đạc).
-## Thử phía xa đường robot trước, rồi phía còn lại; cả hai bị chắn ➔ null (đứng yên).
+## Thử phía NPC đang đứng trước; phía bên kia chỉ khi NPC gần giữa làn. Bị chắn ➔ null (không né, robot tự vòng).
 static func pick_clear_pardon_target(npc: Node3D, anchor: Vector3, robot: Node3D) -> Variant:
 	var fwd: Vector3 = -robot.global_transform.basis.z
 	var space: PhysicsDirectSpaceState3D = npc.get_world_3d().direct_space_state
@@ -202,8 +229,15 @@ static func pick_clear_pardon_target(npc: Node3D, anchor: Vector3, robot: Node3D
 	for body: Node in [npc, robot]:
 		if body is CollisionObject3D:
 			exclude.append((body as CollisionObject3D).get_rid())
+	var fwd_2d := Vector2(fwd.x, fwd.z).normalized()
+	var rel := Vector2(anchor.x - robot.global_position.x, anchor.z - robot.global_position.z)
+	var lateral: float = absf(rel.dot(Vector2(-fwd_2d.y, fwd_2d.x)))
 	for flip: bool in [false, true]:
-		var target: Vector3 = HospitalNpc.compute_pardon_target(anchor, robot.global_position, fwd, PARDON_SIDESTEP_M, flip)
+		if flip and lateral >= PARDON_FLIP_MAX_LATERAL:
+			break
+		var target: Vector3 = HospitalNpc.compute_pardon_target(anchor, robot.global_position, fwd, PARDON_LANE_CLEAR_M, flip)
+		if HospitalNpc.near_doorway(npc, target):
+			continue
 		var from := Vector3(npc.global_position.x, 0.5, npc.global_position.z)
 		var dir := Vector3(target.x - from.x, 0.0, target.z - from.z)
 		if dir.length() < 1e-4:
@@ -216,7 +250,17 @@ static func pick_clear_pardon_target(npc: Node3D, anchor: Vector3, robot: Node3D
 	return null
 
 
-static func compute_pardon_target(npc_pos: Vector3, robot_pos: Vector3, robot_fwd: Vector3, sidestep: float = PARDON_SIDESTEP_M, flip: bool = false) -> Vector3:
+## Điểm nằm trong vòng PARDON_DOORWAY_KEEP_CLEAR_M quanh một cửa trượt (nhóm "sliding_doors").
+static func near_doorway(npc: Node, p: Vector3) -> bool:
+	for door: Node in npc.get_tree().get_nodes_in_group(&"sliding_doors"):
+		if Human.flat_distance(p, (door as Node3D).global_position) < PARDON_DOORWAY_KEEP_CLEAR_M:
+			return true
+	return false
+
+
+## Điểm né: dịch vuông góc với hướng robot tới khoảng cách ngang `lane_clear` so với đường đi của robot,
+## về phía NPC đang đứng (flip ➔ phía còn lại).
+static func compute_pardon_target(npc_pos: Vector3, robot_pos: Vector3, robot_fwd: Vector3, lane_clear: float = PARDON_LANE_CLEAR_M, flip: bool = false) -> Vector3:
 	var fwd_2d := Vector2(robot_fwd.x, robot_fwd.z)
 	if fwd_2d.length() < 1e-4:
 		fwd_2d = Vector2(0.0, -1.0)
@@ -224,10 +268,11 @@ static func compute_pardon_target(npc_pos: Vector3, robot_pos: Vector3, robot_fw
 		fwd_2d = fwd_2d.normalized()
 	var perp := Vector2(-fwd_2d.y, fwd_2d.x)
 	var rel := Vector2(npc_pos.x - robot_pos.x, npc_pos.z - robot_pos.z)
-	var side_sign: float = 1.0 if rel.dot(perp) >= 0.0 else -1.0
+	var lateral: float = rel.dot(perp)
+	var side_sign: float = 1.0 if lateral >= 0.0 else -1.0
 	if flip:
 		side_sign = -side_sign
-	var offset: Vector2 = perp * (sidestep * side_sign)
+	var offset: Vector2 = perp * (side_sign * lane_clear - lateral)
 	var x_base: float = 50.0 if npc_pos.x >= 25.0 else 0.0  # tầng 2 đặt cạnh tầng 1 tại X + 50 m
 	return Vector3(
 		clampf(npc_pos.x + offset.x, x_base - 11.4, x_base + 11.4),

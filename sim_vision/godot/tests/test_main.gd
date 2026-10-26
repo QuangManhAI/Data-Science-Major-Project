@@ -51,7 +51,8 @@ func test_start_positions_separated_and_free() -> void:
 		var rng := RandomNumberGenerator.new()
 		rng.seed = s
 		var p: Dictionary = Main.pick_start_positions(r, rng)
-		assert_true(Human.flat_distance(p["robot"], p["human"]) >= 3.0, "seed %d separation" % s)
+		assert_eq(p["robot"], r.get_robot_dock()["position"], "seed %d: shift starts at the robot dock" % s)
+		assert_true(Human.flat_distance(p["robot"], p["human"]) >= 3.5, "seed %d separation" % s)
 		for key: String in ["robot", "human"]:
 			var pos: Vector3 = p[key]
 			assert_true(absf(pos.x) <= 11.4 and absf(pos.z) <= 8.4, "seed %d %s inside" % [s, key])

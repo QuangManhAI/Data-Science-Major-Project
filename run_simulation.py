@@ -214,7 +214,7 @@ def main() -> None:
         "--rl-checkpoint",
         type=str,
         default=None,
-        help="PPO checkpoint (.pt) served by rl_policy_server.py on port 8768 (default: latest solo run's _last.pt)",
+        help="PPO checkpoint (.pt) served by rl_policy_server.py on port 8768 (default: experiments/checkpoints/PPOHospital-full_strongest.pt)",
     )
     parser.add_argument(
         "--solo-patient",

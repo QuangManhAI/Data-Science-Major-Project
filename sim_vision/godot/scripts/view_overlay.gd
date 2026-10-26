@@ -66,6 +66,8 @@ func set_alert(text: String) -> void:
 
 
 func set_status(text: String) -> void:
+	if text != _status and not text.is_empty():
+		print("[status %.1fs] %s" % [Time.get_ticks_msec() / 1000.0, text])  # sự kiện nhiệm vụ vào log để soát sau
 	_status = text
 	_boxes.queue_redraw()
 

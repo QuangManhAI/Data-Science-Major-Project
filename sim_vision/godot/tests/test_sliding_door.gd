@@ -50,3 +50,15 @@ func test_proximity_enter_and_delayed_auto_close() -> void:
 	assert_false(door.is_collision_disabled(), "collision re-enabled when closed")
 	door.step(0.3)
 	assert_almost_eq(door.get_slide_progress(), 0.0, 1e-5)
+
+
+func test_main_entrance_door_ignores_robot_but_opens_for_people() -> void:
+	door.robot_can_open = false
+	var robot := (load("res://scenes/robot.tscn") as PackedScene).instantiate() as Robot
+	add_child_autofree(robot)
+	door._on_body_entered(robot)
+	assert_false(door.is_open, "robot never opens the main entrance (stays inside the hospital)")
+	var person := CharacterBody3D.new()
+	add_child_autofree(person)
+	door._on_body_entered(person)
+	assert_true(door.is_open, "people still open the main entrance")

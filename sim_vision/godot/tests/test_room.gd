@@ -23,7 +23,7 @@ func test_has_furniture_and_wall_footprints_inside_hospital() -> void:
 func test_has_five_sliding_doors() -> void:
 	var doorsNode: Node = room.get_node_or_null(^"Doors")
 	assert_not_null(doorsNode)
-	assert_eq(doorsNode.get_child_count(), 5)
+	assert_eq(doorsNode.get_child_count(), 6)
 	for child: Node in doorsNode.get_children():
 		assert_true(child is SlidingDoor, "%s should be SlidingDoor" % child.name)
 
@@ -139,15 +139,73 @@ func test_npc_walking_and_pardon_step_aside() -> void:
 	assert_true(doc.walks, "doctor should patrol corridor")
 	assert_true(doc.pardon_enabled, "doctor should have pardon enabled")
 	var p_target: Vector3 = HospitalNpc.compute_pardon_target(
-		Vector3(0.0, 0.0, 0.0), Vector3(-1.0, 0.0, 0.0), Vector3(1.0, 0.0, 0.0), 0.55
+		Vector3(0.0, 0.0, 0.0), Vector3(-1.0, 0.0, 0.0), Vector3(1.0, 0.0, 0.0), 0.8
 	)
-	assert_almost_eq(absf(p_target.z), 0.55, 1e-4, "steps aside perpendicular to robot heading")
+	assert_almost_eq(absf(p_target.z), 0.8, 1e-4, "steps aside perpendicular to robot heading, out of its lane")
+	# Already 0.5 m off the robot's line ➔ only 0.3 m more, on the same side (never across the robot's lane)
+	var p_side: Vector3 = HospitalNpc.compute_pardon_target(
+		Vector3(0.0, 0.0, 0.5), Vector3(-1.0, 0.0, 0.0), Vector3(1.0, 0.0, 0.0), 0.8
+	)
+	assert_almost_eq(p_side.z, 0.8, 1e-4, "keeps its side and clears the lane")
 	var fake_robot := Node3D.new()
 	add_child_autofree(fake_robot)
-	fake_robot.global_position = doc.global_position + Vector3(0.8, 0.0, 0.0)
+	fake_robot.global_position = doc.global_position + Vector3(0.5, 0.0, 0.0)
 	doc.setup_robot(fake_robot)
 	await wait_physics_frames(3)
 	assert_true(doc.is_pardoning(), "doctor enters pardon state when robot is within trigger distance")
 	fake_robot.global_position = doc.global_position + Vector3(5.0, 0.0, 0.0)
 	await wait_physics_frames(3)
 	assert_false(doc.is_pardoning(), "doctor exits pardon state when robot moves away")
+
+
+func test_main_entrance_and_robot_dock() -> void:
+	var entrance := room.get_node_or_null(^"Doors/Door_Entrance") as SlidingDoor
+	assert_not_null(entrance)
+	assert_false(entrance.robot_can_open, "robot is geofenced inside the building")
+	assert_almost_eq(entrance.global_position.x, -12.1, 1e-3, "entrance sits in the west wall")
+	var dock: Dictionary = room.get_robot_dock()
+	var pos: Vector3 = dock["position"]
+	assert_almost_eq(pos.x, -10.6, 1e-3)
+	assert_almost_eq(pos.z, 0.0, 1e-3)
+	var fwd := Vector3(-sin(float(dock["yaw"])), 0.0, -cos(float(dock["yaw"])))
+	assert_almost_eq(fwd.x, 1.0, 1e-3, "dock faces east, into the corridor")
+	assert_true(Room.is_clear(pos, room.get_obstacle_footprints(), 0.6), "dock is clear of furniture")
+
+
+func test_patient_spawns_in_corridor_or_lobby_clear_of_furniture_and_npcs() -> void:
+	var rects: Array[Rect2] = room.get_obstacle_footprints()
+	for s: int in 40:
+		var rng := RandomNumberGenerator.new()
+		rng.seed = s
+		for floor_num: int in [1, 2]:
+			var p: Vector3 = room.get_patient_spawn_position(floor_num, rng)
+			var x: float = p.x - (50.0 if floor_num == 2 else 0.0)
+			var in_corridor: bool = Room.PATIENT_CORRIDOR_RECT.has_point(Vector2(x, p.z))
+			var in_lobby: bool = Room.PATIENT_LOBBY_RECT.has_point(Vector2(x, p.z))
+			assert_true(in_corridor or in_lobby, "seed %d floor %d: %s in a patient area" % [s, floor_num, p])
+			assert_true(Room.is_clear_box(p, rects, Room.PATIENT_CLEARANCE_M), "seed %d floor %d clear" % [s, floor_num])
+			assert_eq(Room.get_floor(p), floor_num)
+
+
+func test_patrolling_doctor_keeps_personal_space_then_turns_back() -> void:
+	var doc := room.get_node(^"Furniture/MedicalStaffDoctor") as HospitalNpc
+	doc.pardon_enabled = false
+	var parked := Node3D.new()
+	add_child_autofree(parked)
+	parked.global_position = Vector3(-0.1, 0.0, -1.35)  # robot parked on the doctor's route
+	doc.global_position = Vector3(-1.0, 0.0, -1.35)
+	doc._wp_index = 1  # walking east toward (1.8, -1.35)
+	doc.setup_robot(parked)
+	for i: int in 45:
+		doc._physics_process(1.0 / 30.0)
+		assert_true(Human.flat_distance(doc.global_position, parked.global_position) >= HospitalNpc.PERSONAL_SPACE_M - 1e-4,
+				"doctor never steps into the robot's personal space")
+	for i: int in 90:
+		doc._physics_process(1.0 / 30.0)
+	assert_lt(doc.global_position.x, -1.3, "waited > BLOCKED_TURN_S ➔ turned back to its other waypoint")
+
+
+func test_pardon_spot_never_blocks_a_doorway() -> void:
+	var doc := room.get_node(^"Furniture/MedicalStaffDoctor") as HospitalNpc
+	assert_true(HospitalNpc.near_doorway(doc, Vector3(0.0, 0.0, -1.5)), "spot in front of room 110's door")
+	assert_false(HospitalNpc.near_doorway(doc, Vector3(-2.0, 0.0, -1.35)), "spot on the corridor wall between doors")

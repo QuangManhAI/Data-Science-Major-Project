@@ -131,10 +131,17 @@
       "z1": 9.0
     },
     {
-      "name": "Shell/WallWestCollision",
+      "name": "Shell/WallWestNorthCollision",
       "x0": -12.2,
       "x1": -12.0,
       "z0": -9.0,
+      "z1": -0.98
+    },
+    {
+      "name": "Shell/WallWestSouthCollision",
+      "x0": -12.2,
+      "x1": -12.0,
+      "z0": 0.98,
       "z1": 9.0
     },
     {
@@ -241,6 +248,13 @@
       "x1": 6.1,
       "z0": 2.0,
       "z1": 9.0
+    },
+    {
+      "name": "Doors/Door_Entrance/DoorBody/CollisionShape3D",
+      "x0": -12.17,
+      "x1": -12.03,
+      "z0": -0.9,
+      "z1": 0.9
     },
     {
       "name": "Furniture/ReceptionCounter/Collision",
@@ -351,8 +365,8 @@
       "name": "Furniture/CorridorWetFloorSign/Collision",
       "x0": -11.15,
       "x1": -10.85,
-      "z0": -0.193,
-      "z1": 0.165
+      "z0": -1.693,
+      "z1": -1.335
     },
     {
       "name": "Furniture/EmergencyBed1/Collision",
@@ -971,5 +985,10 @@
       "z1": -1.56
     }
   ],
+  "robot_dock": {
+    "x": -10.6,
+    "yaw": -1.5708,
+    "z": 0.0
+  },
   "source": "sim_vision/godot/scenes/room.tscn"
 }

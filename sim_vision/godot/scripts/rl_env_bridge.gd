@@ -50,6 +50,12 @@ const FLOOR1_CLINIC_ALIASES: Array[String] = [
 const FLOOR2_DIRECT_KEYS: Array[String] = [
 	"201", "204", "205", "210", "220", "sanh_t2", "wc_t2", "thang_may_t2", "hanh_lang_t2"
 ]
+## Khoa của NLU (dept_<slug>, sim_vision/python/voice/hospital_map.json) ➔ số phòng
+const NLU_DEPARTMENT_ROOMS: Dictionary = {
+	"dept_tim_mach": "301", "dept_tieu_hoa": "205", "dept_tai_mui_hong": "210", "dept_co_xuong_khop": "315",
+	"dept_nhi": "401", "dept_san": "410", "dept_cap_cuu": "101", "dept_noi_tong_quat": "120",
+	"dept_ho_hap": "320", "dept_than_kinh": "330", "dept_da_lieu": "220", "dept_mat": "230", "dept_rang_ham_mat": "240",
+}
 
 var task_phase: int = TaskPhase.SEARCH_PATIENT
 var active_action: String = ""
@@ -87,12 +93,27 @@ func begin_post_dialogue_task(act: String, target_str: String, floor_num: int, _
 
 
 ## Phân giải phòng đích cuối cùng của bệnh nhân
+## Đích từ NLU ("room_205", "dept_tim_mach") ➔ {"key": số phòng, "floor": tầng = chữ số đầu của số phòng}.
+static func normalize_nlu_target(target_id: String, dest_floor: int = 1) -> Dictionary:
+	var t: String = target_id.strip_edges().to_lower()
+	if t.begins_with("room_"):
+		t = t.substr(5)
+	elif NLU_DEPARTMENT_ROOMS.has(t):
+		t = NLU_DEPARTMENT_ROOMS[t]
+	var fl: int = dest_floor
+	if t.length() == 3 and t.is_valid_int():
+		fl = maxi(dest_floor, int(t.substr(0, 1)))
+	return {"key": t, "floor": fl}
+
+
 static func resolve_final_target(action_name: String, target_id: String, dest_floor: int = 1) -> String:
 	if action_name in ["call_staff", "emergency"]:
 		return "staff"
 	if action_name != "guide":
 		return ""
-	var t: String = target_id.strip_edges().to_lower()
+	var nlu: Dictionary = RLEnvBridge.normalize_nlu_target(target_id, dest_floor)
+	var t: String = nlu["key"]
+	dest_floor = nlu["floor"]
 	if t in FLOOR1_LOBBY_ALIASES:
 		return "tiep_don"
 	if t in FLOOR2_DIRECT_KEYS:
@@ -119,7 +140,7 @@ static func resolve_destination_key(action_name: String, target_id: String, dest
 	if action_name != "guide":
 		return ""
 	var final_key: String = resolve_final_target(action_name, target_id, dest_floor)
-	var target_floor: int = 2 if (final_key in FLOOR2_DIRECT_KEYS or dest_floor >= 2 or (target_id.length() == 3 and target_id.begins_with("2"))) else 1
+	var target_floor: int = 2 if (final_key in FLOOR2_DIRECT_KEYS or RLEnvBridge.normalize_nlu_target(target_id, dest_floor)["floor"] >= 2) else 1
 	if current_floor == 1:
 		if target_floor >= 2:
 			return "thang_may"

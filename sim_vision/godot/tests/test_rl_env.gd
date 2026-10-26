@@ -41,6 +41,20 @@ func test_smart_floor1_destination_routing() -> void:
 	assert_eq(RLEnvBridge.resolve_destination_key("answer", "", 1), "")
 
 
+func test_nlu_room_and_department_targets_are_routed() -> void:
+	# NLU target ids (sim_vision/python/nlu/slots.py): room_<number> / dept_<slug>; floor comes from the room number
+	assert_eq(RLEnvBridge.resolve_destination_key("guide", "room_110", 1), "110")
+	assert_eq(RLEnvBridge.resolve_destination_key("guide", "room_130", 1), "112", "floor-1 clinic alias")
+	assert_eq(RLEnvBridge.resolve_destination_key("guide", "room_115", 1), "tiep_don", "result counter is in the lobby")
+	assert_eq(RLEnvBridge.resolve_destination_key("guide", "room_205", 1), "thang_may", "floor-2 room: elevator first")
+	assert_eq(RLEnvBridge.resolve_final_target("guide", "room_205", 1), "205")
+	assert_eq(RLEnvBridge.resolve_destination_key("guide", "room_205", 1, 2), "205", "already on floor 2")
+	assert_eq(RLEnvBridge.resolve_destination_key("guide", "dept_cap_cuu", 1), "101")
+	assert_eq(RLEnvBridge.resolve_final_target("guide", "dept_tai_mui_hong", 1), "210")
+	assert_eq(RLEnvBridge.resolve_destination_key("guide", "dept_tim_mach", 1), "thang_may", "floor 3 via the elevator")
+	assert_eq(RLEnvBridge.resolve_final_target("guide", "room_302", 1), "sanh_t2", "floors 3-4 are not simulated: floor-2 lobby")
+
+
 func test_observation_vector_31_dims_and_bounds() -> void:
 	var lidar := PackedFloat32Array()
 	lidar.resize(Robot.LIDAR_NUM_RAYS)

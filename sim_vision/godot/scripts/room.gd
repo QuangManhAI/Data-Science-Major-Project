@@ -155,10 +155,20 @@ const CANONICAL_ROOM_KEYS: Array[String] = [
 
 const FLOOR2_SPAWN_RECT := Rect2(Vector2(44.4, -1.8), Vector2(11.2, 10.2))
 
+## Vùng đặt bệnh nhân, khớp HospitalShiftEnv._sample_patient_spawn_solo (src/training/hospital_env.py):
+## 60% hành lang, 40% sảnh chính; cách đồ vật/tường ≥ 0.65 m và NPC ≥ 0.8 m (hộp nở vuông như Python is_blocked).
+const PATIENT_CORRIDOR_RECT := Rect2(Vector2(-10.0, -1.3), Vector2(20.0, 2.6))
+const PATIENT_LOBBY_RECT := Rect2(Vector2(-3.2, 2.2), Vector2(6.4, 4.3))
+const PATIENT_CORRIDOR_PROB: float = 0.6
+const PATIENT_CLEARANCE_M: float = 0.65
+const PATIENT_NPC_CLEARANCE_M: float = 0.8
+const PATIENT_NPC_HALF_M: float = 0.25
+
 @onready var _furniture: Node3D = $Furniture
 @onready var _interior_walls: Node3D = get_node_or_null(^"InteriorWalls")
 @onready var _ceiling: MeshInstance3D = get_node_or_null(^"Shell/Ceiling")
 @onready var _floor2_node: Node3D = get_node_or_null(^"Floor2")
+@onready var _robot_dock: Node3D = get_node_or_null(^"Entrance/RobotDock")
 
 
 ## Ẩn hoặc hiện trần nhà (hữu ích cho camera nhìn từ trên xuống TOP_DOWN kiểu RimWorld).
@@ -208,6 +218,31 @@ func is_ceiling_visible() -> bool:
 ## cách tường và mọi đồ vật ≥ `min_clearance`.
 func get_free_position(min_clearance: float, rng: RandomNumberGenerator = null) -> Vector3:
 	return _sample_in_rect(DEFAULT_SPAWN_RECT, min_clearance, rng)
+
+
+## Trạm robot ngay trong cửa chính (đầu Tây hành lang tầng 1): {"position", "yaw"}; ca trực bắt đầu ở đây.
+func get_robot_dock() -> Dictionary:
+	if _robot_dock == null:
+		return {"position": Vector3.ZERO, "yaw": 0.0}
+	return {"position": Vector3(_robot_dock.global_position.x, 0.0, _robot_dock.global_position.z),
+			"yaw": _robot_dock.global_rotation.y}
+
+
+## Điểm đặt bệnh nhân ngẫu nhiên trên tầng `floor_num` (hành lang / sảnh chính, xem PATIENT_*).
+func get_patient_spawn_position(floor_num: int, rng: RandomNumberGenerator) -> Vector3:
+	var x_base: float = 50.0 if floor_num == 2 else 0.0
+	var footprints: Array[Rect2] = get_obstacle_footprints()
+	var npc_rects: Array[Rect2] = []
+	for node: Node in find_children("*", "", true, false):
+		if node is HospitalNpc:
+			var c: Vector3 = (node as Node3D).global_position
+			npc_rects.append(Rect2(c.x - PATIENT_NPC_HALF_M, c.z - PATIENT_NPC_HALF_M, 2.0 * PATIENT_NPC_HALF_M, 2.0 * PATIENT_NPC_HALF_M))
+	for i: int in 250:
+		var r: Rect2 = PATIENT_CORRIDOR_RECT if rng.randf() < PATIENT_CORRIDOR_PROB else PATIENT_LOBBY_RECT
+		var p := Vector3(x_base + rng.randf_range(r.position.x, r.end.x), 0.0, rng.randf_range(r.position.y, r.end.y))
+		if Room.is_clear_box(p, footprints, PATIENT_CLEARANCE_M) and Room.is_clear_box(p, npc_rects, PATIENT_NPC_CLEARANCE_M):
+			return p
+	return Vector3(x_base, 0.0, 4.0)
 
 
 ## Điểm ngẫu nhiên trên sàn (y = 0) nằm trong phòng `room_key`, cách tường phòng và đồ vật ≥ `min_clearance`.
@@ -305,6 +340,16 @@ static func distance_to_rect(p: Vector2, r: Rect2) -> float:
 	var dx: float = maxf(maxf(r.position.x - p.x, 0.0), p.x - r.end.x)
 	var dz: float = maxf(maxf(r.position.y - p.y, 0.0), p.y - r.end.y)
 	return sqrt(dx * dx + dz * dz)
+
+
+## Như is_clear nhưng nở hộp hình vuông (khoảng cách Chebyshev), khớp is_blocked() bên Python.
+static func is_clear_box(p: Vector3, footprints: Array[Rect2], clearance: float) -> bool:
+	for r: Rect2 in footprints:
+		var dx: float = maxf(maxf(r.position.x - p.x, 0.0), p.x - r.end.x)
+		var dz: float = maxf(maxf(r.position.y - p.z, 0.0), p.z - r.end.y)
+		if maxf(dx, dz) <= clearance:
+			return false
+	return true
 
 
 static func is_clear(p: Vector3, footprints: Array[Rect2], clearance: float) -> bool:

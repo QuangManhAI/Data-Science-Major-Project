@@ -174,6 +174,7 @@ def run_train_solo_patient(
     warmstart_loaded = False
     best_eval = -float("inf")
     evals_without_improve = 0
+    ckpt_prefix = f"PPOHospital-{env_mode}"
 
     if resume_from:
         r_path = Path(resume_from)
@@ -182,13 +183,12 @@ def run_train_solo_patient(
             run_dir = r_path.parent.parent
         else:
             run_dir = r_path
-            ckpt_file = run_dir / "checkpoints" / "PPOHospital-solo_last.pt"
-            if not ckpt_file.exists():
-                ckpt_file = run_dir / "checkpoints" / "PPOHospital-solo-1000ep_last.pt"
-            if not ckpt_file.exists():
-                ckpt_file = run_dir / "checkpoints" / "PPOHospital-solo_best.pt"
-            if not ckpt_file.exists():
-                ckpt_file = run_dir / "checkpoints" / "PPOHospital-solo-1000ep_best.pt"
+            candidates = [f"PPOHospital-{env_mode}_last.pt", "PPOHospital-solo_last.pt", "PPOHospital-solo-1000ep_last.pt",
+                          f"PPOHospital-{env_mode}_best.pt", "PPOHospital-solo_best.pt", "PPOHospital-solo-1000ep_best.pt"]
+            ckpt_file = next(
+                (run_dir / "checkpoints" / c for c in candidates if (run_dir / "checkpoints" / c).exists()),
+                run_dir / "checkpoints" / candidates[0],
+            )
 
         ckpt = torch.load(ckpt_file, map_location=device, weights_only=True)
         agent.load_state_dict(ckpt["model_state_dict"])
@@ -524,7 +524,7 @@ def run_train_solo_patient(
             if improved:
                 best_eval = ev["score"]
                 evals_without_improve = 0
-                torch.save(checkpoint_payload(), ckpt_dir / "PPOHospital-solo_best.pt")
+                torch.save(checkpoint_payload(), ckpt_dir / f"{ckpt_prefix}_best.pt")
             else:
                 evals_without_improve += 1
             print(
@@ -540,7 +540,7 @@ def run_train_solo_patient(
         # Periodic Last Checkpoint (every 50-100 episodes or end)
         save_freq = 50 if episodes <= 1000 else 100
         if (ep % save_freq == 0) or (ep == episodes) or stop_early:
-            torch.save(checkpoint_payload(), ckpt_dir / "PPOHospital-solo_last.pt")
+            torch.save(checkpoint_payload(), ckpt_dir / f"{ckpt_prefix}_last.pt")
 
         if stop_early:
             print(f" Early stop          : no eval improvement in {patience} evals (best score {best_eval:+.1f})", flush=True)
@@ -558,7 +558,7 @@ def run_train_solo_patient(
     print(f" Best Rolling-20      : {best_roll20:+.2f}", flush=True)
     print(f" Best Eval Score      : {best_eval:+.2f} (R_team - {EVAL_COLLISION_WEIGHT:g} x collisions, deterministic)", flush=True)
     print(f" Peak R_team Achieved : {peak_r_team:+.2f}", flush=True)
-    print(f" Best Checkpoint Saved: {ckpt_dir / 'PPOHospital-solo_best.pt'}", flush=True)
+    print(f" Best Checkpoint Saved: {ckpt_dir / f'{ckpt_prefix}_best.pt'}", flush=True)
     print("=" * 86, flush=True)
 
     # Write summary README.md
@@ -573,7 +573,7 @@ def run_train_solo_patient(
 - **Best Rolling-20 $R_{{team}}$**: {best_roll20:+.2f}
 - **Best Eval Score** (deterministic, {eval_episodes} held-out seeds, R_team - {EVAL_COLLISION_WEIGHT:g} x collisions): {best_eval:+.2f}
 - **Peak Episode $R_{{team}}$**: {peak_r_team:+.2f}
-- **Best Checkpoint**: `checkpoints/PPOHospital-solo_best.pt`
+- **Best Checkpoint**: `checkpoints/{ckpt_prefix}_best.pt`
 """
     (run_dir / "README.md").write_text(readme_content, encoding="utf-8")
     return run_dir

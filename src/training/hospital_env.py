@@ -45,7 +45,7 @@ PENALTY_COLLISION = -5.0
 TETHER_IDEAL_M = 1.6
 TETHER_MAX_M = 2.5
 GOAL_ARRIVE_ROBOT_M = 1.4
-GOAL_ARRIVE_PATIENT_M = 2.0
+GOAL_ARRIVE_PATIENT_M = 2.5
 COLLISION_LIDAR_M = 0.40
 PATIENT_TALK_DIST_M = 1.35
 
@@ -787,7 +787,8 @@ class HospitalShiftEnv:
         a_v = float(np.clip(action[0], -1.0, 1.0))
         a_omega = float(np.clip(action[1], -1.0, 1.0))
 
-        v = float(np.clip((a_v + 1.0) * 0.5 * V_MAX, 0.0, V_MAX))
+        v_limit = ESCORT_WALK_SPEED if self.task_phase == TaskPhase.GUIDE_ESCORT else V_MAX
+        v = float(np.clip((a_v + 1.0) * 0.5 * v_limit, 0.0, v_limit))
         omega = float(np.clip(a_omega * OMEGA_MAX, -OMEGA_MAX, OMEGA_MAX))
 
         # Assistive navigational prior blended with policy residual so PPO learns smooth

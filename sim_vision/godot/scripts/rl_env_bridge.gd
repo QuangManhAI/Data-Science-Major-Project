@@ -24,7 +24,7 @@ const ESCORT_CRUMB_REACH_M: float = 0.3
 const ESCORT_TRAIL_JUMP_M: float = 5.0
 const ESCORT_TRAIL_MAX: int = 400
 const GOAL_ARRIVE_ROBOT_M: float = 1.4     # = hospital_env.GOAL_ARRIVE_ROBOT_M
-const GOAL_ARRIVE_PATIENT_M: float = 2.0   # = hospital_env.GOAL_ARRIVE_PATIENT_M
+const GOAL_ARRIVE_PATIENT_M: float = 2.5   # = hospital_env.GOAL_ARRIVE_PATIENT_M
 const STAFF_ARRIVE_M: float = 1.5
 
 const REWARD_ANSWER: float = 10.0

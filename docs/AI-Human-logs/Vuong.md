@@ -472,3 +472,19 @@
 - **Touches:** `sim_vision/godot/scenes/room.tscn`, `sim_vision/godot/scenes/room_floor2.tscn`, `sim_vision/godot/scenes/props/elevator_station.tscn`, `sim_vision/godot/scripts/elevator_station.gd`, `sim_vision/godot/scripts/room.gd`, `sim_vision/godot/scripts/rl_env_bridge.gd`, `sim_vision/godot/scripts/main.gd`, `src/training/hospital_env.py`, `tests/test_floor2_elevator.py`, `docs/AI-Human-logs/Vuong.md`
 - **Evidence:** 151/151 Godot GUT tests pass; 12/12 pytest unit tests pass (including multi-floor elevator transit test); verified GPU smoke training with warm-start weights from the 100k episode checkpoint.
 
+
+
+### D-032 — Fix Patient Escort Geometric Deadlock and Velocity Mismatch During Inference
+- **Status:** accepted
+- **When:** 2026-10-26T16:25:00+07:00
+- **Decided by:** human
+- **Trigger:** "our newest training, but from what i saw when inference, the robot are literealy not works for escort patient, you test its our, by examining a specific case where patient ask for destination and see why the robot wont works experiments\runs\20261025_1248_PPOHospital"
+- **Diagnosis:**
+  1. **Geometric Arrival Deadlock (`GOAL_ARRIVE_PATIENT_M = 2.0m`):** In `main.gd` and `hospital_env.py`, goal arrival required both $d(\text{robot}, \text{goal}) \le 1.4\text{m}$ and $d(\text{patient}, \text{goal}) \le 2.0\text{m}$. However, `step_escorted_patient` halts the patient as soon as $d(\text{patient}, \text{robot}) \le 0.9\text{m}$. When the robot stopped at $1.2\text{m}$ from the goal, the trailing patient stopped at $1.2 + 0.85 = 2.05\text{m} > 2.0\text{m}$. Neither agent moved again, deadlocking task completion.
+  2. **Escort Velocity Mismatch:** In `rl_policy_server.py`, robot speed uncapped reached $V_{\text{MAX}} = 0.80\,\text{m/s}$, while elderly patient walking speed is $0.48\,\text{m/s}$. Within 3 seconds, tether stretched past $2.2\,\text{m}$, triggering sharp policy speed collapse ($0.80 \to 0.21 \to 0.03\,\text{m/s}$) and severe right-turn steering bias ($\omega = -0.92\,\text{rad/s}$).
+- **Decision:**
+  1. Relaxed `GOAL_ARRIVE_PATIENT_M` from $2.0\,\text{m}$ to $2.5\,\text{m}$ in `src/training/hospital_env.py` and `sim_vision/godot/scripts/rl_env_bridge.gd`, safely accommodating $1.4\,\text{m} (\text{robot}) + 0.9\,\text{m} (\text{tether}) = 2.3\,\text{m} \le 2.5\,\text{m}$.
+  2. In `sim_vision/python/rl_policy_server.py` and `src/training/hospital_env.py`, capped robot forward velocity during `TaskPhase.GUIDE_ESCORT` to `ESCORT_WALK_SPEED = 0.52 m/s` (matching patient walking speed of $0.48\,\text{m/s}$), preventing tether stretch and keeping $d_{\text{tether}}$ within the optimal $1.0 - 1.6\,\text{m}$ window.
+- **Why:** Completely eliminates arrival deadlocks at destination clinics and elevators, avoids tether-stretch policy speed collapse, and raises multi-seed test success rate from 76.7% to 100.0%.
+- **Touches:** `src/training/hospital_env.py`, `sim_vision/godot/scripts/rl_env_bridge.gd`, `sim_vision/python/rl_policy_server.py`, `docs/AI-Human-logs/Vuong.md`
+- **Evidence:** 30-seed deterministic benchmark verified: success rate improved from 76.7% to 100.0% (0 failures); average patients helped increased from 1.27 to 1.70 (+34%); all 18 pytest tests pass.

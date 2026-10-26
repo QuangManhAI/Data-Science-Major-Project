@@ -31,7 +31,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from src.models.ppo_agent import ACT_DIM, OBS_DIM, PPOHospitalAgent  # noqa: E402
-from src.training.hospital_env import OMEGA_MAX, V_MAX, HospitalShiftEnv, TaskPhase  # noqa: E402
+from src.training.hospital_env import ESCORT_WALK_SPEED, OMEGA_MAX, V_MAX, HospitalShiftEnv, TaskPhase  # noqa: E402
 
 log = logging.getLogger("rl_policy_server")
 
@@ -98,7 +98,7 @@ class PolicyRunner:
         return {
             "type": "rl_action",
             "id": msg.get("id", -1),
-            "v": float(np.clip((a_v + 1.0) * 0.5 * V_MAX, 0.0, V_MAX)),
+            "v": float(np.clip((a_v + 1.0) * 0.5 * (ESCORT_WALK_SPEED if env.task_phase == TaskPhase.GUIDE_ESCORT else V_MAX), 0.0, ESCORT_WALK_SPEED if env.task_phase == TaskPhase.GUIDE_ESCORT else V_MAX)),
             "omega": float(np.clip(a_omega * OMEGA_MAX, -OMEGA_MAX, OMEGA_MAX)),
             "a": [a_v, a_omega],
             "phase": int(env.task_phase),

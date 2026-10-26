@@ -48,6 +48,8 @@ var _start_ms: int = 0
 
 @onready var room: Room = $Room
 @onready var human: Human = $Human
+var active_escorted_patient: CharacterBody3D = null
+var _pending_turn_reset: bool = false
 @onready var robot: Robot = $Robot
 @onready var vision: VisionClient = $VisionClient
 @onready var overlay: ViewOverlay = $UI/ViewOverlay
@@ -146,7 +148,8 @@ func _physics_process(delta: float) -> void:
 	# Đồng hồ kẹt áp dụng cả pha tìm bệnh nhân (đích = bệnh nhân), trừ lúc hội thoại / đã tới nơi chờ NPC nói
 	if not Main.is_dialogue_state(state) and state != Config.RobotState.ARRIVED:
 		_task_elapsed_s += delta
-		var task_target: Vector3 = human.global_position if _is_search_phase() else _rl_bridge.goal_position
+		var current_pat: CharacterBody3D = active_escorted_patient if active_escorted_patient != null else human
+		var task_target: Vector3 = current_pat.global_position if _is_search_phase() else _rl_bridge.goal_position
 		var d_task: float = Human.flat_distance(robot.global_position, _leg_target(task_target))
 		if _task_best_dist < 0.0 or d_task < _task_best_dist - TASK_PROGRESS_M:
 			_task_best_dist = d_task
@@ -157,10 +160,11 @@ func _physics_process(delta: float) -> void:
 			reset_positions(false)
 			return
 	if _rl_bridge.task_phase == RLEnvBridgeScript.TaskPhase.GUIDE_ESCORT:
-		RLEnvBridgeScript.step_escorted_patient(human, robot.global_position, delta, _rl_bridge.escort_trail)
+		var esc_pat: CharacterBody3D = active_escorted_patient if active_escorted_patient != null else human
+		RLEnvBridgeScript.step_escorted_patient(esc_pat, robot.global_position, delta, _rl_bridge.escort_trail)
 		var d_goal: float = Human.flat_distance(robot.global_position, _rl_bridge.goal_position)
-		var d_tether: float = Human.flat_distance(robot.global_position, human.global_position)
-		var d_patient_goal: float = Human.flat_distance(human.global_position, _rl_bridge.goal_position)
+		var d_tether: float = Human.flat_distance(robot.global_position, esc_pat.global_position)
+		var d_patient_goal: float = Human.flat_distance(esc_pat.global_position, _rl_bridge.goal_position)
 		if d_goal <= RLEnvBridgeScript.GOAL_ARRIVE_ROBOT_M and d_patient_goal <= RLEnvBridgeScript.GOAL_ARRIVE_PATIENT_M:
 			# Kiểm tra chuyển tầng qua thang máy
 			if _rl_bridge.goal_key in ["thang_may", "thang_may_t2"] and _rl_bridge.final_target_key != "" and _rl_bridge.final_target_key != _rl_bridge.goal_key:
@@ -173,6 +177,9 @@ func _physics_process(delta: float) -> void:
 			_rl_bridge.patients_helped += 1
 			_rl_bridge.task_phase = RLEnvBridgeScript.TaskPhase.SEARCH_PATIENT
 			overlay.set_status("Đã dẫn tới: %s (R_team=%.0f)" % [_rl_bridge.goal_key, _rl_bridge.cumulative_team_reward])
+			if esc_pat.has_method("end_escort"):
+				esc_pat.end_escort()
+			active_escorted_patient = null
 			reset_positions(true)
 			return
 		if not _policy_active():
@@ -217,6 +224,14 @@ func _leg_target(target: Vector3) -> Vector3:
 func _policy_active() -> bool:
 	return _policy != null and _policy.is_server_connected()
 
+
+
+func get_active_speaking_patient() -> CharacterBody3D:
+	if dialogue != null and dialogue.active_npc != null:
+		var p: Node = dialogue.active_npc.get_parent()
+		if p is CharacterBody3D:
+			return p as CharacterBody3D
+	return human
 
 func _is_search_phase() -> bool:
 	return _rl_bridge.task_phase in [RLEnvBridgeScript.TaskPhase.SEARCH_PATIENT, RLEnvBridgeScript.TaskPhase.APPROACH_PATIENT]
@@ -275,27 +290,25 @@ func _on_dialogue_turn_completed(row: Dictionary) -> void:
 	var act: String = str(row.get("action", ""))
 	var target_key: String = str(row.get("target", ""))
 	var fl: int = int(row.get("floor", 1))
-	# Chế độ đầy đủ: bệnh nhân ngồi chờ cũng hỏi được robot. Robot trả lời bằng lời, nhưng chỉ bệnh nhân
-	# mục tiêu (Human) mới đi theo khi dẫn đường ➔ yêu cầu dẫn đường của người khác chỉ được trả lời.
-	var from_target: bool = dialogue == null or dialogue.active_npc == null \
-			or dialogue.active_npc == human.get_node_or_null(^"Npc")
-	if not from_target:
-		overlay.set_status("Đã trả lời người đang chờ, tiếp tục tìm bệnh nhân")
-		state = Config.RobotState.SEARCH
-		return
+
+	var speaking_pat: CharacterBody3D = get_active_speaking_patient()
+
 	if act == "guide" or act == "call_staff" or act == "emergency":
-		_rl_bridge.begin_post_dialogue_task(act, target_key, fl, human)
+		active_escorted_patient = speaking_pat
+		_rl_bridge.begin_post_dialogue_task(act, target_key, fl, active_escorted_patient)
 		_task_elapsed_s = 0.0  # đích đổi từ bệnh nhân sang phòng / nhân viên
 		_task_best_dist = -1.0
+		overlay.set_status("Bắt đầu dẫn đường bệnh nhân tới: %s" % _rl_bridge.goal_key)
 	else:
-		# Mọi kết quả không sinh nhiệm vụ (answer / adjust / refuse / clarify hết lượt / lỗi STT) đều kết thúc
-		# lượt này; không thì robot đứng ARRIVED chờ mãi vì NPC chỉ nói MAX_TURNS lần.
 		if act in ["answer", "repeat", "refuse", "adjust"]:
 			_rl_bridge.cumulative_team_reward += RLEnvBridgeScript.REWARD_ANSWER
 			_rl_bridge.patients_helped += 1
 			overlay.set_status("Đã hỗ trợ bệnh nhân (R_team=%.0f)" % _rl_bridge.cumulative_team_reward)
 		if _policy_active():
-			reset_positions(true)  # như env lúc train: xong lượt ➔ bệnh nhân mới
+			if Main.is_dialogue_state(state):
+				_pending_turn_reset = true
+			else:
+				reset_positions(true)
 
 
 ## Thực hiện chu trình đi thang máy 2 chiều đầy đủ hiệu ứng âm thanh, đèn LED và animation di chuyển
@@ -313,7 +326,8 @@ func _execute_elevator_transit(from_floor: int, to_floor: int, with_patient: boo
 		var offset_x: float = 50.0 if to_floor == 2 else -50.0
 		robot.global_position.x += offset_x
 		if with_patient:
-			human.global_position.x += offset_x
+			var esc_p: CharacterBody3D = active_escorted_patient if active_escorted_patient != null else human
+			esc_p.global_position.x += offset_x
 			_rl_bridge.goal_key = _rl_bridge.final_target_key
 			_rl_bridge.goal_position = room.get_room_waypoint(_rl_bridge.final_target_key) if room != null else Vector3.ZERO
 		_is_in_elevator_transit = false
@@ -341,7 +355,8 @@ func _execute_elevator_transit(from_floor: int, to_floor: int, with_patient: boo
 		var move_in := create_tween().set_parallel(true)
 		move_in.tween_property(robot, "global_position", robot_cabin_target, 0.8)
 		if with_patient:
-			move_in.tween_property(human, "global_position", human_cabin_target, 0.8)
+			var esc_p: CharacterBody3D = active_escorted_patient if active_escorted_patient != null else human
+			move_in.tween_property(esc_p, "global_position", human_cabin_target, 0.8)
 	)
 	seq.tween_interval(0.9)
 
@@ -374,7 +389,8 @@ func _execute_elevator_transit(from_floor: int, to_floor: int, with_patient: boo
 		var cabin_pos_to: Vector3 = station_to.get_cabin_position()
 		robot.global_position = cabin_pos_to + station_to.global_transform.basis * Vector3(0.25, 0.0, 0.0)
 		if with_patient:
-			human.global_position = cabin_pos_to + station_to.global_transform.basis * Vector3(-0.25, 0.0, 0.0)
+			var esc_p: CharacterBody3D = active_escorted_patient if active_escorted_patient != null else human
+			esc_p.global_position = cabin_pos_to + station_to.global_transform.basis * Vector3(-0.25, 0.0, 0.0)
 
 		station_from.set_floor_indicator(to_floor, "")
 		station_to.set_floor_indicator(to_floor, "")
@@ -398,7 +414,8 @@ func _execute_elevator_transit(from_floor: int, to_floor: int, with_patient: boo
 		var move_out := create_tween().set_parallel(true)
 		move_out.tween_property(robot, "global_position", robot_out_target, 0.8)
 		if with_patient:
-			move_out.tween_property(human, "global_position", human_out_target, 0.8)
+			var esc_p: CharacterBody3D = active_escorted_patient if active_escorted_patient != null else human
+			move_out.tween_property(esc_p, "global_position", human_out_target, 0.8)
 	)
 	seq.tween_interval(0.9)
 
@@ -546,6 +563,10 @@ func reset_positions(is_task_transition: bool = false) -> void:
 	_task_elapsed_s = 0.0
 	_task_best_dist = -1.0
 	_arrived_wait_s = 0.0
+	if active_escorted_patient != null and active_escorted_patient.has_method("end_escort"):
+		active_escorted_patient.end_escort()
+	active_escorted_patient = null
+	_pending_turn_reset = false
 	human.end_escort()
 	if is_task_transition:
 		# Bệnh nhân mới (cùng tầng với robot, vùng như lúc train) cách robot ≥ MIN_START_SEPARATION; robot giữ nguyên vị trí
@@ -583,7 +604,8 @@ func reset_positions(is_task_transition: bool = false) -> void:
 
 
 func human_distance() -> float:
-	return Human.flat_distance(robot.global_position, human.global_position)
+	var target_pat: CharacterBody3D = active_escorted_patient if active_escorted_patient != null else human
+	return Human.flat_distance(robot.global_position, target_pat.global_position)
 
 
 func _setup_hospital_npcs() -> void:
@@ -679,6 +701,10 @@ func set_dialogue_state(s: int) -> void:
 	_arrived_wait_s = 0.0
 	if Main.is_dialogue_state(s):
 		robot.set_command(0.0, 0.0)
+	elif s == Config.RobotState.ARRIVED and _pending_turn_reset:
+		_pending_turn_reset = false
+		if _policy_active():
+			reset_positions(true)
 	_last_result_ms = Time.get_ticks_msec()
 	overlay.show_detections([], Config.state_name(state), _connected)
 

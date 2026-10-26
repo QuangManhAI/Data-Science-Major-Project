@@ -1,12 +1,17 @@
 class_name HospitalNpc
-extends StaticBody3D
+extends CharacterBody3D
 ## NPC trong bệnh viện (Nhân viên y tế: Bác sĩ, Điều dưỡng; Bệnh nhân cao tuổi / ngồi chờ).
 ## Hỗ trợ cả đứng/ngồi tại chỗ lẫn đi bộ theo `waypoints` (`walks = true`) và tự động
 ## bước sang một bên nhường đường ("pardon") khi robot đi ngang qua (`pardon_enabled = true`).
+## Hỗ trợ State Machine (SITTING -> STANDING -> WALKING -> SITTING) cho bệnh nhân
+## và hỗ trợ được dẫn đường (ESCORTED) bởi robot.
 
 const NpcScript = preload("res://scripts/npc.gd")
 const WALK_ANIM_RES: String = "res://assets/models/human_m06/anims/walk.res"
-const ARRIVE_TOL: float = 0.05
+const IDLE_ANIM_RES: String = "res://assets/models/human_m06/anims/idle.res"
+const SIT_ANIM_RES: String = "res://assets/models/human_m06/anims/f_sit_waiting.res"
+
+const ARRIVE_TOL: float = 0.08
 const PARDON_TRIGGER_DIST: float = 1.4
 const PARDON_CLEAR_DIST: float = 1.85
 const PARDON_MIN_ROBOT_V: float = 0.05    # robot đứng yên (vd. tới nói chuyện) ➔ không né
@@ -20,6 +25,8 @@ const PARDON_DOORWAY_KEEP_CLEAR_M: float = 1.2  # điểm né không chắn cử
 const PERSONAL_SPACE_M: float = 0.9       # không bước lại gần tâm robot hơn 0.9 m; đứng chờ...
 const BLOCKED_TURN_S: float = 2.0         # ...chờ quá 2 s khi đi tuần ➔ quay đầu về điểm tuần còn lại
 
+enum State { SITTING, STANDING, WALKING, ESCORTED }
+
 @export var tex_dir: String = "res://assets/models/medical_f01/textures"
 @export var anim_path: String = "res://assets/models/human_m06/anims/f_idle.res"
 @export var anim_offset: float = 0.0
@@ -31,6 +38,9 @@ const BLOCKED_TURN_S: float = 2.0         # ...chờ quá 2 s khi đi tuần ➔
 @export var waypoints: Array[Vector3] = []
 @export var walk_speed: float = 0.48
 @export var pardon_enabled: bool = true
+@export var current_state: State = State.SITTING
+@export var sit_duration_range: Vector2 = Vector2(15.0, 30.0)
+@export var stand_duration_range: Vector2 = Vector2(3.0, 6.0)
 
 var robot_ref: Node3D = null
 @export var can_speak: bool = true
@@ -42,48 +52,53 @@ var _anim_player: AnimationPlayer
 var _wp_index: int = 0
 var _home_pos: Vector3 = Vector3.ZERO
 var _home_yaw: float = 0.0
+var _home_seat_pos: Vector3 = Vector3.ZERO
+var _home_seat_yaw: float = 0.0
 var _anchor_pos: Vector3 = Vector3.ZERO
 var _is_pardoning: bool = false
 var _pardon_target: Vector3 = Vector3.ZERO
 var _pardon_elapsed_s: float = 0.0
 var _pardon_cooldown_s: float = 0.0
 var _blocked_s: float = 0.0
+var _state_timer: float = 0.0
 
 
 func _ready() -> void:
 	_home_pos = global_position
+	_home_seat_pos = global_position
 	_anchor_pos = global_position
 	_home_yaw = rotation.y
+	_home_seat_yaw = rotation.y
+
 	if can_speak:
 		_setup_speech()
 
 	var model := get_node_or_null(^"Model") as Node3D
-	if model == null:
-		return
-	if is_seated:
+	if model != null and is_seated:
 		model.position = Vector3(0.0, 0.0, 0.06)
 
-	var mesh_node := _find_mesh(model)
-	if mesh_node != null and mesh_node.mesh != null:
-		var mat_body := _make_part_mat("body")
-		var mat_head := _make_part_mat("head")
-		var mat_opacity := _make_opacity_mat()
-		var fallback: Array[Material] = [mat_body, mat_head, mat_opacity]
-		for s: int in mesh_node.mesh.get_surface_count():
-			var orig_mat: Material = mesh_node.mesh.surface_get_material(s)
-			var mname: String = orig_mat.resource_name.to_lower() if orig_mat != null else ""
-			if "opacity" in mname:
-				mesh_node.set_surface_override_material(s, mat_opacity)
-			elif "head" in mname:
-				mesh_node.set_surface_override_material(s, mat_head)
-			elif "body" in mname:
-				mesh_node.set_surface_override_material(s, mat_body)
-			elif s < fallback.size():
-				mesh_node.set_surface_override_material(s, fallback[s])
+	if model != null:
+		var mesh_node := _find_mesh(model)
+		if mesh_node != null and mesh_node.mesh != null:
+			var mat_body := _make_part_mat("body")
+			var mat_head := _make_part_mat("head")
+			var mat_opacity := _make_opacity_mat()
+			var fallback: Array[Material] = [mat_body, mat_head, mat_opacity]
+			for s: int in mesh_node.mesh.get_surface_count():
+				var orig_mat: Material = mesh_node.mesh.surface_get_material(s)
+				var mname: String = orig_mat.resource_name.to_lower() if orig_mat != null else ""
+				if "opacity" in mname:
+					mesh_node.set_surface_override_material(s, mat_opacity)
+				elif "head" in mname:
+					mesh_node.set_surface_override_material(s, mat_head)
+				elif "body" in mname:
+					mesh_node.set_surface_override_material(s, mat_body)
+				elif s < fallback.size():
+					mesh_node.set_surface_override_material(s, fallback[s])
 
-	var skel := model.get_node_or_null(^"Skeleton3D") as Skeleton3D
-	if skel != null and staff_role == "nurse":
-		_attach_nurse_cap(skel)
+		var skel := model.get_node_or_null(^"Skeleton3D") as Skeleton3D
+		if skel != null and staff_role == "nurse":
+			_attach_nurse_cap(skel)
 
 	if badge_text != "":
 		_create_role_badge()
@@ -91,7 +106,7 @@ func _ready() -> void:
 	if has_cane:
 		_create_walking_cane()
 
-	if anim_path != "" and ResourceLoader.exists(anim_path):
+	if anim_path != "" and ResourceLoader.exists(anim_path) and model != null:
 		_anim_player = AnimationPlayer.new()
 		_anim_player.name = "AnimationPlayer"
 		model.add_child(_anim_player)
@@ -100,11 +115,30 @@ func _ready() -> void:
 		lib.add_animation(&"loop", anim_res)
 		if ResourceLoader.exists(WALK_ANIM_RES):
 			lib.add_animation(&"walk", load(WALK_ANIM_RES))
+		if ResourceLoader.exists(IDLE_ANIM_RES):
+			lib.add_animation(&"idle", load(IDLE_ANIM_RES))
+		if "sit" in anim_path:
+			lib.add_animation(&"sit", anim_res)
+		elif ResourceLoader.exists(SIT_ANIM_RES):
+			lib.add_animation(&"sit", load(SIT_ANIM_RES))
 		_anim_player.add_animation_library(&"npc", lib)
-		var start_anim: StringName = &"npc/walk" if _can_walk() else &"npc/loop"
-		_anim_player.play(start_anim)
-		if anim_offset > 0.0:
-			_anim_player.advance(anim_offset)
+
+	# Khởi tạo trạng thái ban đầu
+	if staff_role == "doctor" or staff_role == "nurse":
+		if walks and waypoints.size() >= 2:
+			set_state(State.WALKING)
+		else:
+			set_state(State.STANDING)
+	else:
+		if is_seated:
+			set_state(State.SITTING)
+		elif walks and waypoints.size() >= 2:
+			set_state(State.WALKING)
+		else:
+			set_state(State.STANDING)
+
+	if anim_offset > 0.0 and _anim_player != null:
+		_anim_player.advance(anim_offset)
 
 
 func setup_robot(robot_node: Node3D, state_fn: Callable = Callable()) -> void:
@@ -122,11 +156,96 @@ func is_pardoning() -> bool:
 	return _is_pardoning
 
 
+func set_state(new_state: State) -> void:
+	current_state = new_state
+	var model := get_node_or_null(^"Model") as Node3D
+	var badge := get_node_or_null(^"RoleBadge") as Label3D
+	var head := get_node_or_null(^"Head") as Node3D
+
+	match current_state:
+		State.SITTING:
+			is_seated = true
+			velocity = Vector3.ZERO
+			_state_timer = randf_range(sit_duration_range.x, sit_duration_range.y)
+			if model != null:
+				model.position = Vector3(0.0, 0.0, 0.06)
+			if badge != null:
+				badge.position.y = 1.48
+			if head != null:
+				head.position.y = 1.2
+			_play_anim(&"npc/sit")
+		State.STANDING:
+			is_seated = false
+			velocity = Vector3.ZERO
+			_state_timer = randf_range(stand_duration_range.x, stand_duration_range.y)
+			if model != null:
+				model.position = Vector3.ZERO
+			if badge != null:
+				badge.position.y = 1.84
+			if head != null:
+				head.position.y = 1.6
+			_play_anim(&"npc/idle")
+		State.WALKING:
+			is_seated = false
+			if model != null:
+				model.position = Vector3.ZERO
+			if badge != null:
+				badge.position.y = 1.84
+			if head != null:
+				head.position.y = 1.6
+			_wp_index = 0
+			_play_anim(&"npc/walk")
+		State.ESCORTED:
+			is_seated = false
+			if model != null:
+				model.position = Vector3.ZERO
+			if badge != null:
+				badge.position.y = 1.84
+			if head != null:
+				head.position.y = 1.6
+			_play_anim(&"npc/walk")
+
+
+## Hỗ trợ dẫn đường: robot gọi mỗi frame trong pha GUIDE_ESCORT
+func escort_step_towards(target: Vector3, max_step: float, delta: float) -> void:
+	current_state = State.ESCORTED
+	is_seated = false
+	var model := get_node_or_null(^"Model") as Node3D
+	if model != null and model.position != Vector3.ZERO:
+		model.position = Vector3.ZERO
+	var to := Vector3(target.x - global_position.x, 0.0, target.z - global_position.z)
+	var d: float = to.length()
+	if d < 1e-4 or max_step <= 0.0:
+		escort_stop()
+		return
+	var disp: Vector3 = to / d * minf(max_step, d)
+	rotation.y = atan2(disp.x, disp.z)
+	if is_inside_tree() and get_world_3d() != null and get_world_3d().space != RID():
+		velocity = disp / maxf(delta, 1e-4)
+		move_and_slide()
+		velocity = Vector3.ZERO
+	global_position += disp
+	_play_anim(&"npc/walk")
+
+
+func escort_stop() -> void:
+	current_state = State.ESCORTED
+	velocity = Vector3.ZERO
+	_play_anim(&"npc/idle")
+
+
+func end_escort() -> void:
+	set_state(State.STANDING)
+	_anchor_pos = global_position
+	velocity = Vector3.ZERO
+
+
 func _physics_process(delta: float) -> void:
-	if is_seated:
+	if current_state == State.ESCORTED:
 		return
 
-	if pardon_enabled and robot_ref != null and is_instance_valid(robot_ref):
+	# Xử lý nhường đường (Pardon) khi robot lại gần
+	if pardon_enabled and robot_ref != null and is_instance_valid(robot_ref) and current_state != State.SITTING:
 		var dist_robot: float = Human.flat_distance(global_position, robot_ref.global_position)
 		_pardon_cooldown_s = maxf(0.0, _pardon_cooldown_s - delta)
 		if _is_pardoning:
@@ -149,7 +268,8 @@ func _physics_process(delta: float) -> void:
 		if d_target > ARRIVE_TOL:
 			_move_step_towards(_pardon_target, walk_speed * delta, delta)
 		else:
-			_play_anim(&"npc/loop")
+			velocity = Vector3.ZERO
+			_play_anim(&"npc/idle")
 			if robot_ref != null and is_instance_valid(robot_ref):
 				rotation.y = atan2(
 					robot_ref.global_position.x - global_position.x,
@@ -157,6 +277,47 @@ func _physics_process(delta: float) -> void:
 				)
 		return
 
+	# Máy trạng thái cho bệnh nhân
+	if staff_role == "patient" or staff_role == "":
+		match current_state:
+			State.SITTING:
+				velocity = Vector3.ZERO
+				_state_timer -= delta
+				if _state_timer <= 0.0:
+					set_state(State.STANDING)
+				return
+			State.STANDING:
+				velocity = Vector3.ZERO
+				_state_timer -= delta
+				if _state_timer <= 0.0:
+					if waypoints.size() >= 2:
+						set_state(State.WALKING)
+					else:
+						set_state(State.SITTING)
+				return
+			State.WALKING:
+				if waypoints.is_empty():
+					set_state(State.STANDING)
+					return
+				var target: Vector3 = waypoints[_wp_index]
+				if Human.flat_distance(global_position, target) <= ARRIVE_TOL:
+					_wp_index += 1
+					if _wp_index >= waypoints.size():
+						# Đã đi hết vòng tuần và quay về ghế ngồi
+						global_position = _home_seat_pos
+						rotation.y = _home_seat_yaw
+						velocity = Vector3.ZERO
+						set_state(State.SITTING)
+						return
+					target = waypoints[_wp_index]
+				_move_step_towards(target, walk_speed * delta, delta)
+				if _blocked_s >= BLOCKED_TURN_S:
+					_wp_index = (_wp_index + 1) % waypoints.size()
+					_blocked_s = 0.0
+				_anchor_pos = global_position
+				return
+
+	# Logic tuần tra cho nhân viên y tế (Bác sĩ, Điều dưỡng)
 	if _can_walk():
 		var target: Vector3 = waypoints[_wp_index]
 		if Human.flat_distance(global_position, target) <= ARRIVE_TOL:
@@ -174,26 +335,33 @@ func _physics_process(delta: float) -> void:
 		else:
 			global_position = _home_pos
 			rotation.y = _home_yaw
-			_play_anim(&"npc/loop")
+			velocity = Vector3.ZERO
+			_play_anim(&"npc/idle")
 
 
 func _can_walk() -> bool:
-	return not is_seated and walks and waypoints.size() >= 2
+	return current_state == State.WALKING or (not is_seated and walks and waypoints.size() >= 2)
 
 
-## Bước về `target`; bước làm NPC lại gần robot dưới PERSONAL_SPACE_M ➔ đứng chờ (cộng dồn _blocked_s).
+## Di chuyển về `target` dùng move_and_slide() và kiểm tra khoảng cách an toàn với robot.
 func _move_step_towards(target: Vector3, max_step: float, delta: float = 0.0) -> void:
 	var next_pos: Vector3 = Human.step_towards(global_position, target, max_step)
 	if robot_ref != null and is_instance_valid(robot_ref):
 		var d_next: float = Human.flat_distance(next_pos, robot_ref.global_position)
 		if d_next < PERSONAL_SPACE_M and d_next < Human.flat_distance(global_position, robot_ref.global_position):
 			_blocked_s += delta
-			_play_anim(&"npc/loop")
+			velocity = Vector3.ZERO
+			_play_anim(&"npc/idle")
 			return
+
 	_blocked_s = 0.0
 	var dir := Vector3(next_pos.x - global_position.x, 0.0, next_pos.z - global_position.z)
 	if dir.length() > 1e-5:
 		rotation.y = atan2(dir.x, dir.z)
+	if is_inside_tree() and get_world_3d() != null and get_world_3d().space != RID():
+		velocity = dir / maxf(delta, 1e-4)
+		move_and_slide()
+		velocity = Vector3.ZERO
 	global_position = next_pos
 	_play_anim(&"npc/walk")
 
@@ -201,13 +369,15 @@ func _move_step_towards(target: Vector3, max_step: float, delta: float = 0.0) ->
 func _play_anim(anim_name: StringName) -> void:
 	if _anim_player == null:
 		return
-	if _anim_player.has_animation(anim_name) and _anim_player.current_animation != anim_name:
-		_anim_player.play(anim_name, 0.25)
+	if _anim_player.has_animation(anim_name):
+		if _anim_player.current_animation != anim_name:
+			_anim_player.play(anim_name, 0.25)
+	elif _anim_player.has_animation(&"npc/loop"):
+		if _anim_player.current_animation != &"npc/loop":
+			_anim_player.play(&"npc/loop", 0.25)
 
 
 ## Tính vị trí bước sang ngang ("pardon") vuông góc với hướng đi của robot, ưu tiên phía xa đường đi của robot.
-## Robot đang chạy và NPC đứng trong làn phía trước robot ➔ cần né. Robot không có thuộc tính `v`
-## (vd. Node3D giả trong test) coi như đang chạy.
 static func should_pardon(npc_pos: Vector3, robot: Node3D) -> bool:
 	var v: Variant = robot.get("v")
 	if v != null and absf(float(v)) < PARDON_MIN_ROBOT_V:
@@ -220,8 +390,6 @@ static func should_pardon(npc_pos: Vector3, robot: Node3D) -> bool:
 	return ahead > -0.2 and lateral < PARDON_LANE_HALF_W
 
 
-## Điểm né còn trống (tia vật lý từ NPC tới điểm né + PARDON_CLEARANCE_M không chạm tường/đồ đạc).
-## Thử phía NPC đang đứng trước; phía bên kia chỉ khi NPC gần giữa làn. Bị chắn ➔ null (không né, robot tự vòng).
 static func pick_clear_pardon_target(npc: Node3D, anchor: Vector3, robot: Node3D) -> Variant:
 	var fwd: Vector3 = -robot.global_transform.basis.z
 	var space: PhysicsDirectSpaceState3D = npc.get_world_3d().direct_space_state
@@ -250,7 +418,6 @@ static func pick_clear_pardon_target(npc: Node3D, anchor: Vector3, robot: Node3D
 	return null
 
 
-## Điểm nằm trong vòng PARDON_DOORWAY_KEEP_CLEAR_M quanh một cửa trượt (nhóm "sliding_doors").
 static func near_doorway(npc: Node, p: Vector3) -> bool:
 	for door: Node in npc.get_tree().get_nodes_in_group(&"sliding_doors"):
 		if Human.flat_distance(p, (door as Node3D).global_position) < PARDON_DOORWAY_KEEP_CLEAR_M:
@@ -258,8 +425,6 @@ static func near_doorway(npc: Node, p: Vector3) -> bool:
 	return false
 
 
-## Điểm né: dịch vuông góc với hướng robot tới khoảng cách ngang `lane_clear` so với đường đi của robot,
-## về phía NPC đang đứng (flip ➔ phía còn lại).
 static func compute_pardon_target(npc_pos: Vector3, robot_pos: Vector3, robot_fwd: Vector3, lane_clear: float = PARDON_LANE_CLEAR_M, flip: bool = false) -> Vector3:
 	var fwd_2d := Vector2(robot_fwd.x, robot_fwd.z)
 	if fwd_2d.length() < 1e-4:
@@ -273,7 +438,7 @@ static func compute_pardon_target(npc_pos: Vector3, robot_pos: Vector3, robot_fw
 	if flip:
 		side_sign = -side_sign
 	var offset: Vector2 = perp * (side_sign * lane_clear - lateral)
-	var x_base: float = 50.0 if npc_pos.x >= 25.0 else 0.0  # tầng 2 đặt cạnh tầng 1 tại X + 50 m
+	var x_base: float = 50.0 if npc_pos.x >= 25.0 else 0.0
 	return Vector3(
 		clampf(npc_pos.x + offset.x, x_base - 11.4, x_base + 11.4),
 		npc_pos.y,
@@ -432,6 +597,7 @@ func _create_walking_cane() -> void:
 	handle.mesh = handle_box
 	handle.position = Vector3(0.0, 0.80, -0.04)
 	cane.add_child(handle)
+
 
 func _setup_speech() -> void:
 	var head := get_node_or_null(^"Head") as Node3D

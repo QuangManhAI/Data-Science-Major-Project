@@ -113,10 +113,10 @@ func test_has_medical_staff_and_waiting_patients_and_new_props() -> void:
 		assert_true(staff.staff_role in ["nurse", "doctor"])
 		assert_not_null(staff.get_node_or_null(^"RoleBadge"))
 	for i: int in range(1, 7):
-		var pat_name: String = "WaitingPatient%d" % i
+		var pat_name: String = "Patient_%02d" % i
 		var pat := furniture.get_node_or_null(NodePath(pat_name)) as HospitalNpc
 		assert_not_null(pat, "expected %s in Furniture" % pat_name)
-		assert_true(pat.is_seated, "%s should be seated" % pat_name)
+		assert_true(pat.is_seated, "%s should initially be seated" % pat_name)
 		assert_eq(pat.staff_role, "patient")
 	for prop_name: String in [
 		"LobbyQueueKiosk",
@@ -209,3 +209,23 @@ func test_pardon_spot_never_blocks_a_doorway() -> void:
 	var doc := room.get_node(^"Furniture/MedicalStaffDoctor") as HospitalNpc
 	assert_true(HospitalNpc.near_doorway(doc, Vector3(0.0, 0.0, -1.5)), "spot in front of room 110's door")
 	assert_false(HospitalNpc.near_doorway(doc, Vector3(-2.0, 0.0, -1.35)), "spot on the corridor wall between doors")
+
+
+func test_dynamic_patient_state_machine() -> void:
+	var pat := room.get_node(^"Furniture/Patient_01") as HospitalNpc
+	assert_not_null(pat)
+	assert_eq(pat.current_state, HospitalNpc.State.SITTING)
+	assert_true(pat.is_seated)
+	# Trigger standing
+	pat._state_timer = 0.01
+	pat._physics_process(0.02)
+	assert_eq(pat.current_state, HospitalNpc.State.STANDING)
+	assert_false(pat.is_seated)
+	# Trigger walking
+	pat._state_timer = 0.01
+	pat._physics_process(0.02)
+	assert_eq(pat.current_state, HospitalNpc.State.WALKING)
+	# Verify walking advances position
+	var p0 := pat.global_position
+	pat._physics_process(0.5)
+	assert_ne(pat.global_position, p0, "patient position changed while walking")

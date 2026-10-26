@@ -78,7 +78,7 @@ func setup(p_robot: Robot, p_room: Room) -> void:
 	room_ref = p_room
 
 
-func begin_post_dialogue_task(act: String, target_str: String, floor_num: int, _patient: Human = null) -> void:
+func begin_post_dialogue_task(act: String, target_str: String, floor_num: int, _patient: CharacterBody3D = null) -> void:
 	final_target_key = resolve_final_target(act, target_str, floor_num)
 	var current_floor: int = Room.get_floor(robot_ref.global_position) if robot_ref != null else 1
 	goal_key = resolve_destination_key(act, target_str, floor_num, current_floor)
@@ -96,9 +96,19 @@ func begin_post_dialogue_task(act: String, target_str: String, floor_num: int, _
 ## Đích từ NLU ("room_205", "dept_tim_mach") ➔ {"key": số phòng, "floor": tầng = chữ số đầu của số phòng}.
 static func normalize_nlu_target(target_id: String, dest_floor: int = 1) -> Dictionary:
 	var t: String = target_id.strip_edges().to_lower()
-	if t.begins_with("room_"):
+	if NLU_DEPARTMENT_ROOMS.has(t):
+		t = NLU_DEPARTMENT_ROOMS[t]
+	elif t.begins_with("room_"):
 		t = t.substr(5)
-	elif NLU_DEPARTMENT_ROOMS.has(t):
+	elif t.begins_with("dept_"):
+		var stripped: String = t.substr(5)
+		if NLU_DEPARTMENT_ROOMS.has(stripped):
+			t = NLU_DEPARTMENT_ROOMS[stripped]
+		else:
+			t = stripped
+	elif t.begins_with("facility_"):
+		t = t.substr(9)
+	if NLU_DEPARTMENT_ROOMS.has(t):
 		t = NLU_DEPARTMENT_ROOMS[t]
 	var fl: int = dest_floor
 	if t.length() == 3 and t.is_valid_int():
@@ -280,7 +290,7 @@ static func compute_step_reward(
 ## Bệnh nhân đi theo sau robot trong pha GUIDE_ESCORT: lần lượt qua các dấu robot đã đi (cách nhau
 ## ESCORT_CRUMB_SPACING_M), không cắt góc xuyên khung cửa; dừng khi cách robot ESCORT_STOP_DIST_M.
 ## Di chuyển bằng move_and_slide nên va chạm tường / đồ đạc như người thật.
-static func step_escorted_patient(patient: Human, robot_pos: Vector3, delta: float, trail: Array[Vector3] = []) -> void:
+static func step_escorted_patient(patient: CharacterBody3D, robot_pos: Vector3, delta: float, trail: Array[Vector3] = []) -> void:
 	if patient == null:
 		return
 	if not trail.is_empty() and Human.flat_distance(robot_pos, trail[-1]) > ESCORT_TRAIL_JUMP_M:

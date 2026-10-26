@@ -221,6 +221,8 @@ func _start_talk() -> void:
 	if _clips.is_empty() and clip_id == "":
 		_clips = Npc.load_clips(voices_dir.path_join("clips.json"))
 	var id: String = clip_id if clip_id != "" else Npc.pick_clip(_clips, speaker, _used_intents, _rng)
+	if id == "" and speaker != "A":
+		id = Npc.pick_clip(_clips, "A", _used_intents, _rng)
 	var stream: AudioStream = Npc.load_voice(id, voices_dir) if id != "" else null
 	if stream == null:
 		push_error("Npc: cannot load voice clip '%s' (speaker %s)" % [id, speaker])
@@ -271,5 +273,8 @@ func _distinct_intents() -> int:
 	var seen: Dictionary = {}
 	for id: String in _clips:
 		if str(_clips[id].get("speaker", "")) == speaker:
+			seen[str(_clips[id].get("intent", ""))] = true
+	if seen.is_empty():
+		for id: String in _clips:
 			seen[str(_clips[id].get("intent", ""))] = true
 	return seen.size()

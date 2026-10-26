@@ -36,41 +36,71 @@ func clear_rl_action() -> void:
 ## Tính lệnh điều hướng tới điểm đích `goal_pos` kết hợp phản xạ tránh vật cản từ 17 tia LiDAR
 ## (dùng cho dẫn đường GUIDE_ESCORT / CALL_STAFF hoặc khi chạy chính sách lai).
 ## Tính điểm trung gian (doorway / corridor sub-goal) khi robot và đích ở khác phòng.
+# Cửa & vách ngăn từng tầng (khớp _derive_doors() đọc src/training/hospital_layout.json; tầng 2 ở X + 50 m)
+const DOORS: Dictionary = {
+	"1_north": [[-8.0, 0.0, 8.0], [-4.0, 4.0]],
+	"1_south": [[-9.0, 0.0, 9.0], [-6.0, 6.0]],
+	"2_north": [[41.65, 50.0, 58.35], [46.0, 54.0]],
+	"2_south": [[41.925, 50.0, 57.5], [45.0, 55.0]],
+}
+const ELEVATOR_POSITIONS: Dictionary = {1: Vector3(9.0, 0.0, 5.2), 2: Vector3(59.0, 0.0, 4.6)}
+
+
+static func floor_of(x: float) -> int:
+	return 2 if x >= 25.0 else 1
+
+
+## Cửa của cột phòng chứa x (side: "north" = phòng z < -2, "south" = phòng z > +2).
+static func door_x(x: float, side: String) -> float:
+	var entry: Array = DOORS["%d_%s" % [floor_of(x), side]]
+	var idx: int = 0
+	for d: float in entry[1]:
+		if d < x:
+			idx += 1
+	return float(entry[0][idx])
+
+
+## Tính điểm trung gian (cửa phòng / tim hành lang / thang máy) khi robot và đích ở khác phòng hoặc khác tầng.
+## Khớp HospitalShiftEnv._route_through_corridor_goal (src/training/hospital_env.py).
 static func route_through_corridor_goal(robot_pos: Vector3, final_goal: Vector3) -> Vector3:
 	var rx: float = robot_pos.x
 	var rz: float = robot_pos.z
 	var gx: float = final_goal.x
 	var gz: float = final_goal.z
+	if floor_of(gx) != floor_of(rx):
+		var elev: Vector3 = ELEVATOR_POSITIONS[floor_of(rx)]
+		gx = elev.x
+		gz = elev.z
 
 	# Robot đang trong phòng phía Bắc (Z < -2.1) và đích ở ngoài phòng đó
-	if rz < -2.1 and (gz > -1.8 or absf(gx - rx) > 3.5):
-		var door_x: float = -8.0 if rx < -4.0 else (0.0 if rx < 4.0 else 8.0)
-		if absf(rx - door_x) > 0.6 or rz < -1.8:
-			return Vector3(door_x, final_goal.y, -1.2)
+	if rz < -2.1 and (gz > -1.8 or door_x(gx, "north") != door_x(rx, "north")):
+		var dx: float = door_x(rx, "north")
+		if absf(rx - dx) > 0.6 or rz < -1.8:
+			return Vector3(dx, final_goal.y, -1.2)
 
 	# Robot đang trong phòng phía Nam (Z > 2.1) và đích ở ngoài phòng đó
-	if rz > 2.1 and (gz < 1.8 or absf(gx - rx) > 3.5):
-		var door_x: float = -9.0 if rx < -6.0 else (0.0 if rx <= 6.0 else 9.0)
-		if absf(rx - door_x) > 0.6 or rz > 1.8:
-			return Vector3(door_x, final_goal.y, 1.2)
+	if rz > 2.1 and (gz < 1.8 or door_x(gx, "south") != door_x(rx, "south")):
+		var dx: float = door_x(rx, "south")
+		if absf(rx - dx) > 0.6 or rz > 1.8:
+			return Vector3(dx, final_goal.y, 1.2)
 
-	# Robot đang trong hành lang (-2.1 <= Z <= 2.1) và đích ở phòng phía Bắc (Z < -2.2)
+	# Robot đang trong hành lang và đích ở phòng phía Bắc: đi theo tim hành lang (z = 0) tới cửa
 	if rz >= -2.1 and rz <= 2.1 and gz < -2.2:
-		var door_x: float = -8.0 if gx < -4.0 else (0.0 if gx < 4.0 else 8.0)
-		if absf(rx - door_x) > 0.8:
-			return Vector3(door_x, final_goal.y, -1.0)
+		var dx: float = door_x(gx, "north")
+		if absf(rx - dx) > 0.8:
+			return Vector3(dx, final_goal.y, 0.0)
 		if rz > -2.1:
-			return Vector3(door_x, final_goal.y, -2.6)
+			return Vector3(dx, final_goal.y, -2.6)
 
-	# Robot đang trong hành lang (-2.1 <= Z <= 2.1) và đích ở phòng phía Nam (Z > 2.2)
+	# Robot đang trong hành lang và đích ở phòng phía Nam
 	if rz >= -2.1 and rz <= 2.1 and gz > 2.2:
-		var door_x: float = -9.0 if gx < -6.0 else (0.0 if gx <= 6.0 else 9.0)
-		if absf(rx - door_x) > 0.8:
-			return Vector3(door_x, final_goal.y, 1.0)
+		var dx: float = door_x(gx, "south")
+		if absf(rx - dx) > 0.8:
+			return Vector3(dx, final_goal.y, 0.0)
 		if rz < 2.1:
-			return Vector3(door_x, final_goal.y, 2.6)
+			return Vector3(dx, final_goal.y, 2.6)
 
-	return final_goal
+	return Vector3(gx, final_goal.y, gz)
 
 
 static func step_towards_goal_with_lidar(

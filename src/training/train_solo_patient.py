@@ -10,6 +10,8 @@ Usage:
     python -m src.training.train_solo_patient --episodes 100000 --no-warmstart --device cpu    # Apple Silicon
     python -m src.training.train_solo_patient --episodes 5000
     python -m src.training.train_solo_patient --resume-from experiments/runs/<run_dir> --episodes 30000
+    python -m src.training.train_solo_patient --warmstart <old_run>/checkpoints/PPOHospital-solo_last.pt \
+        --episodes 15000 --no-bc --eval-every 500 --patience 8 --device cpu
 """
 
 from __future__ import annotations
@@ -76,6 +78,53 @@ def describe_device(device: torch.device) -> str:
     return "CPU"
 
 
+EVAL_SEED_BASE = 900_000_000  # held-out seeds, never used by training episodes (seed + ep * 79)
+EVAL_COLLISION_WEIGHT = 1.0   # eval score = mean R_team - weight * mean collisions
+
+
+def evaluate_policy(
+    agent: PPOHospitalAgent,
+    n_episodes: int,
+    stagnation_timeout_s: float,
+    stagnation_penalty: float,
+    shift_duration_s: float,
+    env_mode: str = "solo",
+) -> dict[str, float]:
+    """Deterministic (mean action) rollouts on fixed held-out seeds; same seeds every call."""
+    r_team, tasks, cols, stag = [], [], [], 0
+    for i in range(n_episodes):
+        env = HospitalShiftEnv(
+            curriculum_stage=1,
+            shift_duration_s=shift_duration_s,
+            dt=0.2,
+            seed=EVAL_SEED_BASE + i * 7919,
+            env_mode=env_mode,
+            stagnation_timeout_s=stagnation_timeout_s,
+            stagnation_penalty=stagnation_penalty,
+        )
+        obs = env.reset()
+        done = False
+        info: dict[str, Any] = {}
+        while not done:
+            with torch.no_grad():
+                action, _, _, _ = agent.get_action_and_value(
+                    torch.as_tensor(obs, dtype=torch.float32).unsqueeze(0), deterministic=True
+                )
+            obs, _, done, info = env.step(action.squeeze(0).numpy())
+        r_team.append(float(info.get("cumulative_team_reward", 0.0)))
+        tasks.append(int(info.get("patients_helped", 0)))
+        cols.append(int(info.get("collisions", 0)))
+        stag += info.get("exit_reason") == "STAGNATION_TIMEOUT"
+    mean_r, mean_col = float(np.mean(r_team)), float(np.mean(cols))
+    return {
+        "score": mean_r - EVAL_COLLISION_WEIGHT * mean_col,
+        "r_team": mean_r,
+        "tasks": float(np.mean(tasks)),
+        "collisions": mean_col,
+        "stagnation_rate": stag / max(1, n_episodes),
+    }
+
+
 def run_train_solo_patient(
     episodes: int = 30000,
     warmstart_path: str | Path | None = None,
@@ -96,6 +145,11 @@ def run_train_solo_patient(
     seed: int = 42,
     device_name: str = "auto",
     experiments_root: str | Path = "experiments",
+    eval_every: int = 500,
+    eval_episodes: int = 20,
+    patience: int = 0,
+    bc_enabled: bool = True,
+    env_mode: str = "solo",
 ) -> Path:
     seed_everything(seed)
 
@@ -118,6 +172,8 @@ def run_train_solo_patient(
     peak_r_team = -float("inf")
     start_ep = 1
     warmstart_loaded = False
+    best_eval = -float("inf")
+    evals_without_improve = 0
 
     if resume_from:
         r_path = Path(resume_from)
@@ -144,6 +200,7 @@ def run_train_solo_patient(
 
         start_ep = int(ckpt.get("episode", 0)) + 1
         best_roll20 = float(ckpt.get("best_roll20", -float("inf")))
+        best_eval = float(ckpt.get("best_eval_score", -float("inf")))
         peak_r_team = float(ckpt.get("peak_r_team", -float("inf")))
         ckpt_dir = run_dir / "checkpoints"
         metrics_file = run_dir / "metrics.jsonl"
@@ -165,7 +222,7 @@ def run_train_solo_patient(
         print(f" Resumed Training    : Continuing from Ep {start_ep} (Best Roll20: {best_roll20:+.1f}, Peak: {peak_r_team:+.1f}) in {run_dir.name}", flush=True)
     else:
         timestamp = dt.datetime.now().strftime("%Y%m%d_%H%M%S")
-        run_dir = Path(experiments_root) / "runs" / f"{timestamp}_PPOHospital-solo-patient"
+        run_dir = Path(experiments_root) / "runs" / f"{timestamp}_PPOHospital-{env_mode}-patient"
         ckpt_dir = run_dir / "checkpoints"
         ckpt_dir.mkdir(parents=True, exist_ok=True)
         metrics_file = run_dir / "metrics.jsonl"
@@ -192,6 +249,7 @@ def run_train_solo_patient(
     print(f" Stagnation Timeout  : {stagnation_timeout_s:.1f}s ({int(stagnation_timeout_s / 0.2)} steps) | Penalty: {stagnation_penalty:+.1f}", flush=True)
     print(f" PPO Batch Update    : Every {update_freq_episodes} episodes | PPO Epochs: {ppo_epochs} | Batch: {batch_size}", flush=True)
     print(f" Learning Rate       : {lr_init:.1e} -> {lr_min:.1e} (Cosine Annealing)", flush=True)
+    print(f" Env Mode            : {env_mode} ({'scene NPCs as live obstacles' if env_mode == 'full' else 'single patient, no crowd'})", flush=True)
 
     # Buffers across update_freq_episodes
     batch_obs: list[np.ndarray] = []
@@ -223,6 +281,12 @@ def run_train_solo_patient(
         "clip_coef": clip_coef,
         "seed": seed,
         "device": str(device),
+        "eval_every": eval_every,
+        "eval_episodes": eval_episodes,
+        "eval_collision_weight": EVAL_COLLISION_WEIGHT,
+        "patience": patience,
+        "bc_enabled": bc_enabled,
+        "env_mode": env_mode,
     }
 
     print("-" * 86, flush=True)
@@ -238,14 +302,14 @@ def run_train_solo_patient(
     for ep in range(start_ep, episodes + 1):
         # Teacher guidance weight: if warm-start decaying over 200 eps; if scratch decaying over 500 eps
         max_bc_eps = 200.0 if warmstart_loaded else 500.0
-        bc_weight = max(0.0, 0.15 * (1.0 - (ep - 1) / max_bc_eps))
+        bc_weight = max(0.0, 0.15 * (1.0 - (ep - 1) / max_bc_eps)) if bc_enabled else 0.0
 
         env = HospitalShiftEnv(
             curriculum_stage=1,
             shift_duration_s=shift_duration_s,
             dt=0.2,
             seed=seed + ep * 79,
-            env_mode="solo",
+            env_mode=env_mode,
             stagnation_timeout_s=stagnation_timeout_s,
             stagnation_penalty=stagnation_penalty,
         )
@@ -432,45 +496,55 @@ def run_train_solo_patient(
             batch_adv.clear()
             batch_ret.clear()
 
-        # Save Best Checkpoint
-        if len(rolling_20) >= min(20, episodes) and roll20_mean > best_roll20:
-            best_roll20 = roll20_mean
-            best_ckpt_path = ckpt_dir / "PPOHospital-solo_best.pt"
-            torch.save(
-                {
-                    "model_state_dict": agent.state_dict(),
-                    "optimizer_state_dict": optimizer.state_dict(),
-                    "scheduler_state_dict": scheduler.state_dict(),
-                    "episode": ep,
-                    "best_roll20": best_roll20,
-                    "peak_r_team": peak_r_team,
-                    "config": run_config,
-                    "rng": capture_rng_state(seed),
-                    "timestamp": dt.datetime.now(dt.timezone.utc).isoformat(),
-                    "commit": get_git_commit(),
-                },
-                best_ckpt_path,
+        if len(rolling_20) >= min(20, episodes):
+            best_roll20 = max(best_roll20, roll20_mean)
+
+        def checkpoint_payload() -> dict[str, Any]:
+            return {
+                "model_state_dict": agent.state_dict(),
+                "optimizer_state_dict": optimizer.state_dict(),
+                "scheduler_state_dict": scheduler.state_dict(),
+                "episode": ep,
+                "best_roll20": best_roll20,
+                "best_eval_score": best_eval,
+                "peak_r_team": peak_r_team,
+                "config": run_config,
+                "rng": capture_rng_state(seed),
+                "timestamp": dt.datetime.now(dt.timezone.utc).isoformat(),
+                "commit": get_git_commit(),
+            }
+
+        # Periodic deterministic evaluation on held-out seeds -> best checkpoint + early stopping
+        stop_early = False
+        if eval_every > 0 and (ep % eval_every == 0 or ep == episodes):
+            ev = evaluate_policy(
+                rollout_agent, eval_episodes, stagnation_timeout_s, stagnation_penalty, shift_duration_s, env_mode
             )
+            improved = ev["score"] > best_eval
+            if improved:
+                best_eval = ev["score"]
+                evals_without_improve = 0
+                torch.save(checkpoint_payload(), ckpt_dir / "PPOHospital-solo_best.pt")
+            else:
+                evals_without_improve += 1
+            print(
+                f"[EVAL @ {ep}] score {ev['score']:+7.1f} | R_team {ev['r_team']:+7.1f} | tasks {ev['tasks']:.2f} | "
+                f"col {ev['collisions']:5.1f} | stag {ev['stagnation_rate']:.0%} | "
+                f"{'NEW BEST' if improved else f'no improve x{evals_without_improve}'}",
+                flush=True,
+            )
+            with (run_dir / "eval.jsonl").open("a", encoding="utf-8") as f:
+                f.write(json.dumps({"episode": ep, **ev, "best_score": best_eval}) + "\n")
+            stop_early = patience > 0 and evals_without_improve >= patience
 
         # Periodic Last Checkpoint (every 50-100 episodes or end)
         save_freq = 50 if episodes <= 1000 else 100
-        if (ep % save_freq == 0) or (ep == episodes):
-            last_ckpt_path = ckpt_dir / "PPOHospital-solo_last.pt"
-            torch.save(
-                {
-                    "model_state_dict": agent.state_dict(),
-                    "optimizer_state_dict": optimizer.state_dict(),
-                    "scheduler_state_dict": scheduler.state_dict(),
-                    "episode": ep,
-                    "best_roll20": best_roll20,
-                    "peak_r_team": peak_r_team,
-                    "config": run_config,
-                    "rng": capture_rng_state(seed),
-                    "timestamp": dt.datetime.now(dt.timezone.utc).isoformat(),
-                    "commit": get_git_commit(),
-                },
-                last_ckpt_path,
-            )
+        if (ep % save_freq == 0) or (ep == episodes) or stop_early:
+            torch.save(checkpoint_payload(), ckpt_dir / "PPOHospital-solo_last.pt")
+
+        if stop_early:
+            print(f" Early stop          : no eval improvement in {patience} evals (best score {best_eval:+.1f})", flush=True)
+            break
 
     t_total = time.time() - t_start
     print("-" * 86, flush=True)
@@ -482,6 +556,7 @@ def run_train_solo_patient(
     print(f" Completed Shifts     : {completed_shifts}", flush=True)
     print(f" Stagnation Timeouts  : {stagnation_timeouts}", flush=True)
     print(f" Best Rolling-20      : {best_roll20:+.2f}", flush=True)
+    print(f" Best Eval Score      : {best_eval:+.2f} (R_team - {EVAL_COLLISION_WEIGHT:g} x collisions, deterministic)", flush=True)
     print(f" Peak R_team Achieved : {peak_r_team:+.2f}", flush=True)
     print(f" Best Checkpoint Saved: {ckpt_dir / 'PPOHospital-solo_best.pt'}", flush=True)
     print("=" * 86, flush=True)
@@ -496,6 +571,7 @@ def run_train_solo_patient(
 - **Stagnation Timeout**: {stagnation_timeout_s}s ({int(stagnation_timeout_s / 0.2)} steps)
 - **Stagnation Penalty**: {stagnation_penalty:+.1f}
 - **Best Rolling-20 $R_{{team}}$**: {best_roll20:+.2f}
+- **Best Eval Score** (deterministic, {eval_episodes} held-out seeds, R_team - {EVAL_COLLISION_WEIGHT:g} x collisions): {best_eval:+.2f}
 - **Peak Episode $R_{{team}}$**: {peak_r_team:+.2f}
 - **Best Checkpoint**: `checkpoints/PPOHospital-solo_best.pt`
 """
@@ -519,6 +595,12 @@ def main() -> None:
     parser.add_argument("--min-lr", type=float, default=3e-5, help="Min learning rate for cosine schedule (default: 3e-5)")
     parser.add_argument("--seed", type=int, default=42, help="Random seed (default: 42)")
     parser.add_argument("--device", type=str, default="auto", choices=["auto", "cuda", "mps", "cpu"], help="Device for PPO updates (auto: cuda, else cpu); rollout always on CPU")
+    parser.add_argument("--eval-every", type=int, default=500, help="Deterministic eval every N episodes; picks best.pt (0 = off)")
+    parser.add_argument("--eval-episodes", type=int, default=20, help="Held-out episodes per eval (default: 20)")
+    parser.add_argument("--patience", type=int, default=0, help="Stop after N evals without improvement (0 = never)")
+    parser.add_argument("--no-bc", action="store_true", help="Disable early teacher imitation (useful when warm-starting)")
+    parser.add_argument("--env-mode", choices=["solo", "full"], default="solo",
+                        help="solo: 1 patient only; full: + scene NPCs (seated patients, nurse, patrolling doctor)")
     parser.add_argument("--smoke", action="store_true", help="Smoke test (10 episodes, update freq 2)")
 
     args = parser.parse_args()
@@ -541,6 +623,11 @@ def main() -> None:
         lr_min=args.min_lr,
         seed=args.seed,
         device_name=args.device,
+        eval_every=5 if args.smoke else args.eval_every,
+        eval_episodes=2 if args.smoke else args.eval_episodes,
+        patience=args.patience,
+        bc_enabled=not args.no_bc,
+        env_mode=args.env_mode,
     )
 
 

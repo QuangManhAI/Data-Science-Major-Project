@@ -17,8 +17,14 @@ const ESCORT_WALK_SPEED: float = 0.48
 const TETHER_IDEAL_MIN_M: float = 0.9
 const TETHER_IDEAL_MAX_M: float = 2.2
 const TETHER_MAX_M: float = 2.5
-const GOAL_ARRIVE_ROBOT_M: float = 1.25
-const GOAL_ARRIVE_PATIENT_M: float = 2.15
+# Bệnh nhân đi theo dấu robot (khớp ESCORT_* trong src/training/hospital_env.py)
+const ESCORT_STOP_DIST_M: float = 0.9
+const ESCORT_CRUMB_SPACING_M: float = 0.25
+const ESCORT_CRUMB_REACH_M: float = 0.3
+const ESCORT_TRAIL_JUMP_M: float = 5.0
+const ESCORT_TRAIL_MAX: int = 400
+const GOAL_ARRIVE_ROBOT_M: float = 1.4     # = hospital_env.GOAL_ARRIVE_ROBOT_M
+const GOAL_ARRIVE_PATIENT_M: float = 2.0   # = hospital_env.GOAL_ARRIVE_PATIENT_M
 const STAFF_ARRIVE_M: float = 1.5
 
 const REWARD_ANSWER: float = 10.0
@@ -30,7 +36,7 @@ const PENALTY_TETHER_STRETCH: float = -0.08
 const BONUS_TETHER_GOOD: float = 0.02
 const PENALTY_COLLISION: float = -5.0
 const SAFE_LIDAR_MARGIN_M: float = 0.45
-const COLLISION_LIDAR_M: float = 0.22
+const COLLISION_LIDAR_M: float = 0.40       # = hospital_env.COLLISION_LIDAR_M
 
 const FLOOR1_DIRECT_KEYS: Array[String] = [
 	"101", "cap_cuu", "110", "112", "nha_thuoc", "tiep_don", "ghe_cho", "thang_may", "nha_ve_sinh", "hanh_lang"
@@ -55,6 +61,7 @@ var final_target_key: String = ""
 var patients_helped: int = 0
 var cumulative_team_reward: float = 0.0
 var prev_goal_dist: float = -1.0
+var escort_trail: Array[Vector3] = []  # dấu robot cho bệnh nhân đi theo khi GUIDE_ESCORT
 
 var robot_ref: Robot = null
 var room_ref: Room = null
@@ -249,14 +256,24 @@ static func compute_step_reward(
 	}
 
 
-## Cập nhật bước đi của bệnh nhân đi theo sau robot trong pha GUIDE_ESCORT.
-static func step_escorted_patient(patient: Human, robot_pos: Vector3, delta: float) -> void:
+## Bệnh nhân đi theo sau robot trong pha GUIDE_ESCORT: lần lượt qua các dấu robot đã đi (cách nhau
+## ESCORT_CRUMB_SPACING_M), không cắt góc xuyên khung cửa; dừng khi cách robot ESCORT_STOP_DIST_M.
+## Di chuyển bằng move_and_slide nên va chạm tường / đồ đạc như người thật.
+static func step_escorted_patient(patient: Human, robot_pos: Vector3, delta: float, trail: Array[Vector3] = []) -> void:
 	if patient == null:
 		return
-	var d: float = Human.flat_distance(patient.global_position, robot_pos)
-	if d > TETHER_IDEAL_MIN_M:
-		var next_p: Vector3 = Human.step_towards(patient.global_position, robot_pos, ESCORT_WALK_SPEED * delta)
-		var dir := Vector3(next_p.x - patient.global_position.x, 0.0, next_p.z - patient.global_position.z)
-		if dir.length() > 1e-5:
-			patient.rotation.y = atan2(dir.x, dir.z)
-		patient.global_position = next_p
+	if not trail.is_empty() and Human.flat_distance(robot_pos, trail[-1]) > ESCORT_TRAIL_JUMP_M:
+		trail.clear()  # robot vừa đi thang máy
+	if trail.is_empty() or Human.flat_distance(robot_pos, trail[-1]) >= ESCORT_CRUMB_SPACING_M:
+		trail.append(robot_pos)
+		if trail.size() > ESCORT_TRAIL_MAX:
+			trail.pop_front()
+
+	var d_robot: float = Human.flat_distance(patient.global_position, robot_pos)
+	if d_robot <= ESCORT_STOP_DIST_M:
+		patient.escort_stop()
+		return
+	while trail.size() > 1 and Human.flat_distance(patient.global_position, trail[0]) <= ESCORT_CRUMB_REACH_M:
+		trail.pop_front()
+	var step: float = minf(ESCORT_WALK_SPEED * delta, d_robot - ESCORT_STOP_DIST_M)
+	patient.escort_step_towards(trail[0], step, delta)

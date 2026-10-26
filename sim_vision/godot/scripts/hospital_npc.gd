@@ -10,6 +10,9 @@ const ARRIVE_TOL: float = 0.05
 const PARDON_TRIGGER_DIST: float = 1.4
 const PARDON_CLEAR_DIST: float = 1.85
 const PARDON_SIDESTEP_M: float = 0.55
+const PARDON_MIN_ROBOT_V: float = 0.05    # robot đứng yên (vd. tới nói chuyện) ➔ không né
+const PARDON_LANE_HALF_W: float = 0.9     # chỉ né khi đứng trong làn đường robot sắp đi qua
+const PARDON_CLEARANCE_M: float = 0.35    # khoảng trống cần có sau điểm né
 
 @export var tex_dir: String = "res://assets/models/medical_f01/textures"
 @export var anim_path: String = "res://assets/models/human_m06/anims/f_idle.res"
@@ -116,12 +119,12 @@ func _physics_process(delta: float) -> void:
 
 	if pardon_enabled and robot_ref != null and is_instance_valid(robot_ref):
 		var dist_robot: float = Human.flat_distance(global_position, robot_ref.global_position)
-		if not _is_pardoning and dist_robot <= PARDON_TRIGGER_DIST:
-			_is_pardoning = true
-			var r_fwd: Vector3 = -robot_ref.global_transform.basis.z
-			_pardon_target = HospitalNpc.compute_pardon_target(
-				_anchor_pos, robot_ref.global_position, r_fwd, PARDON_SIDESTEP_M
-			)
+		if not _is_pardoning and dist_robot <= PARDON_TRIGGER_DIST \
+				and HospitalNpc.should_pardon(global_position, robot_ref):
+			var target: Variant = HospitalNpc.pick_clear_pardon_target(self, _anchor_pos, robot_ref)
+			if target != null:
+				_is_pardoning = true
+				_pardon_target = target
 		elif _is_pardoning and dist_robot >= PARDON_CLEAR_DIST:
 			_is_pardoning = false
 
@@ -176,7 +179,44 @@ func _play_anim(anim_name: StringName) -> void:
 
 
 ## Tính vị trí bước sang ngang ("pardon") vuông góc với hướng đi của robot, ưu tiên phía xa đường đi của robot.
-static func compute_pardon_target(npc_pos: Vector3, robot_pos: Vector3, robot_fwd: Vector3, sidestep: float = PARDON_SIDESTEP_M) -> Vector3:
+## Robot đang chạy và NPC đứng trong làn phía trước robot ➔ cần né. Robot không có thuộc tính `v`
+## (vd. Node3D giả trong test) coi như đang chạy.
+static func should_pardon(npc_pos: Vector3, robot: Node3D) -> bool:
+	var v: Variant = robot.get("v")
+	if v != null and absf(float(v)) < PARDON_MIN_ROBOT_V:
+		return false
+	var fwd: Vector3 = -robot.global_transform.basis.z
+	var fwd_2d := Vector2(fwd.x, fwd.z).normalized()
+	var rel := Vector2(npc_pos.x - robot.global_position.x, npc_pos.z - robot.global_position.z)
+	var ahead: float = rel.dot(fwd_2d)
+	var lateral: float = absf(rel.dot(Vector2(-fwd_2d.y, fwd_2d.x)))
+	return ahead > -0.2 and lateral < PARDON_LANE_HALF_W
+
+
+## Điểm né còn trống (tia vật lý từ NPC tới điểm né + PARDON_CLEARANCE_M không chạm tường/đồ đạc).
+## Thử phía xa đường robot trước, rồi phía còn lại; cả hai bị chắn ➔ null (đứng yên).
+static func pick_clear_pardon_target(npc: Node3D, anchor: Vector3, robot: Node3D) -> Variant:
+	var fwd: Vector3 = -robot.global_transform.basis.z
+	var space: PhysicsDirectSpaceState3D = npc.get_world_3d().direct_space_state
+	var exclude: Array[RID] = []
+	for body: Node in [npc, robot]:
+		if body is CollisionObject3D:
+			exclude.append((body as CollisionObject3D).get_rid())
+	for flip: bool in [false, true]:
+		var target: Vector3 = HospitalNpc.compute_pardon_target(anchor, robot.global_position, fwd, PARDON_SIDESTEP_M, flip)
+		var from := Vector3(npc.global_position.x, 0.5, npc.global_position.z)
+		var dir := Vector3(target.x - from.x, 0.0, target.z - from.z)
+		if dir.length() < 1e-4:
+			continue
+		var to: Vector3 = from + dir + dir.normalized() * PARDON_CLEARANCE_M
+		var query := PhysicsRayQueryParameters3D.create(from, to)
+		query.exclude = exclude
+		if space == null or space.intersect_ray(query).is_empty():
+			return target
+	return null
+
+
+static func compute_pardon_target(npc_pos: Vector3, robot_pos: Vector3, robot_fwd: Vector3, sidestep: float = PARDON_SIDESTEP_M, flip: bool = false) -> Vector3:
 	var fwd_2d := Vector2(robot_fwd.x, robot_fwd.z)
 	if fwd_2d.length() < 1e-4:
 		fwd_2d = Vector2(0.0, -1.0)
@@ -185,9 +225,12 @@ static func compute_pardon_target(npc_pos: Vector3, robot_pos: Vector3, robot_fw
 	var perp := Vector2(-fwd_2d.y, fwd_2d.x)
 	var rel := Vector2(npc_pos.x - robot_pos.x, npc_pos.z - robot_pos.z)
 	var side_sign: float = 1.0 if rel.dot(perp) >= 0.0 else -1.0
+	if flip:
+		side_sign = -side_sign
 	var offset: Vector2 = perp * (sidestep * side_sign)
+	var x_base: float = 50.0 if npc_pos.x >= 25.0 else 0.0  # tầng 2 đặt cạnh tầng 1 tại X + 50 m
 	return Vector3(
-		clampf(npc_pos.x + offset.x, -11.4, 11.4),
+		clampf(npc_pos.x + offset.x, x_base - 11.4, x_base + 11.4),
 		npc_pos.y,
 		clampf(npc_pos.z + offset.y, -8.4, 8.4)
 	)

@@ -21,6 +21,7 @@ var _wp_index: int = 0
 var _is_pardoning: bool = false
 var _pardon_target: Vector3 = Vector3.ZERO
 var _anchor_pos: Vector3 = Vector3.ZERO
+var _escorted: bool = false  # đang được robot dẫn đường: main điều khiển bước đi, bỏ qua waypoint / pardon
 
 @onready var _anim: AnimationPlayer = $AnimationPlayer
 
@@ -72,16 +73,46 @@ func apply_variant_textures(tex_dir: String) -> void:
 		mesh_node.set_surface_override_material(s, mat)
 
 
+## Bước theo robot khi được dẫn đường (gọi mỗi physics frame từ RLEnvBridge.step_escorted_patient).
+func escort_step_towards(target: Vector3, max_step: float, delta: float) -> void:
+	_escorted = true
+	var to := Vector3(target.x - global_position.x, 0.0, target.z - global_position.z)
+	var d: float = to.length()
+	if d < 1e-4 or max_step <= 0.0:
+		escort_stop()
+		return
+	var disp: Vector3 = to / d * minf(max_step, d)
+	rotation.y = atan2(disp.x, disp.z)
+	velocity = disp / maxf(delta, 1e-4)
+	move_and_slide()
+	velocity = Vector3.ZERO
+	_play(&"human/walk")
+
+
+func escort_stop() -> void:
+	_escorted = true
+	velocity = Vector3.ZERO
+	_play(&"human/idle")
+
+
+## Kết thúc dẫn đường (reset / hoàn thành nhiệm vụ) ➔ hành vi thường.
+func end_escort() -> void:
+	_escorted = false
+	_anchor_pos = global_position
+
+
 func _physics_process(delta: float) -> void:
+	if _escorted:
+		return
 	if pardon_enabled and robot_ref != null and is_instance_valid(robot_ref):
 		var dist_robot: float = Human.flat_distance(global_position, robot_ref.global_position)
-		if not _is_pardoning and dist_robot <= PARDON_TRIGGER_DIST:
-			_is_pardoning = true
+		if not _is_pardoning and dist_robot <= PARDON_TRIGGER_DIST \
+				and HospitalNpc.should_pardon(global_position, robot_ref):
 			_anchor_pos = global_position
-			var r_fwd: Vector3 = -robot_ref.global_transform.basis.z
-			_pardon_target = HospitalNpc.compute_pardon_target(
-				_anchor_pos, robot_ref.global_position, r_fwd, PARDON_SIDESTEP_M
-			)
+			var target: Variant = HospitalNpc.pick_clear_pardon_target(self, _anchor_pos, robot_ref)
+			if target != null:
+				_is_pardoning = true
+				_pardon_target = target
 		elif _is_pardoning and dist_robot >= PARDON_CLEAR_DIST:
 			_is_pardoning = false
 

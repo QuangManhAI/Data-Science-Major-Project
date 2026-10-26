@@ -16,7 +16,9 @@ const RLEnvBridgeScript = preload("res://scripts/rl_env_bridge.gd")
 const RLControllerScript = preload("res://scripts/rl_controller.gd")
 const RLPolicyClientScript = preload("res://scripts/rl_policy_client.gd")
 const PATIENT_ENGAGE_DIST_M: float = 1.35  # = PATIENT_TALK_DIST_M của env lúc train
-const TASK_TIMEOUT_S: float = 45.0         # = stagnation_timeout_s lúc train: dẫn đường / gọi NV kẹt quá lâu ➔ hủy
+const TASK_TIMEOUT_S: float = 45.0         # = stagnation_timeout_s lúc train: không tiến triển quá lâu ➔ hủy
+const TASK_PROGRESS_M: float = 1.0         # = STAGNATION_PROGRESS_M: lại gần đích thêm 1 m ➔ đặt lại đồng hồ
+const ARRIVED_WAIT_S: float = 10.0         # đứng ARRIVED mà NPC không bắt đầu nói ➔ đi tiếp
 
 @warning_ignore("shadowed_global_identifier")
 @export var seed: int = -1              # −1 = ngẫu nhiên
@@ -36,6 +38,8 @@ var _is_in_elevator_transit: bool = false
 var _policy: Node = null                # RLPolicyClient; null khi không ở chế độ RL
 var _policy_accum: float = 0.0
 var _task_elapsed_s: float = 0.0
+var _task_best_dist: float = -1.0
+var _arrived_wait_s: float = 0.0
 var _connected: bool = false
 var _last_seen_ms: int = -1             # −1 = chưa thấy người lần nào
 var _last_result_ms: int = -1
@@ -138,14 +142,20 @@ func _physics_process(delta: float) -> void:
 		return
 	if _is_in_elevator_transit:
 		return
-	if _rl_bridge.task_phase in [RLEnvBridgeScript.TaskPhase.GUIDE_ESCORT, RLEnvBridgeScript.TaskPhase.CALL_STAFF]:
+	# Đồng hồ kẹt áp dụng cả pha tìm bệnh nhân (đích = bệnh nhân), trừ lúc hội thoại / đã tới nơi chờ NPC nói
+	if not Main.is_dialogue_state(state) and state != Config.RobotState.ARRIVED:
 		_task_elapsed_s += delta
+		var task_target: Vector3 = human.global_position if _is_search_phase() else _rl_bridge.goal_position
+		var d_task: float = Human.flat_distance(robot.global_position, task_target)
+		if _task_best_dist < 0.0 or d_task < _task_best_dist - TASK_PROGRESS_M:
+			_task_best_dist = d_task
+			_task_elapsed_s = 0.0
 		if _task_elapsed_s > TASK_TIMEOUT_S:
 			overlay.set_status("Hủy nhiệm vụ %s: kẹt quá %.0fs" % [_rl_bridge.goal_key, TASK_TIMEOUT_S])
 			reset_positions(true)
 			return
 	if _rl_bridge.task_phase == RLEnvBridgeScript.TaskPhase.GUIDE_ESCORT:
-		RLEnvBridgeScript.step_escorted_patient(human, robot.global_position, delta)
+		RLEnvBridgeScript.step_escorted_patient(human, robot.global_position, delta, _rl_bridge.escort_trail)
 		var d_goal: float = Human.flat_distance(robot.global_position, _rl_bridge.goal_position)
 		var d_tether: float = Human.flat_distance(robot.global_position, human.global_position)
 		var d_patient_goal: float = Human.flat_distance(human.global_position, _rl_bridge.goal_position)
@@ -203,11 +213,17 @@ func _step_policy(delta: float) -> void:
 	if _is_search_phase():
 		var d_human: float = human_distance()
 		if state == Config.RobotState.ARRIVED:
+			_arrived_wait_s += delta
+			if _arrived_wait_s > ARRIVED_WAIT_S:
+				overlay.set_status("Bệnh nhân không phản hồi, chuyển sang người khác")
+				reset_positions(true)
+				return
 			if d_human <= Config.TALK_TRIGGER_DIST + 1.0:
 				robot.set_command(0.0, 0.0)
 				return
 			state = Config.RobotState.SEARCH  # bệnh nhân đi xa trước khi nói ➔ tìm lại
 		elif d_human <= PATIENT_ENGAGE_DIST_M:
+			_arrived_wait_s = 0.0
 			robot.set_command(0.0, 0.0)
 			state = Config.RobotState.ARRIVED
 			overlay.show_detections([], Config.state_name(state), _connected)
@@ -242,14 +258,27 @@ func _on_dialogue_turn_completed(row: Dictionary) -> void:
 	var act: String = str(row.get("action", ""))
 	var target_key: String = str(row.get("target", ""))
 	var fl: int = int(row.get("floor", 1))
+	# Chế độ đầy đủ: bệnh nhân ngồi chờ cũng hỏi được robot. Robot trả lời bằng lời, nhưng chỉ bệnh nhân
+	# mục tiêu (Human) mới đi theo khi dẫn đường ➔ yêu cầu dẫn đường của người khác chỉ được trả lời.
+	var from_target: bool = dialogue == null or dialogue.active_npc == null \
+			or dialogue.active_npc == human.get_node_or_null(^"Npc")
+	if not from_target:
+		overlay.set_status("Đã trả lời người đang chờ, tiếp tục tìm bệnh nhân")
+		state = Config.RobotState.SEARCH
+		return
 	if act == "guide" or act == "call_staff" or act == "emergency":
 		_rl_bridge.begin_post_dialogue_task(act, target_key, fl, human)
-	elif act in ["answer", "repeat", "refuse", "adjust"]:
-		_rl_bridge.cumulative_team_reward += RLEnvBridgeScript.REWARD_ANSWER
-		_rl_bridge.patients_helped += 1
-		overlay.set_status("Đã hỗ trợ bệnh nhân (R_team=%.0f)" % _rl_bridge.cumulative_team_reward)
-		if _policy_active() and solo_patient_mode:
-			reset_positions(true)  # như env lúc train: trả lời xong ➔ bệnh nhân mới
+		_task_elapsed_s = 0.0  # đích đổi từ bệnh nhân sang phòng / nhân viên
+		_task_best_dist = -1.0
+	else:
+		# Mọi kết quả không sinh nhiệm vụ (answer / adjust / refuse / clarify hết lượt / lỗi STT) đều kết thúc
+		# lượt này; không thì robot đứng ARRIVED chờ mãi vì NPC chỉ nói MAX_TURNS lần.
+		if act in ["answer", "repeat", "refuse", "adjust"]:
+			_rl_bridge.cumulative_team_reward += RLEnvBridgeScript.REWARD_ANSWER
+			_rl_bridge.patients_helped += 1
+			overlay.set_status("Đã hỗ trợ bệnh nhân (R_team=%.0f)" % _rl_bridge.cumulative_team_reward)
+		if _policy_active():
+			reset_positions(true)  # như env lúc train: xong lượt ➔ bệnh nhân mới
 
 
 ## Thực hiện chu trình đi thang máy 2 chiều đầy đủ hiệu ứng âm thanh, đèn LED và animation di chuyển
@@ -270,6 +299,7 @@ func _execute_elevator_transit(from_floor: int, to_floor: int) -> void:
 		_rl_bridge.goal_position = room.get_room_waypoint(_rl_bridge.final_target_key) if room != null else Vector3.ZERO
 		_is_in_elevator_transit = false
 		_task_elapsed_s = 0.0  # chặng mới sau thang máy
+		_task_best_dist = -1.0
 		return
 
 	var arrow: String = "▲" if to_floor > from_floor else "▼"
@@ -357,6 +387,7 @@ func _execute_elevator_transit(from_floor: int, to_floor: int) -> void:
 		_rl_bridge.goal_position = room.get_room_waypoint(_rl_bridge.final_target_key)
 		_is_in_elevator_transit = false
 		_task_elapsed_s = 0.0  # chặng mới sau thang máy
+		_task_best_dist = -1.0
 		overlay.set_status("Đã đến Tầng %d, tiếp tục dẫn tới: %s" % [to_floor, _rl_bridge.goal_key])
 	)
 
@@ -488,9 +519,18 @@ func reset_positions(is_task_transition: bool = false) -> void:
 	if _rl_bridge != null:
 		# Không đặt lại pha thì bệnh nhân vẫn ở GUIDE_ESCORT và cứ đi theo robot sau khi reset
 		_rl_bridge.task_phase = RLEnvBridgeScript.TaskPhase.SEARCH_PATIENT
+		_rl_bridge.escort_trail.clear()
 	_task_elapsed_s = 0.0
-	if solo_patient_mode and is_task_transition:
+	_task_best_dist = -1.0
+	_arrived_wait_s = 0.0
+	human.end_escort()
+	if is_task_transition:
+		# Bệnh nhân mới ở chỗ trống cách robot ≥ MIN_START_SEPARATION; robot giữ nguyên vị trí (cả 2 chế độ)
 		var human_pos: Vector3 = room.get_free_position(START_CLEARANCE, _rng)
+		for i: int in MAX_PLACEMENT_TRIES:
+			if Human.flat_distance(human_pos, robot.global_position) >= MIN_START_SEPARATION:
+				break
+			human_pos = room.get_free_position(START_CLEARANCE, _rng)
 		human.global_position = human_pos
 		human.rotation.y = _rng.randf_range(-PI, PI)
 	elif solo_patient_mode:
@@ -612,6 +652,7 @@ static func is_dialogue_state(s: int) -> bool:
 ## Gọi bởi DialogueManager. Trạng thái hội thoại ➔ dừng robot. Về ARRIVED ➔ controller chạy lại ở frame sau.
 func set_dialogue_state(s: int) -> void:
 	state = s
+	_arrived_wait_s = 0.0
 	if Main.is_dialogue_state(s):
 		robot.set_command(0.0, 0.0)
 	_last_result_ms = Time.get_ticks_msec()

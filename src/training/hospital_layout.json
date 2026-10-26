@@ -39,78 +39,204 @@
     {
       "half_x": 0.239999994635582,
       "half_z": 0.275000005960464,
-      "name": "WaitingPatient1",
+      "name": "Patient_01",
       "pardon_enabled": true,
       "role": "patient",
       "seated": true,
       "walk_speed": 0.48,
       "walks": false,
-      "waypoints": [],
+      "waypoints": [
+        [
+          -4.55,
+          4.2
+        ],
+        [
+          -4.55,
+          2.5
+        ],
+        [
+          -2.2,
+          2.5
+        ],
+        [
+          -2.2,
+          4.2
+        ],
+        [
+          -4.55,
+          4.2
+        ]
+      ],
       "x": -4.55,
       "z": 4.2
     },
     {
       "half_x": 0.239999994635582,
       "half_z": 0.275000005960464,
-      "name": "WaitingPatient2",
+      "name": "Patient_02",
       "pardon_enabled": true,
       "role": "patient",
       "seated": true,
       "walk_speed": 0.48,
       "walks": false,
-      "waypoints": [],
+      "waypoints": [
+        [
+          -3.55,
+          5.8
+        ],
+        [
+          -3.55,
+          7.0
+        ],
+        [
+          -1.2,
+          7.0
+        ],
+        [
+          -1.2,
+          5.8
+        ],
+        [
+          -3.55,
+          5.8
+        ]
+      ],
       "x": -3.55,
       "z": 5.8
     },
     {
       "half_x": 0.239999994635582,
       "half_z": 0.275000005960464,
-      "name": "WaitingPatient3",
+      "name": "Patient_03",
       "pardon_enabled": true,
       "role": "patient",
       "seated": true,
       "walk_speed": 0.48,
       "walks": false,
-      "waypoints": [],
+      "waypoints": [
+        [
+          3.05,
+          4.2
+        ],
+        [
+          1.5,
+          4.2
+        ],
+        [
+          1.5,
+          2.5
+        ],
+        [
+          3.05,
+          2.5
+        ],
+        [
+          3.05,
+          4.2
+        ]
+      ],
       "x": 3.05,
       "z": 4.2
     },
     {
       "half_x": 0.239999994635582,
       "half_z": 0.275000005960464,
-      "name": "WaitingPatient4",
+      "name": "Patient_04",
       "pardon_enabled": true,
       "role": "patient",
       "seated": true,
       "walk_speed": 0.48,
       "walks": false,
-      "waypoints": [],
+      "waypoints": [
+        [
+          4.55,
+          1.48
+        ],
+        [
+          2.0,
+          1.48
+        ],
+        [
+          2.0,
+          0.2
+        ],
+        [
+          4.2,
+          0.2
+        ],
+        [
+          4.55,
+          1.48
+        ]
+      ],
       "x": 4.55,
       "z": 1.48
     },
     {
       "half_x": 0.239999994635582,
       "half_z": 0.275000005960464,
-      "name": "WaitingPatient5",
+      "name": "Patient_05",
       "pardon_enabled": true,
       "role": "patient",
       "seated": true,
       "walk_speed": 0.48,
       "walks": false,
-      "waypoints": [],
+      "waypoints": [
+        [
+          4.05,
+          5.8
+        ],
+        [
+          2.0,
+          5.8
+        ],
+        [
+          2.0,
+          7.0
+        ],
+        [
+          4.05,
+          7.0
+        ],
+        [
+          4.05,
+          5.8
+        ]
+      ],
       "x": 4.05,
       "z": 5.8
     },
     {
       "half_x": 0.239999994635582,
       "half_z": 0.275000005960464,
-      "name": "WaitingPatient6",
+      "name": "Patient_06",
       "pardon_enabled": true,
       "role": "patient",
       "seated": true,
       "walk_speed": 0.48,
       "walks": false,
-      "waypoints": [],
+      "waypoints": [
+        [
+          4.05,
+          4.2
+        ],
+        [
+          4.05,
+          2.5
+        ],
+        [
+          2.5,
+          2.5
+        ],
+        [
+          2.5,
+          4.2
+        ],
+        [
+          4.05,
+          4.2
+        ]
+      ],
       "x": 4.05,
       "z": 4.2
     }

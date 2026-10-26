@@ -708,6 +708,14 @@ class HospitalShiftEnv:
     def _sample_patient_spawn_solo(self) -> tuple[float, float]:
         """Sample free coordinates strictly in public corridors or lobby on robot's current floor."""
         x_base = 50.0 if self.robot_x >= 25.0 else 0.0
+        if self.npcs and x_base == 0.0 and self.rng.random() < 0.50:
+            patient_npcs = [n for n in self.npcs if n.get("role") == "patient"]
+            if patient_npcs:
+                chosen = patient_npcs[int(self.rng.integers(0, len(patient_npcs)))]
+                cand_z = chosen["z"] - 0.9 if chosen["z"] > 3.0 else chosen["z"] + 0.9
+                cand_x = float(chosen["x"])
+                if not is_blocked(cand_x, cand_z, 0.45) and nav_grid(1).is_approachable(cand_x, cand_z):
+                    return float(cand_x), float(cand_z)
         for _ in range(250):
             if self.rng.random() < 0.60:
                 # Central and connecting corridors

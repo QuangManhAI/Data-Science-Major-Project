@@ -49,6 +49,7 @@ var _start_ms: int = 0
 @onready var room: Room = $Room
 @onready var human: Human = $Human
 var active_escorted_patient: CharacterBody3D = null
+var current_target_patient: CharacterBody3D = null
 var _pending_turn_reset: bool = false
 @onready var robot: Robot = $Robot
 @onready var vision: VisionClient = $VisionClient
@@ -148,7 +149,7 @@ func _physics_process(delta: float) -> void:
 	# Đồng hồ kẹt áp dụng cả pha tìm bệnh nhân (đích = bệnh nhân), trừ lúc hội thoại / đã tới nơi chờ NPC nói
 	if not Main.is_dialogue_state(state) and state != Config.RobotState.ARRIVED:
 		_task_elapsed_s += delta
-		var current_pat: CharacterBody3D = active_escorted_patient if active_escorted_patient != null else human
+		var current_pat: CharacterBody3D = active_escorted_patient if active_escorted_patient != null else (current_target_patient if current_target_patient != null else human)
 		var task_target: Vector3 = current_pat.global_position if _is_search_phase() else _rl_bridge.goal_position
 		var d_task: float = Human.flat_distance(robot.global_position, _leg_target(task_target))
 		if _task_best_dist < 0.0 or d_task < _task_best_dist - TASK_PROGRESS_M:
@@ -231,7 +232,26 @@ func get_active_speaking_patient() -> CharacterBody3D:
 		var p: Node = dialogue.active_npc.get_parent()
 		if p is CharacterBody3D:
 			return p as CharacterBody3D
-	return human
+	return current_target_patient if current_target_patient != null else human
+
+
+func get_available_patients() -> Array[CharacterBody3D]:
+	var list: Array[CharacterBody3D] = []
+	var furn: Node = room.get_node_or_null(^"Furniture") if room != null else null
+	if furn != null:
+		for child: Node in furn.get_children():
+			if child is HospitalNpc and (child as HospitalNpc).staff_role == "patient":
+				list.append(child as CharacterBody3D)
+	if human != null and not solo_patient_mode:
+		list.append(human)
+	return list
+
+
+func pick_next_target_patient() -> CharacterBody3D:
+	var list := get_available_patients()
+	if list.is_empty():
+		return human
+	return list[_rng.randi_range(0, list.size() - 1)]
 
 func _is_search_phase() -> bool:
 	return _rl_bridge.task_phase in [RLEnvBridgeScript.TaskPhase.SEARCH_PATIENT, RLEnvBridgeScript.TaskPhase.APPROACH_PATIENT]
@@ -265,11 +285,12 @@ func _step_policy(delta: float) -> void:
 		return
 	_policy_accum = fmod(_policy_accum, RLPolicyClientScript.STEP_DT_S)
 	var search: bool = _is_search_phase()
+	var target_p: CharacterBody3D = current_target_patient if current_target_patient != null else human
 	_policy.send_state(
 		robot.global_position, robot.rotation.y, robot.get_real_velocity().length(), robot.omega,
-		robot.get_lidar_readings(), human.global_position,
+		robot.get_lidar_readings(), target_p.global_position,
 		RLEnvBridgeScript.TaskPhase.SEARCH_PATIENT if search else _rl_bridge.task_phase,
-		human.global_position if search else _rl_bridge.goal_position,
+		target_p.global_position if search else _rl_bridge.goal_position,
 		_rl_bridge.patients_helped
 	)
 
@@ -568,6 +589,7 @@ func reset_positions(is_task_transition: bool = false) -> void:
 	active_escorted_patient = null
 	_pending_turn_reset = false
 	human.end_escort()
+	current_target_patient = pick_next_target_patient()
 	if is_task_transition:
 		# Bệnh nhân mới (cùng tầng với robot, vùng như lúc train) cách robot ≥ MIN_START_SEPARATION; robot giữ nguyên vị trí
 		var floor_num: int = Room.get_floor(robot.global_position)
@@ -604,11 +626,12 @@ func reset_positions(is_task_transition: bool = false) -> void:
 
 
 func human_distance() -> float:
-	var target_pat: CharacterBody3D = active_escorted_patient if active_escorted_patient != null else human
+	var target_pat: CharacterBody3D = active_escorted_patient if active_escorted_patient != null else (current_target_patient if current_target_patient != null else human)
 	return Human.flat_distance(robot.global_position, target_pat.global_position)
 
 
 func _setup_hospital_npcs() -> void:
+	current_target_patient = pick_next_target_patient()
 	if human != null:
 		human.setup_robot(robot)
 	var furn: Node = room.get_node_or_null(^"Furniture") if room != null else null
@@ -639,7 +662,8 @@ func _nearest_person_distance() -> float:
 
 ## Góc thật tới người so với hướng trước của robot (−Z), dương khi người bên trái.
 func human_angle_deg() -> float:
-	return RunLogger.signed_angle_deg(-robot.global_transform.basis.z, human.global_position - robot.global_position)
+	var target_pat: CharacterBody3D = active_escorted_patient if active_escorted_patient != null else (current_target_patient if current_target_patient != null else human)
+	return RunLogger.signed_angle_deg(-robot.global_transform.basis.z, target_pat.global_position - robot.global_position)
 
 
 ## Một dòng log G9: kết quả nhận diện (target do controller chọn) + ground truth + lệnh sau an toàn.

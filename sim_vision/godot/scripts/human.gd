@@ -13,6 +13,7 @@ const PARDON_CLEAR_DIST: float = 1.85
 @export var walks: bool = false
 @export var waypoints: Array[Vector3] = []
 @export var pardon_enabled: bool = false
+@export var use_t_pose: bool = true
 
 var robot_ref: Node3D = null
 
@@ -27,7 +28,10 @@ var _escorted: bool = false  # đang được robot dẫn đường: main điề
 
 func _ready() -> void:
 	_anchor_pos = global_position
-	_anim.play(&"human/walk" if _is_walking() else &"human/idle")
+	if not use_t_pose:
+		_anim.play(&"human/walk" if _is_walking() else &"human/idle")
+	elif _anim != null and _anim.is_playing():
+		_anim.stop()
 
 
 func setup_robot(robot_node: Node3D) -> void:
@@ -155,7 +159,11 @@ func _is_walking() -> bool:
 
 
 func _play(anim_name: StringName) -> void:
-	if _anim.current_animation != anim_name:
+	if use_t_pose:
+		if _anim != null and _anim.is_playing():
+			_anim.stop()
+		return
+	if _anim != null and _anim.current_animation != anim_name:
 		_anim.play(anim_name, 0.3)
 
 

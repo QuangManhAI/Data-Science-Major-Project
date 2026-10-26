@@ -41,6 +41,7 @@ enum State { SITTING, STANDING, WALKING, ESCORTED }
 @export var current_state: State = State.SITTING
 @export var sit_duration_range: Vector2 = Vector2(15.0, 30.0)
 @export var stand_duration_range: Vector2 = Vector2(3.0, 6.0)
+@export var use_t_pose: bool = true
 
 var robot_ref: Node3D = null
 @export var can_speak: bool = true
@@ -137,7 +138,9 @@ func _ready() -> void:
 		else:
 			set_state(State.STANDING)
 
-	if anim_offset > 0.0 and _anim_player != null:
+	if use_t_pose and _anim_player != null:
+		_anim_player.stop()
+	elif anim_offset > 0.0 and _anim_player != null:
 		_anim_player.advance(anim_offset)
 
 
@@ -367,6 +370,10 @@ func _move_step_towards(target: Vector3, max_step: float, delta: float = 0.0) ->
 
 
 func _play_anim(anim_name: StringName) -> void:
+	if use_t_pose:
+		if _anim_player != null and _anim_player.is_playing():
+			_anim_player.stop()
+		return
 	if _anim_player == null:
 		return
 	if _anim_player.has_animation(anim_name):

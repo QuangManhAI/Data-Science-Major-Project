@@ -574,5 +574,11 @@
      - 2000 episodes on NVIDIA RTX 4060 GPU with Cosine Annealing LR ($1.0 \times 10^{-4} \to 3.0 \times 10^{-5}$), teacher prior decaying $0.05 \to 0.0$ over first 300 episodes, and deterministic evaluation every 200 episodes on 20 held-out seeds.
 - **Why:** Eliminates deadlock caused by bystander NPC interruptions during patient transport, equips the PPO policy with multi-floor elevator transit navigation, and focuses learning entirely on patient escort delivery.
 - **Touches:** `sim_vision/godot/scripts/main.gd`, `sim_vision/godot/scripts/dialogue_manager.gd`, `sim_vision/godot/scripts/rl_controller.gd`, `src/training/hospital_env.py`, `src/training/hospital_layout.json`, `src/training/train_3floor_escort_2000ep.py`, `docs/AI-Human-logs/Vuong.md`
-- **Evidence:** Smoke test (5 episodes) completed cleanly on RTX 4060 in 49.5s with 22 patients escorted, 0 collisions, and 0 stagnation timeouts; 2000-episode training launched in `experiments/runs/20261027_183421_PPOHospital-3floor-escort-2k`.
+- **Evidence:** Full 2000-episode training run completed in 2h43m (9,839.7s) on NVIDIA RTX 4060 GPU (`experiments/runs/20261027_183421_PPOHospital-3floor-escort-2k`):
+  - **Completed Shifts:** 2,000 / 2,000 (100% completion rate).
+  - **Patients Escorted:** 7,362 (average 3.68 patients helped per 240s shift).
+  - **Stagnation Timeouts:** 0 (0.0% stagnation rate across all 2,000 episodes and all evaluation checkpoints).
+  - **Best Rolling-20 $R_{team}$:** +158.10 (Peak $R_{team}$: +246.00).
+  - **Best Deterministic Eval Score:** +134.00 (3.30 tasks/shift, 0.0 collisions across 20 held-out seeds).
+  - **Checkpoints Saved:** `PPOHospital-3floor-escort_best.pt` and `PPOHospital-3floor-escort_last.pt`.
 

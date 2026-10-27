@@ -16,7 +16,7 @@ func test_has_furniture_and_wall_footprints_inside_hospital() -> void:
 	assert_true(furniture.size() >= 15, "expected >= 15 furniture footprints, got %d" % furniture.size())
 	assert_true(walls.size() >= 8, "expected >= 8 interior wall footprints, got %d" % walls.size())
 	for r: Rect2 in room.get_obstacle_footprints():
-		assert_true((r.position.x >= -12.01 and r.end.x <= 12.01) or (r.position.x >= 37.8 and r.end.x <= 62.2), "x inside hospital: %s" % r)
+		assert_true((r.position.x >= -12.01 and r.end.x <= 12.01) or (r.position.x >= 37.8 and r.end.x <= 62.2) or (r.position.x >= 87.8 and r.end.x <= 112.2), "x inside hospital: %s" % r)
 		assert_true(r.position.y >= -9.01 and r.end.y <= 9.01, "z inside hospital: %s" % r)
 
 
@@ -229,3 +229,20 @@ func test_dynamic_patient_state_machine() -> void:
 	var p0 := pat.global_position
 	pat._physics_process(0.5)
 	assert_ne(pat.global_position, p0, "patient position changed while walking")
+
+
+func test_floor3_rooms_and_elevator() -> void:
+	assert_eq(Room.get_floor(Vector3(100.0, 0.0, 0.0)), 3)
+	assert_eq(Room.get_room_floor("301"), 3)
+	assert_eq(Room.get_room_floor("302"), 3)
+	assert_eq(Room.get_room_floor("303"), 3)
+	assert_eq(Room.get_room_floor("315"), 3)
+	assert_eq(Room.get_room_floor("sanh_t3"), 3)
+	var station := room.get_elevator_station(3)
+	assert_not_null(station)
+	assert_eq(station.current_floor, 3)
+	assert_eq(room.get_room_waypoint("301"), Vector3(92.0, 0.0, -5.2))
+	assert_eq(room.get_room_waypoint("302"), Vector3(100.0, 0.0, -5.2))
+	assert_eq(room.get_room_waypoint("303"), Vector3(108.0, 0.0, -5.2))
+	assert_eq(room.get_room_waypoint("315"), Vector3(91.0, 0.0, 5.2))
+	assert_eq(room.get_room_at(Vector3(92.0, 0.0, -5.2)), "301")

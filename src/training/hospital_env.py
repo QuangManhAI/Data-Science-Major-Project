@@ -104,6 +104,29 @@ DESTINATION_POSITIONS: dict[str, tuple[float, float]] = {
     "sanh_t2": (50.0, 5.2),
     "wc_t2": (59.5, 6.5),
     "thang_may_t2": (59.0, 4.6),
+    # Floor 3 Anchors (offset X = +100.0m)
+    "301": (92.0, -5.2),
+    "dept_tim_mach": (92.0, -5.2),
+    "302": (100.0, -5.2),
+    "303": (108.0, -5.2),
+    "315": (91.0, 5.2),
+    "dept_co_xuong_khop": (91.0, 5.2),
+    "sanh_t3": (100.0, 5.2),
+    "wc_t3": (109.5, 6.5),
+    "thang_may_t3": (109.0, 4.6),
+}
+
+FLOOR3_DIRECT_SLOTS = {
+    "301",
+    "dept_tim_mach",
+    "302",
+    "303",
+    "315",
+    "dept_co_xuong_khop",
+    "sanh_t3",
+    "wc_t3",
+    "thang_may_t3",
+    "hanh_lang_t3",
 }
 
 FLOOR2_DIRECT_SLOTS = {
@@ -485,13 +508,20 @@ def resolve_final_target(action: str, slot_key: str, dest_floor: int = 1) -> str
         return ""
     if key in ("bhyt", "thu_ngan", "uu_tien"):
         return "tiep_don"
+    if key in FLOOR3_DIRECT_SLOTS:
+        return key
     if key in FLOOR2_DIRECT_SLOTS:
         return key
-    if len(key) == 3 and key.isdigit() and key[0] == "2":
-        return "205"
+    if len(key) == 3 and key.isdigit():
+        if key.startswith("3"):
+            return "301"
+        elif key.startswith("2"):
+            return "205"
     if key in FLOOR1_DIRECT_SLOTS:
         return key
-    if dest_floor >= 2:
+    if dest_floor >= 3:
+        return "sanh_t3"
+    if dest_floor == 2:
         return "sanh_t2"
     return "tiep_don"
 
@@ -507,16 +537,20 @@ def resolve_destination_key(action: str, slot_key: str, dest_floor: int = 1, cur
     if act != "guide":
         return ""
     final_target = resolve_final_target(act, key, dest_floor)
-    target_floor = 2 if (final_target in FLOOR2_DIRECT_SLOTS or dest_floor >= 2 or (len(key) == 3 and key.isdigit() and key[0] in ("2", "3", "4"))) else 1
+    target_floor = 1
+    if final_target in FLOOR3_DIRECT_SLOTS or dest_floor >= 3 or (len(key) == 3 and key.isdigit() and key.startswith("3")):
+        target_floor = 3
+    elif final_target in FLOOR2_DIRECT_SLOTS or dest_floor == 2 or (len(key) == 3 and key.isdigit() and key.startswith("2")):
+        target_floor = 2
 
+    if current_floor == target_floor:
+        return final_target
     if current_floor == 1:
-        if target_floor >= 2:
-            return "thang_may"
-        return final_target
-    else:  # current_floor == 2
-        if target_floor == 1:
-            return "thang_may_t2"
-        return final_target
+        return "thang_may"
+    elif current_floor == 2:
+        return "thang_may_t2"
+    else:
+        return "thang_may_t3"
 
 
 def signed_angle_rad(fwd_x: float, fwd_z: float, to_x: float, to_z: float) -> float:

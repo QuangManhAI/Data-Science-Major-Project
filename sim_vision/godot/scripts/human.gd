@@ -13,7 +13,7 @@ const PARDON_CLEAR_DIST: float = 1.85
 @export var walks: bool = false
 @export var waypoints: Array[Vector3] = []
 @export var pardon_enabled: bool = false
-@export var use_t_pose: bool = true
+@export var use_t_pose: bool = false
 
 var robot_ref: Node3D = null
 

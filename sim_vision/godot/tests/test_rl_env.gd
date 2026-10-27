@@ -52,7 +52,8 @@ func test_nlu_room_and_department_targets_are_routed() -> void:
 	assert_eq(RLEnvBridge.resolve_destination_key("guide", "dept_cap_cuu", 1), "101")
 	assert_eq(RLEnvBridge.resolve_final_target("guide", "dept_tai_mui_hong", 1), "210")
 	assert_eq(RLEnvBridge.resolve_destination_key("guide", "dept_tim_mach", 1), "thang_may", "floor 3 via the elevator")
-	assert_eq(RLEnvBridge.resolve_final_target("guide", "room_302", 1), "sanh_t2", "floors 3-4 are not simulated: floor-2 lobby")
+	assert_eq(RLEnvBridge.resolve_final_target("guide", "room_302", 1), "302", "floor 3 is now simulated: room 302")
+	assert_eq(RLEnvBridge.resolve_destination_key("guide", "room_302", 1, 3), "302", "already on floor 3")
 
 
 func test_observation_vector_31_dims_and_bounds() -> void:

@@ -50,6 +50,9 @@ const FLOOR1_CLINIC_ALIASES: Array[String] = [
 const FLOOR2_DIRECT_KEYS: Array[String] = [
 	"201", "204", "205", "210", "220", "sanh_t2", "wc_t2", "thang_may_t2", "hanh_lang_t2"
 ]
+const FLOOR3_DIRECT_KEYS: Array[String] = [
+	"301", "302", "303", "315", "sanh_t3", "wc_t3", "thang_may_t3", "hanh_lang_t3"
+]
 ## Khoa của NLU (dept_<slug>, sim_vision/python/voice/hospital_map.json) ➔ số phòng
 const NLU_DEPARTMENT_ROOMS: Dictionary = {
 	"dept_tim_mach": "301", "dept_tieu_hoa": "205", "dept_tai_mui_hong": "210", "dept_co_xuong_khop": "315",
@@ -126,6 +129,10 @@ static func resolve_final_target(action_name: String, target_id: String, dest_fl
 	dest_floor = nlu["floor"]
 	if t in FLOOR1_LOBBY_ALIASES:
 		return "tiep_don"
+	if t in FLOOR3_DIRECT_KEYS:
+		return t
+	if t.begins_with("3"):
+		return t if t in ["301", "302", "303", "315"] else "301"
 	if t in FLOOR2_DIRECT_KEYS:
 		return t
 	if t.begins_with("2"):
@@ -134,6 +141,8 @@ static func resolve_final_target(action_name: String, target_id: String, dest_fl
 		return t
 	if t in FLOOR1_CLINIC_ALIASES:
 		return "112"
+	if dest_floor >= 3:
+		return "301"
 	if dest_floor >= 2:
 		return "sanh_t2"
 	if t != "":
@@ -150,15 +159,17 @@ static func resolve_destination_key(action_name: String, target_id: String, dest
 	if action_name != "guide":
 		return ""
 	var final_key: String = resolve_final_target(action_name, target_id, dest_floor)
-	var target_floor: int = 2 if (final_key in FLOOR2_DIRECT_KEYS or RLEnvBridge.normalize_nlu_target(target_id, dest_floor)["floor"] >= 2) else 1
-	if current_floor == 1:
-		if target_floor >= 2:
-			return "thang_may"
+	var nlu: Dictionary = RLEnvBridge.normalize_nlu_target(target_id, dest_floor)
+	var target_floor: int = 1
+	if final_key in FLOOR3_DIRECT_KEYS or nlu["floor"] >= 3 or final_key.begins_with("3"):
+		target_floor = 3
+	elif final_key in FLOOR2_DIRECT_KEYS or nlu["floor"] == 2 or final_key.begins_with("2"):
+		target_floor = 2
+
+	if current_floor == target_floor:
 		return final_key
 	else:
-		if target_floor == 1:
-			return "thang_may_t2"
-		return final_key
+		return "thang_may" if current_floor == 1 else ("thang_may_t2" if current_floor == 2 else "thang_may_t3")
 
 
 ## Tìm vị trí Nhân viên y tế (MedicalStaffNurse hoặc MedicalStaffDoctor) gần robot nhất.

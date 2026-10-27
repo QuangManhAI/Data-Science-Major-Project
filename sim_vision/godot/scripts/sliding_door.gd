@@ -1,3 +1,4 @@
+@tool
 class_name SlidingDoor
 extends Node3D
 ## Cửa trượt tự động kiểu RimWorld âm tường (pocket sliding door) cho môi trường bệnh viện.
@@ -12,7 +13,10 @@ signal door_state_changed(opened: bool)
 @export var open_offset: Vector3 = Vector3(1.75, 0.0, 0.0)
 @export var slide_duration_s: float = 0.25
 @export var close_delay_s: float = 1.5
-@export var door_label: String = ""
+@export var door_label: String = "":
+	set(v):
+		door_label = v
+		_update_labels()
 @export var robot_can_open: bool = true
 
 var is_open: bool = false
@@ -29,15 +33,23 @@ var _occupants: Dictionary = {}
 @onready var _header_label_back: Label3D = get_node_or_null(^"Frame/HeaderSign/LabelBack")
 
 
+func _update_labels() -> void:
+	var front: Label3D = _header_label if _header_label != null else get_node_or_null(^"Frame/HeaderSign/Label") as Label3D
+	var back: Label3D = _header_label_back if _header_label_back != null else get_node_or_null(^"Frame/HeaderSign/LabelBack") as Label3D
+	var text_to_set: String = door_label if not door_label.is_empty() else "PHÒNG KHÁM"
+	for lbl: Label3D in [front, back]:
+		if lbl != null:
+			lbl.text = text_to_set
+
+
 func _ready() -> void:
 	add_to_group(&"sliding_doors")
+	_update_labels()
+	if Engine.is_editor_hint():
+		return
 	if _trigger_area != null:
 		_trigger_area.body_entered.connect(_on_body_entered)
 		_trigger_area.body_exited.connect(_on_body_exited)
-	if not door_label.is_empty():
-		for label: Label3D in [_header_label, _header_label_back]:
-			if label != null:
-				label.text = door_label
 	var indicator := get_node_or_null(^"Frame/StatusLight") as MeshInstance3D
 	if indicator != null and indicator.mesh != null:
 		_status_mat = indicator.get_active_material(0) as StandardMaterial3D
@@ -48,6 +60,8 @@ func _ready() -> void:
 
 
 func _physics_process(delta: float) -> void:
+	if Engine.is_editor_hint():
+		return
 	step(delta)
 
 

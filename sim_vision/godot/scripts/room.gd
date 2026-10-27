@@ -9,6 +9,8 @@ extends Node3D
 ##   - tiep_don      : Sảnh Chính - Quầy Tiếp Đón & Khu Ghế Chờ (Nam)
 ##   - thang_may     : Khu Thang Máy & Nhà Vệ Sinh (Đông Nam)
 ##   - hanh_lang     : Hành Lang Chính Đông - Tây (Giữa)
+## Tầng 2: Khoa Tiêu Hóa (205), Tai Mũi Họng (210), X-Quang (201/204), Da Liễu (220), Thang máy (offset X = +50.0m).
+## Tầng 3: Khoa Tim Mạch (301), Siêu Âm Tim (302), Điện Tâm Đồ (303), Cơ Xương Khớp (315), Thang máy (offset X = +100.0m).
 
 const SIZE_X: float = 24.0
 const SIZE_Z: float = 18.0
@@ -146,14 +148,77 @@ const ROOMS: Dictionary = {
 		"door": Vector3(50.0, 0.0, 0.0),
 		"waypoint": Vector3(50.0, 0.0, 0.0),
 	},
+	# Các phòng và khu vực Tầng 3 (tâm phòng offset X = +100.0m)
+	"301": {
+		"name": "Khoa tim mạch",
+		"rect": Rect2(Vector2(88.0, -9.0), Vector2(8.0, 7.0)),
+		"door": Vector3(92.0, 0.0, -2.0),
+		"waypoint": Vector3(92.0, 0.0, -5.2),
+	},
+	"dept_tim_mach": {
+		"name": "Khoa tim mạch",
+		"rect": Rect2(Vector2(88.0, -9.0), Vector2(8.0, 7.0)),
+		"door": Vector3(92.0, 0.0, -2.0),
+		"waypoint": Vector3(92.0, 0.0, -5.2),
+	},
+	"302": {
+		"name": "Phòng siêu âm tim",
+		"rect": Rect2(Vector2(96.0, -9.0), Vector2(8.0, 7.0)),
+		"door": Vector3(100.0, 0.0, -2.0),
+		"waypoint": Vector3(100.0, 0.0, -5.2),
+	},
+	"303": {
+		"name": "Phòng điện tâm đồ (ECG)",
+		"rect": Rect2(Vector2(104.0, -9.0), Vector2(8.0, 7.0)),
+		"door": Vector3(108.0, 0.0, -2.0),
+		"waypoint": Vector3(108.0, 0.0, -5.2),
+	},
+	"315": {
+		"name": "Khoa cơ xương khớp",
+		"rect": Rect2(Vector2(88.0, 2.0), Vector2(6.0, 7.0)),
+		"door": Vector3(91.0, 0.0, 2.0),
+		"waypoint": Vector3(91.0, 0.0, 5.2),
+	},
+	"dept_co_xuong_khop": {
+		"name": "Khoa cơ xương khớp",
+		"rect": Rect2(Vector2(88.0, 2.0), Vector2(6.0, 7.0)),
+		"door": Vector3(91.0, 0.0, 2.0),
+		"waypoint": Vector3(91.0, 0.0, 5.2),
+	},
+	"sanh_t3": {
+		"name": "Sảnh chờ tầng 3",
+		"rect": Rect2(Vector2(94.0, 2.0), Vector2(12.0, 7.0)),
+		"door": Vector3(100.0, 0.0, 2.0),
+		"waypoint": Vector3(100.0, 0.0, 5.2),
+	},
+	"wc_t3": {
+		"name": "Nhà vệ sinh tầng 3",
+		"rect": Rect2(Vector2(106.0, 2.0), Vector2(6.0, 7.0)),
+		"door": Vector3(109.0, 0.0, 2.0),
+		"waypoint": Vector3(109.5, 0.0, 6.5),
+	},
+	"thang_may_t3": {
+		"name": "Thang máy tầng 3",
+		"rect": Rect2(Vector2(106.0, 2.0), Vector2(6.0, 7.0)),
+		"door": Vector3(109.0, 0.0, 2.0),
+		"waypoint": Vector3(109.0, 0.0, 4.6),
+	},
+	"hanh_lang_t3": {
+		"name": "Hành lang tầng 3",
+		"rect": Rect2(Vector2(88.0, -2.0), Vector2(24.0, 4.0)),
+		"door": Vector3(100.0, 0.0, 0.0),
+		"waypoint": Vector3(100.0, 0.0, 0.0),
+	},
 }
 
 const CANONICAL_ROOM_KEYS: Array[String] = [
 	"101", "110", "112", "nha_thuoc", "tiep_don", "thang_may", "hanh_lang",
-	"201", "205", "210", "220", "sanh_t2", "wc_t2", "thang_may_t2", "hanh_lang_t2"
+	"201", "205", "210", "220", "sanh_t2", "wc_t2", "thang_may_t2", "hanh_lang_t2",
+	"301", "302", "303", "315", "sanh_t3", "wc_t3", "thang_may_t3", "hanh_lang_t3"
 ]
 
 const FLOOR2_SPAWN_RECT := Rect2(Vector2(44.4, -1.8), Vector2(11.2, 10.2))
+const FLOOR3_SPAWN_RECT := Rect2(Vector2(94.4, -1.8), Vector2(11.2, 10.2))
 
 ## Vùng đặt bệnh nhân, khớp HospitalShiftEnv._sample_patient_spawn_solo (src/training/hospital_env.py):
 ## 60% hành lang, 40% sảnh chính; cách đồ vật/tường ≥ 0.65 m và NPC ≥ 0.8 m (hộp nở vuông như Python is_blocked).
@@ -168,6 +233,7 @@ const PATIENT_NPC_HALF_M: float = 0.25
 @onready var _interior_walls: Node3D = get_node_or_null(^"InteriorWalls")
 @onready var _ceiling: MeshInstance3D = get_node_or_null(^"Shell/Ceiling")
 @onready var _floor2_node: Node3D = get_node_or_null(^"Floor2")
+@onready var _floor3_node: Node3D = get_node_or_null(^"Floor3")
 @onready var _robot_dock: Node3D = get_node_or_null(^"Entrance/RobotDock")
 
 
@@ -179,24 +245,38 @@ func set_ceiling_visible(v: bool) -> void:
 		var c2: MeshInstance3D = _floor2_node.get_node_or_null(^"Shell/Ceiling")
 		if c2 != null:
 			c2.visible = v
+	if _floor3_node != null:
+		var c3: MeshInstance3D = _floor3_node.get_node_or_null(^"Shell/Ceiling")
+		if c3 != null:
+			c3.visible = v
 
 
-## Xác định tầng (1 hoặc 2) dựa trên tọa độ X (Floor 2 bắt đầu từ X >= 25.0)
+## Xác định tầng (1, 2 hoặc 3) dựa trên tọa độ X
 static func get_floor(pos: Vector3) -> int:
-	return 2 if pos.x >= 25.0 else 1
+	if pos.x >= 75.0:
+		return 3
+	elif pos.x >= 25.0:
+		return 2
+	return 1
 
 
 ## Xác định tầng của một mã phòng
 static func get_room_floor(room_key: String) -> int:
 	var k: String = room_key.strip_edges().to_lower()
-	if k in ["201", "204", "205", "210", "220", "sanh_t2", "wc_t2", "thang_may_t2", "hanh_lang_t2"]:
+	if k in ["301", "302", "303", "315", "sanh_t3", "wc_t3", "thang_may_t3", "hanh_lang_t3", "dept_tim_mach", "dept_co_xuong_khop"]:
+		return 3
+	elif k in ["201", "204", "205", "210", "220", "sanh_t2", "wc_t2", "thang_may_t2", "hanh_lang_t2", "dept_tieu_hoa", "dept_tai_mui_hong"]:
 		return 2
 	return 1
 
 
-## Lấy node ElevatorStation của Tầng 1 hoặc Tầng 2
+## Lấy node ElevatorStation của Tầng 1, Tầng 2 hoặc Tầng 3
 func get_elevator_station(floor_num: int) -> ElevatorStation:
-	if floor_num == 2:
+	if floor_num == 3:
+		if _floor3_node != null:
+			return _floor3_node.get_node_or_null(^"Floor3Elevator") as ElevatorStation
+		return get_node_or_null(^"Floor3/Floor3Elevator") as ElevatorStation
+	elif floor_num == 2:
 		if _floor2_node != null:
 			return _floor2_node.get_node_or_null(^"Floor2Elevator") as ElevatorStation
 		return get_node_or_null(^"Floor2/Floor2Elevator") as ElevatorStation
@@ -205,7 +285,9 @@ func get_elevator_station(floor_num: int) -> ElevatorStation:
 
 ## Điểm ngẫu nhiên trên sàn theo tầng
 func get_free_position_on_floor(floor_num: int, min_clearance: float, rng: RandomNumberGenerator = null) -> Vector3:
-	if floor_num == 2:
+	if floor_num == 3:
+		return _sample_in_rect(FLOOR3_SPAWN_RECT, min_clearance, rng)
+	elif floor_num == 2:
 		return _sample_in_rect(FLOOR2_SPAWN_RECT, min_clearance, rng)
 	return get_free_position(min_clearance, rng)
 
@@ -230,7 +312,7 @@ func get_robot_dock() -> Dictionary:
 
 ## Điểm đặt bệnh nhân ngẫu nhiên trên tầng `floor_num` (hành lang / sảnh chính, xem PATIENT_*).
 func get_patient_spawn_position(floor_num: int, rng: RandomNumberGenerator) -> Vector3:
-	var x_base: float = 50.0 if floor_num == 2 else 0.0
+	var x_base: float = 100.0 if floor_num == 3 else (50.0 if floor_num == 2 else 0.0)
 	var footprints: Array[Rect2] = get_obstacle_footprints()
 	var npc_rects: Array[Rect2] = []
 	for node: Node in find_children("*", "", true, false):
@@ -311,6 +393,13 @@ func get_obstacle_footprints() -> Array[Rect2]:
 		var f2_walls: Node3D = _floor2_node.get_node_or_null(^"InteriorWalls")
 		if f2_walls != null:
 			rects.append_array(_collect_footprints(f2_walls))
+	if _floor3_node != null:
+		var f3_furn: Node3D = _floor3_node.get_node_or_null(^"Furniture")
+		if f3_furn != null:
+			rects.append_array(_collect_footprints(f3_furn))
+		var f3_walls: Node3D = _floor3_node.get_node_or_null(^"InteriorWalls")
+		if f3_walls != null:
+			rects.append_array(_collect_footprints(f3_walls))
 	return rects
 
 

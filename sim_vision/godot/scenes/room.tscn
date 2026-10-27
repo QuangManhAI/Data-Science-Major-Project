@@ -63,6 +63,7 @@
 [ext_resource type="PackedScene" path="res://scenes/props/npc_patient_elder_m14.tscn" id="62"]
 [ext_resource type="PackedScene" path="res://scenes/props/npc_patient_f08.tscn" id="63"]
 [ext_resource type="PackedScene" path="res://scenes/room_floor2.tscn" id="64"]
+[ext_resource type="PackedScene" path="res://scenes/room_floor3.tscn" id="65"]
 
 [sub_resource type="StandardMaterial3D" id="mat_floor"]
 albedo_texture = ExtResource("2")
@@ -1243,3 +1244,6 @@ omni_range = 8.0
 
 [node name="Floor2" parent="." instance=ExtResource("64")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 50, 0, 0)
+
+[node name="Floor3" parent="." instance=ExtResource("65")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 100, 0, 0)

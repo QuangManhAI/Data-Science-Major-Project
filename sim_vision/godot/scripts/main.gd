@@ -16,6 +16,7 @@ const MAX_PLACEMENT_TRIES: int = 100
 const RLEnvBridgeScript = preload("res://scripts/rl_env_bridge.gd")
 const RLControllerScript = preload("res://scripts/rl_controller.gd")
 const RLPolicyClientScript = preload("res://scripts/rl_policy_client.gd")
+const InspectionPanelScript = preload("res://scripts/inspection_panel.gd")
 const PATIENT_ENGAGE_DIST_M: float = 1.35  # = PATIENT_TALK_DIST_M của env lúc train
 const TASK_TIMEOUT_S: float = 45.0         # = stagnation_timeout_s lúc train: không tiến triển quá lâu ➔ hủy
 const TASK_PROGRESS_M: float = 1.0         # = STAGNATION_PROGRESS_M: lại gần đích thêm 1 m ➔ đặt lại đồng hồ
@@ -54,6 +55,7 @@ var _pending_turn_reset: bool = false
 @onready var robot: Robot = $Robot
 @onready var vision: VisionClient = $VisionClient
 @onready var overlay: ViewOverlay = $UI/ViewOverlay
+@onready var inspection_panel: Node = get_node_or_null(^"UI/InspectionPanel")
 @onready var help_label: Label = get_node_or_null(^"UI/Help")
 @onready var viewer_camera: Camera3D = get_node_or_null(^"ViewerCamera")
 @onready var ceiling_mesh: Node3D = get_node_or_null(^"Room/Shell/Ceiling")
@@ -63,6 +65,8 @@ var _pending_turn_reset: bool = false
 var _interior_walls: Array[MeshInstance3D] = []
 var _occluding_walls: Array[MeshInstance3D] = []
 var _transparent_wall_mat: StandardMaterial3D
+var _human_home_pos: Vector3 = Vector3.ZERO
+var _human_home_yaw: float = 0.0
 
 
 func _ready() -> void:
@@ -99,6 +103,16 @@ func _ready() -> void:
 	_start_ms = Time.get_ticks_msec()
 	if logger != null:
 		logger.open()
+	if human != null:
+		_human_home_pos = human.global_position
+		_human_home_yaw = human.rotation.y
+		if _human_home_pos == Vector3.ZERO:
+			_human_home_pos = Vector3(4.5, 0.0, -1.35)
+			human.global_position = _human_home_pos
+		if human.waypoints.is_empty():
+			human.waypoints = [Vector3(4.5, 0.0, -1.35), Vector3(7.5, 0.0, -1.35), Vector3(4.5, 0.0, -1.35), Vector3(2.5, 0.0, -1.35)]
+			human.walks = true
+			human.pardon_enabled = true
 	_setup_hospital_npcs()
 	reset_positions()
 	_update_viewer_camera()
@@ -129,6 +143,7 @@ func _process(delta: float) -> void:
 	elif Input.is_key_pressed(KEY_D):
 		camera_orbit_angle -= CAMERA_ORBIT_SPEED * delta
 	_update_viewer_camera()
+	_update_inspection_panel()
 	# Quá LOST_TIMEOUT_S không có kết quả mới (nhưng vẫn kết nối) ➔ coi như không thấy ai.
 	var now: int = Time.get_ticks_msec()
 	if Main.is_dialogue_state(state):
@@ -219,7 +234,8 @@ func _leg_target(target: Vector3) -> Vector3:
 	var robot_floor: int = Room.get_floor(robot.global_position)
 	if room == null or Room.get_floor(target) == robot_floor:
 		return target
-	return room.get_room_waypoint("thang_may" if robot_floor == 1 else "thang_may_t2")
+	var station_key: String = "thang_may" if robot_floor == 1 else ("thang_may_t2" if robot_floor == 2 else "thang_may_t3")
+	return room.get_room_waypoint(station_key)
 
 
 func _policy_active() -> bool:
@@ -314,6 +330,15 @@ func _on_dialogue_turn_completed(row: Dictionary) -> void:
 
 	var speaking_pat: CharacterBody3D = get_active_speaking_patient()
 
+	if inspection_panel != null:
+		inspection_panel.update_dialogue(
+			dialogue != null and dialogue.stt != null and dialogue.stt.connected,
+			dialogue != null and dialogue.tts != null and dialogue.tts.connected,
+			str(row.get("hyp_text", "")),
+			str(row.get("intent_pred", "")),
+			target_key,
+			fl
+		)
 	if act == "guide" or act == "call_staff" or act == "emergency":
 		active_escorted_patient = speaking_pat
 		_rl_bridge.begin_post_dialogue_task(act, target_key, fl, active_escorted_patient)
@@ -344,7 +369,7 @@ func _execute_elevator_transit(from_floor: int, to_floor: int, with_patient: boo
 	var station_to: ElevatorStation = room.get_elevator_station(to_floor) if room != null else null
 
 	if station_from == null or station_to == null:
-		var offset_x: float = 50.0 if to_floor == 2 else -50.0
+		var offset_x: float = float(to_floor - from_floor) * 50.0
 		robot.global_position.x += offset_x
 		if with_patient:
 			var esc_p: CharacterBody3D = active_escorted_patient if active_escorted_patient != null else human
@@ -460,7 +485,7 @@ func _update_viewer_camera() -> void:
 		ceiling_mesh.visible = (camera_mode != CameraMode.TOP_DOWN)
 	if room != null:
 		room.set_ceiling_visible(camera_mode != CameraMode.TOP_DOWN)
-	var x_center: float = 50.0 if robot.global_position.x >= 25.0 else 0.0
+	var x_center: float = 100.0 if robot.global_position.x >= 75.0 else (50.0 if robot.global_position.x >= 25.0 else 0.0)
 	match camera_mode:
 		CameraMode.FOLLOW:
 			var cam_target := robot.global_position + Vector3(0.0, 0.8, 0.0)
@@ -525,6 +550,12 @@ func _cache_interior_walls() -> void:
 			var mesh_inst := child as MeshInstance3D
 			if mesh_inst != null and mesh_inst.mesh is BoxMesh:
 				_interior_walls.append(mesh_inst)
+	var iw3: Node = get_node_or_null(^"Room/Floor3/InteriorWalls")
+	if iw3 != null:
+		for child: Node in iw3.get_children():
+			var mesh_inst := child as MeshInstance3D
+			if mesh_inst != null and mesh_inst.mesh is BoxMesh:
+				_interior_walls.append(mesh_inst)
 
 
 func _update_wall_transparency() -> void:
@@ -567,6 +598,41 @@ func _update_wall_transparency() -> void:
 	_occluding_walls = new_occluding
 
 
+func _update_inspection_panel() -> void:
+	if inspection_panel == null or not inspection_panel.is_open or robot == null:
+		return
+	inspection_panel.update_lidar(robot.get_lidar_readings())
+	var current_pat: CharacterBody3D = active_escorted_patient if active_escorted_patient != null else (current_target_patient if current_target_patient != null else human)
+	var search: bool = _is_search_phase()
+	var g_pos: Vector3 = current_pat.global_position if (search or _rl_bridge == null) else _rl_bridge.goal_position
+	var r_pos: Vector3 = robot.global_position
+	var d_goal: float = Human.flat_distance(r_pos, g_pos)
+	var r_yaw: float = robot.rotation.y
+	var fwd := Vector3(-sin(r_yaw), 0.0, -cos(r_yaw))
+	var to_goal := Vector3(g_pos.x - r_pos.x, 0.0, g_pos.z - r_pos.z)
+	var angle_rad: float = 0.0
+	if to_goal.length() > 1e-4:
+		angle_rad = deg_to_rad(RunLogger.signed_angle_deg(fwd, to_goal))
+	var esc_p: CharacterBody3D = active_escorted_patient if active_escorted_patient != null else human
+	var d_tether: float = Human.flat_distance(r_pos, esc_p.global_position)
+	var cur_vel: Vector3 = robot.get_real_velocity()
+	var phase_str: String = Config.state_name(state)
+	if _rl_bridge != null:
+		match _rl_bridge.task_phase:
+			RLEnvBridgeScript.TaskPhase.SEARCH_PATIENT:
+				phase_str = "SEARCH_PATIENT"
+			RLEnvBridgeScript.TaskPhase.APPROACH_PATIENT:
+				phase_str = "APPROACH_PATIENT"
+			RLEnvBridgeScript.TaskPhase.GUIDE_ESCORT:
+				phase_str = "GUIDE_ESCORT"
+			RLEnvBridgeScript.TaskPhase.CALL_STAFF:
+				phase_str = "CALL_STAFF"
+	inspection_panel.update_rl_navigation(
+		phase_str, d_goal, sin(angle_rad), cos(angle_rad), d_tether, cur_vel.length(), robot.omega
+	)
+
+
+
 func _clear_wall_transparency() -> void:
 	for wall: MeshInstance3D in _occluding_walls:
 		if is_instance_valid(wall):
@@ -591,15 +657,8 @@ func reset_positions(is_task_transition: bool = false) -> void:
 	human.end_escort()
 	current_target_patient = pick_next_target_patient()
 	if is_task_transition:
-		# Bệnh nhân mới (cùng tầng với robot, vùng như lúc train) cách robot ≥ MIN_START_SEPARATION; robot giữ nguyên vị trí
-		var floor_num: int = Room.get_floor(robot.global_position)
-		var human_pos: Vector3 = room.get_patient_spawn_position(floor_num, _rng)
-		for i: int in MAX_PLACEMENT_TRIES:
-			if Human.flat_distance(human_pos, robot.global_position) >= MIN_START_SEPARATION:
-				break
-			human_pos = room.get_patient_spawn_position(floor_num, _rng)
-		human.global_position = human_pos
-		human.rotation.y = _rng.randf_range(-PI, PI)
+		# Không teleport bệnh nhân nữa: bệnh nhân giữ vị trí tự nhiên hoặc tiếp tục tuần tra.
+		pass
 	elif solo_patient_mode:
 		var p: Dictionary = Main.pick_solo_start_positions(room, _rng)
 		robot.global_position = p["robot"]
@@ -607,11 +666,16 @@ func reset_positions(is_task_transition: bool = false) -> void:
 		human.global_position = p["human"]
 		human.rotation.y = p["human_yaw"]
 	else:
-		var p: Dictionary = Main.pick_start_positions(room, _rng)
-		robot.global_position = p["robot"]
-		robot.rotation.y = p["robot_yaw"]
-		human.global_position = p["human"]
-		human.rotation.y = p["human_yaw"]
+		var dock: Dictionary = room.get_robot_dock()
+		robot.global_position = dock["position"]
+		robot.rotation.y = float(dock["yaw"])
+		if _human_home_pos != Vector3.ZERO:
+			human.global_position = _human_home_pos
+			human.rotation.y = _human_home_yaw
+		else:
+			var p: Dictionary = Main.pick_start_positions(room, _rng)
+			human.global_position = p["human"]
+			human.rotation.y = p["human_yaw"]
 	robot.set_command(0.0, 0.0)
 	state = Config.RobotState.SEARCH
 	if dialogue != null:
@@ -626,7 +690,8 @@ func reset_positions(is_task_transition: bool = false) -> void:
 
 
 func human_distance() -> float:
-	var target_pat: CharacterBody3D = active_escorted_patient if active_escorted_patient != null else (current_target_patient if current_target_patient != null else human)
+	var spk: CharacterBody3D = get_active_speaking_patient() if Main.is_dialogue_state(state) else null
+	var target_pat: CharacterBody3D = spk if spk != null else (active_escorted_patient if active_escorted_patient != null else (current_target_patient if current_target_patient != null else human))
 	return Human.flat_distance(robot.global_position, target_pat.global_position)
 
 
@@ -662,7 +727,8 @@ func _nearest_person_distance() -> float:
 
 ## Góc thật tới người so với hướng trước của robot (−Z), dương khi người bên trái.
 func human_angle_deg() -> float:
-	var target_pat: CharacterBody3D = active_escorted_patient if active_escorted_patient != null else (current_target_patient if current_target_patient != null else human)
+	var spk: CharacterBody3D = get_active_speaking_patient() if Main.is_dialogue_state(state) else null
+	var target_pat: CharacterBody3D = spk if spk != null else (active_escorted_patient if active_escorted_patient != null else (current_target_patient if current_target_patient != null else human))
 	return RunLogger.signed_angle_deg(-robot.global_transform.basis.z, target_pat.global_position - robot.global_position)
 
 
@@ -699,6 +765,8 @@ func _on_detections(frame_id: int, dets: Array, infer_ms: float) -> void:
 	else:
 		cmd = _apply(_controller.step(state, dets, _time_since_seen_s(now)))
 	overlay.show_detections(dets, Config.state_name(state), _connected)
+	if inspection_panel != null and inspection_panel.is_open:
+		inspection_panel.update_vision(dets)
 	if logger != null:
 		logger.log_row(build_log_row(frame_id, dets, cmd, infer_ms, now))
 	cycle_completed.emit({"frame_id": frame_id, "dets": dets, "cmd": cmd, "infer_ms": infer_ms,

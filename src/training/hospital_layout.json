@@ -1109,6 +1109,223 @@
       "x1": 47.39,
       "z0": -1.94,
       "z1": -1.56
+    },
+    {
+      "name": "Floor3/Shell/WallNorthCol",
+      "x0": 87.95,
+      "x1": 112.05,
+      "z0": -9.1,
+      "z1": -8.9
+    },
+    {
+      "name": "Floor3/Shell/WallSouthCol",
+      "x0": 87.95,
+      "x1": 112.05,
+      "z0": 8.9,
+      "z1": 9.1
+    },
+    {
+      "name": "Floor3/Shell/WallEastCol",
+      "x0": 111.9,
+      "x1": 112.1,
+      "z0": -9.05,
+      "z1": 9.05
+    },
+    {
+      "name": "Floor3/Shell/WallWestCol",
+      "x0": 87.9,
+      "x1": 88.1,
+      "z0": -9.05,
+      "z1": 9.05
+    },
+    {
+      "name": "Floor3/InteriorWalls/NorthCol1",
+      "x0": 88.0,
+      "x1": 90.3,
+      "z0": -2.09,
+      "z1": -1.91
+    },
+    {
+      "name": "Floor3/InteriorWalls/NorthCol2",
+      "x0": 93.0,
+      "x1": 99.0,
+      "z0": -2.09,
+      "z1": -1.91
+    },
+    {
+      "name": "Floor3/InteriorWalls/NorthCol3",
+      "x0": 101.0,
+      "x1": 107.0,
+      "z0": -2.09,
+      "z1": -1.91
+    },
+    {
+      "name": "Floor3/InteriorWalls/NorthCol4",
+      "x0": 109.7,
+      "x1": 112.0,
+      "z0": -2.09,
+      "z1": -1.91
+    },
+    {
+      "name": "Floor3/InteriorWalls/DivCol_301_302",
+      "x0": 95.91,
+      "x1": 96.09,
+      "z0": -9.0,
+      "z1": -2.0
+    },
+    {
+      "name": "Floor3/InteriorWalls/DivCol_302_303",
+      "x0": 103.91,
+      "x1": 104.09,
+      "z0": -9.0,
+      "z1": -2.0
+    },
+    {
+      "name": "Floor3/InteriorWalls/SouthCol1",
+      "x0": 87.85,
+      "x1": 90.15,
+      "z0": 1.91,
+      "z1": 2.09
+    },
+    {
+      "name": "Floor3/InteriorWalls/SouthCol2",
+      "x0": 93.7,
+      "x1": 98.3,
+      "z0": 1.91,
+      "z1": 2.09
+    },
+    {
+      "name": "Floor3/InteriorWalls/SouthCol3",
+      "x0": 101.7,
+      "x1": 106.3,
+      "z0": 1.91,
+      "z1": 2.09
+    },
+    {
+      "name": "Floor3/InteriorWalls/SouthCol4",
+      "x0": 108.7,
+      "x1": 112.0,
+      "z0": 1.91,
+      "z1": 2.09
+    },
+    {
+      "name": "Floor3/InteriorWalls/DivCol_315_Lobby",
+      "x0": 94.91,
+      "x1": 95.09,
+      "z0": 2.0,
+      "z1": 9.0
+    },
+    {
+      "name": "Floor3/InteriorWalls/DivCol_Lobby_WC",
+      "x0": 104.91,
+      "x1": 105.09,
+      "z0": 2.0,
+      "z1": 9.0
+    },
+    {
+      "name": "Floor3/Floor3Elevator/Collision",
+      "x0": 111.79,
+      "x1": 111.97,
+      "z0": 3.575,
+      "z1": 5.625
+    },
+    {
+      "name": "Floor3/Furniture/R301_Bed/Collision",
+      "x0": 90.0,
+      "x1": 91.0,
+      "z0": -7.55,
+      "z1": -5.45
+    },
+    {
+      "name": "Floor3/Furniture/R301_Monitor/Collision",
+      "x0": 92.26,
+      "x1": 92.74,
+      "z0": -7.44,
+      "z1": -6.96
+    },
+    {
+      "name": "Floor3/Furniture/R302_Screen/Collision",
+      "x0": 100.39,
+      "x1": 102.01,
+      "z0": -5.68,
+      "z1": -5.32
+    },
+    {
+      "name": "Floor3/Furniture/R302_Bed/Collision",
+      "x0": 101.0,
+      "x1": 102.0,
+      "z0": -7.85,
+      "z1": -5.75
+    },
+    {
+      "name": "Floor3/Furniture/R302_Monitor/Collision",
+      "x0": 102.56,
+      "x1": 103.04,
+      "z0": -7.44,
+      "z1": -6.96
+    },
+    {
+      "name": "Floor3/Furniture/R303_Bed/Collision",
+      "x0": 109.0,
+      "x1": 110.0,
+      "z0": -7.55,
+      "z1": -5.45
+    },
+    {
+      "name": "Floor3/Furniture/R303_Trolley/Collision",
+      "x0": 108.86,
+      "x1": 109.54,
+      "z0": -5.05,
+      "z1": -4.55
+    },
+    {
+      "name": "Floor3/Furniture/R315_Bed/Collision",
+      "x0": 92.15,
+      "x1": 94.25,
+      "z0": 6.0,
+      "z1": 7.0
+    },
+    {
+      "name": "Floor3/Furniture/LobbyBench1/Collision",
+      "x0": 97.125,
+      "x1": 99.275,
+      "z0": 4.89,
+      "z1": 5.51
+    },
+    {
+      "name": "Floor3/Furniture/LobbyBench2/Collision",
+      "x0": 100.725,
+      "x1": 102.875,
+      "z0": 4.89,
+      "z1": 5.51
+    },
+    {
+      "name": "Floor3/Furniture/LobbyQueueKiosk/Collision",
+      "x0": 95.846,
+      "x1": 96.554,
+      "z0": 2.857,
+      "z1": 3.543
+    },
+    {
+      "name": "Floor3/Furniture/LobbyWaterDispenser/Collision",
+      "x0": 103.58,
+      "x1": 104.02,
+      "z0": 8.0,
+      "z1": 8.4
+    },
+    {
+      "name": "Floor3/Furniture/RestroomStation/Collision",
+      "x0": 108.0,
+      "x1": 110.4,
+      "z0": 8.31,
+      "z1": 8.89
+    },
+    {
+      "name": "Floor3/Furniture/CorridorSanitizer/Collision",
+      "x0": 97.01,
+      "x1": 97.39,
+      "z0": -1.94,
+      "z1": -1.56
     }
   ],
   "robot_dock": {

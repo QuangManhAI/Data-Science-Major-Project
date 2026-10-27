@@ -152,6 +152,8 @@ func build_log_row(r: Dictionary, error: String) -> Dictionary:
 
 
 func _on_talk_started(clip_id: String) -> void:
+	if main != null and main.has_method("is_task_busy") and main.is_task_busy():
+		return
 	if main.state == Config.RobotState.ARRIVED:
 		clarify_count = 0
 		used_clips = [clip_id]
@@ -304,6 +306,8 @@ func register_npc(other_npc: Npc) -> void:
 		return
 	_registered_npcs.append(other_npc)
 	other_npc.talk_started.connect(func(clip_id: String) -> void:
+		if main != null and main.has_method("is_task_busy") and main.is_task_busy():
+			return
 		active_npc = other_npc
 		_on_talk_started(clip_id)
 	)

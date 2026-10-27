@@ -242,6 +242,18 @@ func _policy_active() -> bool:
 	return _policy != null and _policy.is_server_connected()
 
 
+func is_task_busy() -> bool:
+	if active_escorted_patient != null:
+		return true
+	if _rl_bridge != null and _rl_bridge.task_phase in [
+		RLEnvBridgeScript.TaskPhase.APPROACH_PATIENT,
+		RLEnvBridgeScript.TaskPhase.GUIDE_ESCORT,
+		RLEnvBridgeScript.TaskPhase.CALL_STAFF
+	]:
+		return true
+	return false
+
+
 
 func get_active_speaking_patient() -> CharacterBody3D:
 	if dialogue != null and dialogue.active_npc != null:
@@ -710,7 +722,7 @@ func _setup_hospital_npcs() -> void:
 					for col: Node in h_npc.find_children("*", "CollisionShape3D", true, false):
 						(col as CollisionShape3D).disabled = true
 				else:
-					h_npc.setup_robot(robot, func() -> int: return state)
+					h_npc.setup_robot(robot, func() -> int: return Config.RobotState.SEARCH if is_task_busy() else state)
 					if dialogue != null and h_npc.has_npc():
 						dialogue.register_npc(h_npc.get_npc())
 

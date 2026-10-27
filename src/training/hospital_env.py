@@ -226,8 +226,12 @@ class WallBox2D:
 
 
 def floor_of(x: float) -> int:
-    """Floor 2 is laid out side by side at X + 50 m."""
-    return 2 if x >= 25.0 else 1
+    """Floor 1: X in [-12, 12], Floor 2: X in [38, 62] (+50m), Floor 3: X in [88, 112] (+100m)."""
+    if x >= 75.0:
+        return 3
+    elif x >= 25.0:
+        return 2
+    return 1
 
 
 # Walls + furniture of both floors, exported from Godot (sim_vision/godot/tools/export_nav_layout.gd).
@@ -266,6 +270,7 @@ def _load_layout(data: dict[str, Any]) -> tuple[tuple[WallBox2D, ...], list[str]
 HOSPITAL_WALLS, HOSPITAL_WALL_NAMES = _load_layout(_LAYOUT_DATA)
 FLOOR1_WALLS: tuple[WallBox2D, ...] = tuple(w for w in HOSPITAL_WALLS if floor_of(w.cx) == 1)
 FLOOR2_WALLS: tuple[WallBox2D, ...] = tuple(w for w in HOSPITAL_WALLS if floor_of(w.cx) == 2)
+FLOOR3_WALLS: tuple[WallBox2D, ...] = tuple(w for w in HOSPITAL_WALLS if floor_of(w.cx) == 3)
 
 
 def _boxes(walls) -> np.ndarray:
@@ -274,11 +279,15 @@ def _boxes(walls) -> np.ndarray:
 
 # Vectorised [N, 4] boxes (min_x, max_x, min_z, max_z) per floor: everything (LiDAR, motion) and
 # structural walls only (camera line of sight sees over furniture)
-_OBSTACLES: dict[int, np.ndarray] = {1: _boxes(FLOOR1_WALLS), 2: _boxes(FLOOR2_WALLS)}
+_OBSTACLES: dict[int, np.ndarray] = {
+    1: _boxes(FLOOR1_WALLS),
+    2: _boxes(FLOOR2_WALLS),
+    3: _boxes(FLOOR3_WALLS),
+}
 _STRUCTURE: dict[int, np.ndarray] = {
     f: _boxes([w for w, n in zip(HOSPITAL_WALLS, HOSPITAL_WALL_NAMES)
                if floor_of(w.cx) == f and ("Shell" in n or "InteriorWalls" in n)])
-    for f in (1, 2)
+    for f in (1, 2, 3)
 }
 
 
@@ -314,7 +323,7 @@ def cast_rays(ox: float, oz: float, dxs: np.ndarray, dzs: np.ndarray, max_t: flo
 def _derive_doors() -> dict[tuple[int, str], tuple[tuple[float, ...], tuple[float, ...]]]:
     """Doorway centres = gaps between corridor wall segments; room columns split by divider walls."""
     doors = {}
-    for floor in (1, 2):
+    for floor in (1, 2, 3):
         for side, z_line in (("north", -2.0), ("south", 2.0)):
             segs = sorted(
                 (w.cx - w.hx, w.cx + w.hx) for w, n in zip(HOSPITAL_WALLS, HOSPITAL_WALL_NAMES)
@@ -354,7 +363,7 @@ class NavGrid:
     """Clearance-weighted shortest-path fields for one floor: 8-connected grid without corner cutting."""
 
     def __init__(self, floor: int) -> None:
-        self.x_base = 50.0 if floor == 2 else 0.0
+        self.x_base = 100.0 if floor == 3 else (50.0 if floor == 2 else 0.0)
         self.x0, self.z0 = self.x_base - 12.0, -9.0
         self.nx = int(round(24.0 / NAV_CELL_M)) + 1
         self.nz = int(round(18.0 / NAV_CELL_M)) + 1
@@ -496,6 +505,7 @@ def nav_grid(floor: int) -> NavGrid:
 ELEVATOR_POSITIONS: dict[int, tuple[float, float]] = {
     1: DESTINATION_POSITIONS["thang_may"],
     2: DESTINATION_POSITIONS["thang_may_t2"],
+    3: DESTINATION_POSITIONS["thang_may_t3"],
 }
 
 
@@ -576,11 +586,13 @@ class HospitalShiftEnv:
         env_mode: str = "solo",
         stagnation_timeout_s: float = 0.0,
         stagnation_penalty: float = -10.0,
+        escort_only: bool = False,
     ) -> None:
         self.curriculum_stage = int(curriculum_stage)
         self.shift_duration_s = float(shift_duration_s)
         self.dt = float(dt)
         self.env_mode = str(env_mode).lower().strip()
+        self.escort_only = bool(escort_only)
         # "full" = solo task flow + the scene's NPCs (seated patients, nurse, patrolling doctor) as live obstacles
         self.solo_like = self.env_mode in ("solo", "full")
         self.npcs: list[dict[str, Any]] = []
@@ -741,7 +753,7 @@ class HospitalShiftEnv:
 
     def _sample_patient_spawn_solo(self) -> tuple[float, float]:
         """Sample free coordinates strictly in public corridors or lobby on robot's current floor."""
-        x_base = 50.0 if self.robot_x >= 25.0 else 0.0
+        x_base = 100.0 if self.robot_x >= 75.0 else (50.0 if self.robot_x >= 25.0 else 0.0)
         if self.npcs and x_base == 0.0 and self.rng.random() < 0.50:
             patient_npcs = [n for n in self.npcs if n.get("role") == "patient"]
             if patient_npcs:
@@ -764,10 +776,29 @@ class HospitalShiftEnv:
         return 0.0 + x_base, 4.0
 
     def _sample_solo_scenario(self) -> None:
-        """Sample scenario with 70% escort, 15% question answer, 15% call doctor."""
+        """Sample scenario: if escort_only, 100% guide with 50% cross-floor elevator escorting across 3 floors."""
+        if self.escort_only:
+            cur_floor = floor_of(self.robot_x)
+            cross_floor = float(self.rng.random()) < 0.50
+            if cross_floor:
+                other_floors = [f for f in (1, 2, 3) if f != cur_floor]
+                target_floor = int(self.rng.choice(other_floors))
+            else:
+                target_floor = cur_floor
+
+            floor_pool = {
+                1: [("guide", "101", 1), ("guide", "110", 1), ("guide", "112", 1), ("guide", "nha_thuoc", 1), ("guide", "tiep_don", 1)],
+                2: [("guide", "201", 2), ("guide", "204", 2), ("guide", "205", 2), ("guide", "210", 2), ("guide", "220", 2)],
+                3: [("guide", "301", 3), ("guide", "302", 3), ("guide", "303", 3), ("guide", "315", 3)],
+            }
+            choices = floor_pool[target_floor]
+            idx = int(self.rng.integers(0, len(choices)))
+            self.scenario_action, self.scenario_slot, self.scenario_floor = choices[idx]
+            return
+
         r_val = float(self.rng.uniform(0.0, 1.0))
         if r_val < 0.70:
-            # 70% Guide / Escort across Floor 1 & Floor 2
+            # 70% Guide / Escort across Floor 1, Floor 2, & Floor 3
             dest_choices = [
                 ("guide", "101", 1),
                 ("guide", "110", 1),
@@ -776,10 +807,16 @@ class HospitalShiftEnv:
                 ("guide", "tiep_don", 1),
                 ("guide", "nha_ve_sinh", 1),
                 ("guide", "201", 2),
+                ("guide", "204", 2),
                 ("guide", "205", 2),
                 ("guide", "210", 2),
                 ("guide", "220", 2),
                 ("guide", "wc_t2", 2),
+                ("guide", "301", 3),
+                ("guide", "302", 3),
+                ("guide", "303", 3),
+                ("guide", "315", 3),
+                ("guide", "wc_t3", 3),
             ]
             idx = int(self.rng.integers(0, len(dest_choices)))
             self.scenario_action, self.scenario_slot, self.scenario_floor = dest_choices[idx]
@@ -877,12 +914,16 @@ class HospitalShiftEnv:
                         break
             else:
                 # Mid-shift start: robot anywhere in the corridors / lobby, must actively search for the patient
-                self.robot_x, self.robot_z = 0.0, 0.0
-                self.patient_x, self.patient_z = self._sample_patient_spawn_solo()
+                start_floor = int(self.rng.choice([1, 2, 3])) if self.escort_only else 1
+                x_base = 100.0 if start_floor == 3 else (50.0 if start_floor == 2 else 0.0)
+                self.robot_x, self.robot_z = x_base, 0.0
+                self.patient_x, self.patient_z = x_base, 0.0
                 for _ in range(150):
+                    px, pz = self._sample_patient_spawn_solo()
                     rx, rz = self._sample_patient_spawn_solo()
-                    if math.hypot(rx - self.patient_x, rz - self.patient_z) >= 3.5:
+                    if math.hypot(rx - px, rz - pz) >= 3.5:
                         self.robot_x, self.robot_z = rx, rz
+                        self.patient_x, self.patient_z = px, pz
                         break
                 self.robot_yaw = float(self.rng.uniform(-math.pi, math.pi))
             self.robot_v = 0.0
@@ -1038,7 +1079,7 @@ class HospitalShiftEnv:
         nx = self.robot_x - math.sin(self.robot_yaw) * v * self.dt
         nz = self.robot_z - math.cos(self.robot_yaw) * v * self.dt
 
-        x_base = 50.0 if self.robot_x >= 25.0 else 0.0
+        x_base = 100.0 if self.robot_x >= 75.0 else (50.0 if self.robot_x >= 25.0 else 0.0)
 
         def free(px: float, pz: float) -> bool:
             return (
@@ -1112,7 +1153,8 @@ class HospitalShiftEnv:
             and (not escorting or math.hypot(elev_x - self.patient_x, elev_z - self.patient_z) <= GOAL_ARRIVE_PATIENT_M)
         ):
             # Generic elevator ride toward the active target's floor (patient rides along when escorted)
-            shift = 50.0 if robot_floor == 1 else -50.0
+            target_floor = floor_of(active_x)
+            shift = float(target_floor - robot_floor) * 50.0
             self.robot_x += shift
             if escorting:
                 self.patient_x += shift
@@ -1147,16 +1189,13 @@ class HospitalShiftEnv:
             if d_robot_dest <= GOAL_ARRIVE_ROBOT_M and d_patient_dest <= GOAL_ARRIVE_PATIENT_M:
                 final_target = resolve_final_target(self.scenario_action, self.scenario_slot, self.scenario_floor)
                 # Check if elevator transition is needed to continue to destination floor
-                if self.goal_key in ("thang_may", "thang_may_t2") and final_target != self.goal_key:
+                if self.goal_key in ("thang_may", "thang_may_t2", "thang_may_t3") and final_target != self.goal_key:
                     event = "elevator_transit"
-                    if self.goal_key == "thang_may":
-                        # Floor 1 -> Floor 2 elevator teleport
-                        self.robot_x += 50.0
-                        self.patient_x += 50.0
-                    else:
-                        # Floor 2 -> Floor 1 elevator teleport
-                        self.robot_x -= 50.0
-                        self.patient_x -= 50.0
+                    cur_fl = floor_of(self.robot_x)
+                    dest_fl = floor_of(DESTINATION_POSITIONS.get(final_target, (0.0, 4.5))[0])
+                    shift = float(dest_fl - cur_fl) * 50.0
+                    self.robot_x += shift
+                    self.patient_x += shift
                     self.goal_key = final_target
                     self.steps_since_task = 0
                 else:

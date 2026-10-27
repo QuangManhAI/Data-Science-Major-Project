@@ -36,18 +36,24 @@ func clear_rl_action() -> void:
 ## Tính lệnh điều hướng tới điểm đích `goal_pos` kết hợp phản xạ tránh vật cản từ 17 tia LiDAR
 ## (dùng cho dẫn đường GUIDE_ESCORT / CALL_STAFF hoặc khi chạy chính sách lai).
 ## Tính điểm trung gian (doorway / corridor sub-goal) khi robot và đích ở khác phòng.
-# Cửa & vách ngăn từng tầng (khớp _derive_doors() đọc src/training/hospital_layout.json; tầng 2 ở X + 50 m)
+# Cửa & vách ngăn từng tầng (khớp _derive_doors() đọc src/training/hospital_layout.json; tầng 2 ở X + 50 m, tầng 3 ở X + 100 m)
 const DOORS: Dictionary = {
 	"1_north": [[-8.0, 0.0, 8.0], [-4.0, 4.0]],
 	"1_south": [[-9.0, 0.0, 9.0], [-6.0, 6.0]],
 	"2_north": [[41.65, 50.0, 58.35], [46.0, 54.0]],
 	"2_south": [[41.925, 50.0, 57.5], [45.0, 55.0]],
+	"3_north": [[91.65, 100.0, 108.35], [96.0, 104.0]],
+	"3_south": [[91.925, 100.0, 107.5], [95.0, 105.0]],
 }
-const ELEVATOR_POSITIONS: Dictionary = {1: Vector3(9.0, 0.0, 5.2), 2: Vector3(59.0, 0.0, 4.6)}
+const ELEVATOR_POSITIONS: Dictionary = {1: Vector3(9.0, 0.0, 5.2), 2: Vector3(59.0, 0.0, 4.6), 3: Vector3(109.0, 0.0, 4.6)}
 
 
 static func floor_of(x: float) -> int:
-	return 2 if x >= 25.0 else 1
+	if x >= 75.0:
+		return 3
+	elif x >= 25.0:
+		return 2
+	return 1
 
 
 ## Cửa của cột phòng chứa x (side: "north" = phòng z < -2, "south" = phòng z > +2).

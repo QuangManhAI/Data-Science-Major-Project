@@ -555,3 +555,24 @@
 - **Why:** Provides human operators and researchers with full, transparent visibility into the robot's real-time sensory and decision-making state during inspection camera view without cluttering the main 3D viewport.
 - **Touches:** `sim_vision/godot/scripts/inspection_panel.gd`, `sim_vision/godot/scenes/inspection_panel.tscn`, `sim_vision/godot/scenes/main.tscn`, `sim_vision/godot/scripts/main.gd`, `sim_vision/godot/tests/test_inspection_panel.gd`, `docs/AI-Human-logs/Vuong.md`
 - **Evidence:** 4/4 GUT tests in `test_inspection_panel.gd` pass; all 163 GUT suite tests pass across the repository (18,873 asserts); hotkeys `I` and `Tab` toggle the panel cleanly.
+
+### D-037 — Dedicated 3-Floor Patient Escort PPO Training & Distraction Guard
+- **Status:** accepted
+- **When:** 2026-10-27T18:30:00+07:00
+- **Decided by:** human-approved via `/grill-me` alignment (`train_3floor_escort_2000ep_plan.md`)
+- **Trigger:** "draft up a training plan, focus solly on escort patient on both 3 floors, train for 2k episode first /grill-me/grill-me", "to prevent deadlock (aka talk and accept too many escort, make the robot so that it will not be distract by other people until the current task is complete)"
+- **Decision:**
+  1. **Distraction Guard (Anti-Deadlock Mechanism):**
+     - In `sim_vision/godot/scripts/main.gd`, added `is_task_busy() -> bool` returning `true` when `active_escorted_patient != null` or when the robot is actively executing an escort/call-staff task phase.
+     - In `dialogue_manager.gd`, guarded `_on_talk_started()` and `register_npc()`: incoming NPC speech triggers and interaction popups are dropped/ignored whenever `main.is_task_busy()` is true, preventing dialogue interruption or task overwriting while an escort is underway.
+  2. **Multi-Floor Environment & Dynamic Stagnation Reset:**
+     - Updated `src/training/hospital_env.py` and `rl_controller.gd` with Floor 3 obstacles (31 rects, total 155 rects across 3 floors), north/south door routing, and elevator positions.
+     - Enforced `escort_only=True` mode: 100% escort focus, balanced with 50% cross-floor elevator journeys ($F_1 \leftrightarrow F_2, F_1 \leftrightarrow F_3, F_2 \leftrightarrow F_3$) and 50% same-floor clinic escort.
+     - Dynamic Stagnation Reset: 60s base timeout, with clock reset to 0 whenever an elevator transit occurs or the robot advances $\ge 1.0\,\text{m}$ toward its active goal.
+  3. **Dedicated Trainer Script (`train_3floor_escort_2000ep.py`):**
+     - Warm-started from full-patient policy (`20261026_214227_PPOHospital-full-patient`).
+     - 2000 episodes on NVIDIA RTX 4060 GPU with Cosine Annealing LR ($1.0 \times 10^{-4} \to 3.0 \times 10^{-5}$), teacher prior decaying $0.05 \to 0.0$ over first 300 episodes, and deterministic evaluation every 200 episodes on 20 held-out seeds.
+- **Why:** Eliminates deadlock caused by bystander NPC interruptions during patient transport, equips the PPO policy with multi-floor elevator transit navigation, and focuses learning entirely on patient escort delivery.
+- **Touches:** `sim_vision/godot/scripts/main.gd`, `sim_vision/godot/scripts/dialogue_manager.gd`, `sim_vision/godot/scripts/rl_controller.gd`, `src/training/hospital_env.py`, `src/training/hospital_layout.json`, `src/training/train_3floor_escort_2000ep.py`, `docs/AI-Human-logs/Vuong.md`
+- **Evidence:** Smoke test (5 episodes) completed cleanly on RTX 4060 in 49.5s with 22 patients escorted, 0 collisions, and 0 stagnation timeouts; 2000-episode training launched in `experiments/runs/20261027_183421_PPOHospital-3floor-escort-2k`.
+

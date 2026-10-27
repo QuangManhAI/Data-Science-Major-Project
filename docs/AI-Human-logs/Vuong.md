@@ -3,10 +3,10 @@
 - **Motivation/Background**: Captures architectural, toolchain, and model selection choices made during AI-assisted development to ensure long-term auditability and prevent unrecorded drift.
 - **Purpose**: Maintain an immutable, attributable provenance log of decisions for the hospital navigation robot project.
 - **Overview Pipeline**: Follows the decision log convention defined in `agents/templates/DECISION_LOG_TEMPLATE.md` and metadata header rules in `agents/rules/MD_CONVENTION.md`.
-- **Detailed Plan**: §1 Decision Index Table; §2 Decision Log Entries (D-001 to D-019).
+- **Detailed Plan**: §1 Decision Index Table; §2 Decision Log Entries (D-001 to D-036).
 - **References**: [agents/templates/DECISION_LOG_TEMPLATE.md](../../agents/templates/DECISION_LOG_TEMPLATE.md), [agents/rules/MD_CONVENTION.md](../../agents/rules/MD_CONVENTION.md).
 - **Created**: 2026-10-21T21:25:00+07:00
-- **Last Updated**: 2026-10-23T11:23:00+07:00
+- **Last Updated**: 2026-10-27T17:35:00+07:00
 
 ---
 
@@ -45,6 +45,11 @@
 | [D-029](#d-029--1000-episode-solo-patient-ppo-training-with-45s-early-stagnation-cutoff)                     | 1000-Episode Solo Patient PPO training with 45s early stagnation cutoff                         | human                          | accepted |
 | [D-030](#d-030--expand-solo-patient-ppo-training-target-to-5000-episodes)                                    | Expand Solo Patient PPO training target to 5000 episodes                                       | human                          | accepted |
 | [D-031](#d-031--hospital-floor-2-expansion-two-way-interactive-elevator-and-multi-floor-rl-navigation) | Hospital Floor 2 expansion, two-way interactive elevator, and multi-floor RL navigation | human-approved via /grill-me | accepted |
+| [D-032](#d-032--fix-patient-escort-geometric-deadlock-and-velocity-mismatch-during-inference) | Fix patient escort geometric deadlock and velocity mismatch during inference | human | accepted |
+| [D-033](#d-033--natural-patient-navigation-animation-stabilization-t-pose-option-and-multi-npc-dialogue-targeting) | Natural patient navigation, animation stabilization (T-pose option), and multi-NPC dialogue targeting | human | accepted |
+| [D-034](#d-034--dynamic-3d-door-labels-and-hospital-department-signage-overhaul) | Dynamic 3D door labels and hospital department signage overhaul | human-approved via /grill-me | accepted |
+| [D-035](#d-035--floor-3-hospital-extension-and-multi-floor-dynamic-elevator-navigation) | Floor 3 hospital extension and multi-floor dynamic elevator navigation (X = +100.0m) | human-approved via /grill-me | accepted |
+| [D-036](#d-036--robot-inspection-telemetry-hud-panel-with-4-tabbed-progress-bar-visualizations) | Robot inspection telemetry HUD panel with 4-tabbed progress bar visualizations | human-approved via /grill-me | accepted |
 
 ---
 
@@ -488,3 +493,65 @@
 - **Why:** Completely eliminates arrival deadlocks at destination clinics and elevators, avoids tether-stretch policy speed collapse, and raises multi-seed test success rate from 76.7% to 100.0%.
 - **Touches:** `src/training/hospital_env.py`, `sim_vision/godot/scripts/rl_env_bridge.gd`, `sim_vision/python/rl_policy_server.py`, `docs/AI-Human-logs/Vuong.md`
 - **Evidence:** 30-seed deterministic benchmark verified: success rate improved from 76.7% to 100.0% (0 failures); average patients helped increased from 1.27 to 1.70 (+34%); all 18 pytest tests pass.
+
+### D-033 — Natural Patient Navigation, Animation Stabilization (T-Pose Option), and Multi-NPC Dialogue Targeting
+- **Status:** accepted
+- **When:** 2026-10-26T23:45:00+07:00
+- **Decided by:** human
+- **Trigger:** "the robot only target the red shirt patient, finetune it so it can adopt all the new patient", "and human animation seem flicking, why? if its too complicated, use t pose for now", "dont teleport the red shirt patient to the nearby possition of the robot anymore, make him a normal patient like other"
+- **Decision:**
+  1. **Disable Artificial Red-Shirt Teleportation:** In `sim_vision/godot/scripts/main.gd`, removed `is_task_transition` forced teleportation of the red-shirt patient. Placed the red-shirt patient at natural corridor coordinates `(4.5, 0.0, -1.35)` with waypoint loop and pardon behavior enabled, treating him as a standard patient alongside the other 6 seated/walking NPCs.
+  2. **Multi-NPC Dynamic Dialogue Targeting:** In `main.gd`, replaced hardcoded references to `human` in `human_distance()` and `human_angle_deg()`. During dialogue states (`LISTEN`, `THINK`, `RESPOND`), distance and angle are evaluated against the active speaking patient (`get_active_speaking_patient()`), preventing incorrect angle/distance telemetry when other patients speak.
+  3. **Animation Stabilization (`use_t_pose`):** Added `@export var use_t_pose: bool = false` in `human.gd` and enabled it in `main.tscn` to eliminate skeletal bone interpolation flickering/jitter while retaining the physics capsule collision shape and standard unit test compatibility.
+- **Why:** Removes artificial biases toward the red-shirt patient, stabilizes visual animation rendering, and ensures the robot properly engages and escorts whichever patient initiates dialogue.
+- **Touches:** `sim_vision/godot/scripts/human.gd`, `sim_vision/godot/scripts/main.gd`, `sim_vision/godot/scenes/main.tscn`, `docs/AI-Human-logs/Vuong.md`
+- **Evidence:** Verified all 7 human unit tests pass; red-shirt patient patrols corridor naturally; active speaking patient correctly becomes the focus of dialogue and escorting.
+
+### D-034 — Dynamic 3D Door Labels and Hospital Department Signage Overhaul
+- **Status:** accepted
+- **When:** 2026-10-27T10:15:00+07:00
+- **Decided by:** human-approved via `/grill-me` alignment (`plan_ui_door_signs_floor3.md`)
+- **Trigger:** "all the rooms that can be destination for patient, must be writen in its name, because as I see right now, all of them have the tabs name in the door to be 'Phòng khám'"
+- **Decision:**
+  1. **Dynamic Door Label Tooling:** In `sim_vision/godot/scripts/sliding_door.gd`, added `@tool` annotation, exported property `door_label: String` with setter `set(val)`, and implemented `_update_labels()` to synchronize both front (`SignLabel3D`) and back (`SignBackLabel3D`) 3D labels directly in the Godot Editor viewport and at runtime.
+  2. **Department Designation Overhaul:** Replaced generic "Phòng khám" labels across all floors with specific room numbers and hospital department titles:
+     - **Floor 1:** `Door_101` ("101 - Phòng Cấp cứu"), `Door_110` ("110 - Phòng Khám Nội"), `Door_112` ("112 - Phòng Khám Ngoại"), `Door_Pharmacy` ("105 - Nhà thuốc Bệnh viện"), `Door_Lobby` ("100 - Quầy Tiếp đón & BHYT").
+     - **Floor 2:** `Door_201` ("201 - Khoa Mắt"), `Door_204` ("204 - Khoa Răng Hàm Mặt"), `Door_205` ("205 - Khoa Tiêu hóa"), `Door_210` ("210 - Khoa Tai Mũi Họng"), `Door_220` ("220 - Khoa Da liễu").
+     - **Floor 3:** `Door_301` ("301 - Khoa Tim mạch"), `Door_302` ("302 - Phòng Siêu âm tim"), `Door_303` ("303 - Phòng Điện tim ECG"), `Door_315` ("315 - Khoa Cơ xương khớp").
+- **Why:** Eliminates clinical room ambiguity for human inspection and robot navigation, matching the NLU slot destinations in hospital dialogue.
+- **Touches:** `sim_vision/godot/scripts/sliding_door.gd`, `sim_vision/godot/scenes/room.tscn`, `sim_vision/godot/scenes/room_floor2.tscn`, `sim_vision/godot/scenes/room_floor3.tscn`, `docs/AI-Human-logs/Vuong.md`
+- **Evidence:** Verified in Godot Editor and runtime; door labels show clear room numbers and specialty titles on both sides; sliding door unit tests pass.
+
+### D-035 — Floor 3 Hospital Extension and Multi-Floor Dynamic Elevator Navigation (X = +100.0m)
+- **Status:** accepted
+- **When:** 2026-10-27T11:20:00+07:00
+- **Decided by:** human-approved via `/grill-me` alignment (`plan_ui_door_signs_floor3.md`)
+- **Trigger:** "plan for adding floor number 3, which include all the destinated one for that floor"
+- **Decision:**
+  1. **Side-by-Side Floor 3 Modular Scene ($X = +100.0\,\text{m}$):** Created `sim_vision/godot/scenes/room_floor3.tscn` ($24\,\text{m} \times 18\,\text{m}$) containing Rooms 301 (Cardiology), 302 (Echocardiography), 303 (Electrocardiogram ECG), 315 (Orthopedics), Floor 3 Waiting Lobby (`sanh_t3`), Restrooms (`wc_t3`), and `Floor3Elevator` (`current_floor = 3`). Instantiated at $X = +100.0\,\text{m}$ inside `room.tscn`.
+  2. **Generalized Multi-Floor Elevator Transit Formula:** In `sim_vision/godot/scripts/main.gd`, generalized elevator translation:
+     $$\Delta X = (to\_floor - from\_floor) \times 50.0\,\text{m}$$
+     Supporting any combination of Floor 1 ($0\,\text{m}$), Floor 2 ($50\,\text{m}$), and Floor 3 ($100\,\text{m}$) travel.
+  3. **Dynamic Camera & Occlusion Handling:** Clamped camera orbit center dynamically ($X_{\text{center}} = 100\,\text{m}$ for $X \ge 75\,\text{m}$, $50\,\text{m}$ for $25 \le X < 75\,\text{m}$, and $0\,\text{m}$ for $X < 25\,\text{m}$) and cached Floor 3 interior walls for see-through transparency.
+  4. **Multi-Floor RL Environment Routing:** Updated `Room.get_floor()`, `Room.get_room_floor()`, `rl_env_bridge.gd`, and `src/training/hospital_env.py` to route Floor 3 clinical keys (`301`, `302`, `303`, `315`, `dept_tim_mach`, `dept_co_xuong_khop`, `sanh_t3`) through the nearest elevator station and to destination clinic doors.
+- **Why:** Fully supports Floor 3 departments referenced in clinical dialogue, expands hospital capacity to 3 complete floors, and keeps multi-floor physics decoupled and modular.
+- **Touches:** `sim_vision/godot/scenes/room_floor3.tscn`, `sim_vision/godot/scenes/room.tscn`, `sim_vision/godot/scripts/room.gd`, `sim_vision/godot/scripts/main.gd`, `sim_vision/godot/scripts/rl_env_bridge.gd`, `src/training/hospital_env.py`, `sim_vision/godot/tests/test_room.gd`, `docs/AI-Human-logs/Vuong.md`
+- **Evidence:** 18/18 GUT tests in `test_room.gd` pass (16,516 asserts); 6/6 GUT tests in `test_rl_env.gd` pass; 35/35 Python pytest tests pass.
+
+### D-036 — Robot Inspection Telemetry HUD Panel with 4-Tabbed Progress Bar Visualizations
+- **Status:** accepted
+- **When:** 2026-10-27T14:40:00+07:00
+- **Decided by:** human-approved via `/grill-me` alignment (`plan_ui_door_signs_floor3.md`)
+- **Trigger:** "update the UI in the top left conner when in the robot inspection cameras, it have a open/closable tab in that, if open it display the values of every inputs data sperate in tabs like you describe using process bar"
+- **Decision:**
+  1. **Component Design (`InspectionPanel`):** Created `sim_vision/godot/scripts/inspection_panel.gd` and `sim_vision/godot/scenes/inspection_panel.tscn` anchored at top-left (`UI/InspectionPanel` in `main.tscn`).
+  2. **Collapsible Header & Shortcut Controls:** Added a toggle button `[▼] TELEMETRY / [▲] CLOSE` with status summary chips, supporting mouse click toggling and keyboard hotkeys (`I` / `Tab`).
+  3. **4 Data Tabs with Real-Time Progress Bars and Numeric Labels:**
+     - **Tab 1: LiDAR (17 Rays, 200° Fan):** 17 progress bars ($0.0 - 6.0\,\text{m}$) color-coded green ($\ge 1.5\,\text{m}$), yellow ($0.8 - 1.5\,\text{m}$), and red ($< 0.8\,\text{m}$).
+     - **Tab 2: YOLO Vision:** Patient detection confidence bar ($0-100\%$), normalized centroid offset $C_x$ with left/right bias indicator, and bounding box height $H$ ($0.0 - 1.0$) with arrival threshold marking at $0.35$.
+     - **Tab 3: RL Navigation:** Active task phase badge (`SEARCH_PATIENT`, `APPROACH_PATIENT`, `GUIDE_ESCORT`, `CALL_STAFF`), geodesic goal distance ($0 - 20\,\text{m}$), heading angle indicators ($\sin\theta, \cos\theta$), patient escort tether distance ($1.6\,\text{m}$ ideal, $2.5\,\text{m}$ max limit), linear velocity $V$, and angular velocity $\omega$.
+     - **Tab 4: Voice & NLU:** STT & TTS connection chips, ASR transcribed hypothesis text, NLU intent & extracted slot, and target floor & clinic destination.
+  4. **Performance Optimization:** Telemetry bars and text fields update only when the panel is expanded (`is_open == true`), incurring zero rendering overhead when collapsed.
+- **Why:** Provides human operators and researchers with full, transparent visibility into the robot's real-time sensory and decision-making state during inspection camera view without cluttering the main 3D viewport.
+- **Touches:** `sim_vision/godot/scripts/inspection_panel.gd`, `sim_vision/godot/scenes/inspection_panel.tscn`, `sim_vision/godot/scenes/main.tscn`, `sim_vision/godot/scripts/main.gd`, `sim_vision/godot/tests/test_inspection_panel.gd`, `docs/AI-Human-logs/Vuong.md`
+- **Evidence:** 4/4 GUT tests in `test_inspection_panel.gd` pass; all 163 GUT suite tests pass across the repository (18,873 asserts); hotkeys `I` and `Tab` toggle the panel cleanly.

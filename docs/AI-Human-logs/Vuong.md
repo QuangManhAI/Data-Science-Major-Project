@@ -3,10 +3,10 @@
 - **Motivation/Background**: Captures architectural, toolchain, and model selection choices made during AI-assisted development to ensure long-term auditability and prevent unrecorded drift.
 - **Purpose**: Maintain an immutable, attributable provenance log of decisions for the hospital navigation robot project.
 - **Overview Pipeline**: Follows the decision log convention defined in `agents/templates/DECISION_LOG_TEMPLATE.md` and metadata header rules in `agents/rules/MD_CONVENTION.md`.
-- **Detailed Plan**: §1 Decision Index Table; §2 Decision Log Entries (D-001 to D-036).
+- **Detailed Plan**: §1 Decision Index Table; §2 Decision Log Entries (D-001 to D-038).
 - **References**: [agents/templates/DECISION_LOG_TEMPLATE.md](../../agents/templates/DECISION_LOG_TEMPLATE.md), [agents/rules/MD_CONVENTION.md](../../agents/rules/MD_CONVENTION.md).
 - **Created**: 2026-10-21T21:25:00+07:00
-- **Last Updated**: 2026-10-27T17:35:00+07:00
+- **Last Updated**: 2026-10-27T19:00:00+07:00
 
 ---
 
@@ -50,6 +50,8 @@
 | [D-034](#d-034--dynamic-3d-door-labels-and-hospital-department-signage-overhaul) | Dynamic 3D door labels and hospital department signage overhaul | human-approved via /grill-me | accepted |
 | [D-035](#d-035--floor-3-hospital-extension-and-multi-floor-dynamic-elevator-navigation) | Floor 3 hospital extension and multi-floor dynamic elevator navigation (X = +100.0m) | human-approved via /grill-me | accepted |
 | [D-036](#d-036--robot-inspection-telemetry-hud-panel-with-4-tabbed-progress-bar-visualizations) | Robot inspection telemetry HUD panel with 4-tabbed progress bar visualizations | human-approved via /grill-me | accepted |
+| [D-037](#d-037--dedicated-3-floor-patient-escort-ppo-training--distraction-guard) | Dedicated 3-Floor Patient Escort PPO Training & Distraction Guard | human-approved via /grill-me | accepted |
+| [D-038](#d-038--escort-only-inference-mode-overlay-hud-escort-label-and-manual-test-hotkey) | Escort-Only inference mode, overlay HUD escort label, and manual test hotkey | human | accepted |
 
 ---
 
@@ -581,4 +583,30 @@
   - **Best Rolling-20 $R_{team}$:** +158.10 (Peak $R_{team}$: +246.00).
   - **Best Deterministic Eval Score:** +134.00 (3.30 tasks/shift, 0.0 collisions across 20 held-out seeds).
   - **Checkpoints Saved:** `PPOHospital-3floor-escort_best.pt` and `PPOHospital-3floor-escort_last.pt`.
+
+### D-038 — Escort-Only Inference Mode, Overlay HUD Escort Label, and Manual Test Hotkey
+- **Status:** accepted
+- **When:** 2026-10-27T19:00:00+07:00
+- **Decided by:** human
+- **Trigger:** "hey, i see the inference the escort doest works at all, the robot just sat there, and the status got updated to arrived, no where to see the escort, make a modifle or flag for the inference/test code for patient to only ask for escort for me to check more throughtly"
+- **Decision:**
+  1. **Root Cause Identification:**
+     - In speech dataset `sim_vision/godot/assets/voices/clips.json`, most clips map to non-escort intents (`dang_ky_kham`, `bao_hiem`, etc.), which trigger verbal answer and patient reset rather than an escort task.
+     - In `main.gd`, `_step_policy()` passed `current_target_patient` rather than `active_escorted_patient`, triggering an artificial 10m tether break and stopping the robot during escort.
+     - Overlay HUD displayed `Config.state_name(state)` which froze on `"ARRIVED"` even while actively navigating.
+     - `_physics_process()` lacked `"thang_may_t3"` in elevator transition triggers.
+  2. **`--escort-only` Simulation Flag:**
+     - In `npc.gd`, added `const ESCORT_INTENTS = ["hoi_phong", "hoi_khoa", "dan_duong"]` and `escort_only` property to filter voice clips strictly to clinical destination escort requests.
+     - In `run_simulation.py`, added `--escort-only` CLI argument forwarded to Godot.
+     - In `main.gd`, parsed `--escort-only` and applied it to all hospital NPCs; if a non-escort intent somehow completes, promoted it to a multi-floor clinic escort.
+  3. **Inference Navigation & HUD Overhaul:**
+     - Fixed `_step_policy()` to measure distance and tether relative to `active_escorted_patient`.
+     - Added `_display_state_name()` displaying `"ESCORT: <dest>"` or `"CALL_STAFF"` in the HUD overlay.
+     - Added `thang_may_t3` to elevator transition checks.
+     - Added `KEY_G` hotkey in `main.gd` calling `trigger_test_escort()` to instantly dispatch an escort task to Floors 1, 2, or 3 for immediate interactive testing.
+  4. **Dedicated CLI Policy Test Script:**
+     - Created `src/training/test_3floor_escort.py` to run headless multi-episode evaluations of trained escort checkpoints with step-by-step logs of elevator rides, patient pacing, and arrivals.
+- **Why:** Guarantees 100% escort task testing without waiting through non-escort Q&A dialogues, corrects policy tether tracking in Godot 3D, and provides clear visual feedback of the active escort destination.
+- **Touches:** `run_simulation.py`, `sim_vision/godot/scripts/main.gd`, `sim_vision/godot/scripts/npc.gd`, `src/training/test_3floor_escort.py`, `docs/AI-Human-logs/Vuong.md`
+- **Evidence:** `pytest` test suite passes (26/26 passed); `python -m src.training.test_3floor_escort --episodes 2` completes with 6/6 patients escorted and 5 elevator transits; verified in Godot runtime with `--escort-only` and `G` key.
 

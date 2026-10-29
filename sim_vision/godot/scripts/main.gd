@@ -27,6 +27,7 @@ const ARRIVED_WAIT_S: float = 10.0         # đứng ARRIVED mà NPC không bắ
 @export var controller_path: NodePath = ^"Controller"
 @export var use_rl_controller: bool = false
 var solo_patient_mode: bool = false
+var escort_only_mode: bool = false
 
 var state: int = Config.RobotState.SEARCH
 var camera_mode: int = CameraMode.FOLLOW
@@ -75,6 +76,8 @@ func _ready() -> void:
 			use_rl_controller = true
 		elif arg == "--solo-patient":
 			solo_patient_mode = true
+		elif arg == "--escort-only":
+			escort_only_mode = true
 	if use_rl_controller:
 		var rl_ctrl: Node = RLControllerScript.new()
 		rl_ctrl.name = "RLController"
@@ -114,6 +117,8 @@ func _ready() -> void:
 			human.walks = true
 			human.pardon_enabled = true
 	_setup_hospital_npcs()
+	if escort_only_mode:
+		_apply_escort_only_mode()
 	reset_positions()
 	_update_viewer_camera()
 
@@ -133,8 +138,26 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif key.keycode == KEY_D and not key.echo:
 		camera_orbit_angle -= 0.25
 		_update_viewer_camera()
+	elif key.keycode == KEY_G and not key.echo:
+		trigger_test_escort()
 	elif key.keycode == KEY_ESCAPE:
 		get_tree().quit()
+
+
+func trigger_test_escort(dest_key: String = "") -> void:
+	if _rl_bridge == null:
+		return
+	var dest_pool: Array[String] = ["110", "112", "nha_thuoc", "201", "204", "205", "210", "220", "301", "302", "303", "315"]
+	var target: String = dest_key if dest_key != "" else dest_pool[_rng.randi_range(0, dest_pool.size() - 1)]
+	var fl: int = Room.get_room_floor(target)
+	var pat: CharacterBody3D = active_escorted_patient if active_escorted_patient != null else (current_target_patient if current_target_patient != null else human)
+	active_escorted_patient = pat
+	current_target_patient = pat
+	_rl_bridge.begin_post_dialogue_task("guide", target, fl, active_escorted_patient)
+	_task_elapsed_s = 0.0
+	_task_best_dist = -1.0
+	state = Config.RobotState.APPROACH
+	overlay.set_status("Dẫn đường test (Phím G): tới %s (Tầng %d)" % [_rl_bridge.goal_key, fl])
 
 
 func _process(delta: float) -> void:
@@ -183,7 +206,7 @@ func _physics_process(delta: float) -> void:
 		var d_patient_goal: float = Human.flat_distance(esc_pat.global_position, _rl_bridge.goal_position)
 		if d_goal <= RLEnvBridgeScript.GOAL_ARRIVE_ROBOT_M and d_patient_goal <= RLEnvBridgeScript.GOAL_ARRIVE_PATIENT_M:
 			# Kiểm tra chuyển tầng qua thang máy
-			if _rl_bridge.goal_key in ["thang_may", "thang_may_t2"] and _rl_bridge.final_target_key != "" and _rl_bridge.final_target_key != _rl_bridge.goal_key:
+			if _rl_bridge.goal_key in ["thang_may", "thang_may_t2", "thang_may_t3"] and _rl_bridge.final_target_key != "" and _rl_bridge.final_target_key != _rl_bridge.goal_key:
 				var cur_fl: int = Room.get_floor(robot.global_position)
 				var dest_fl: int = Room.get_room_floor(_rl_bridge.final_target_key)
 				_execute_elevator_transit(cur_fl, dest_fl)
@@ -306,14 +329,14 @@ func _step_policy(delta: float) -> void:
 			_arrived_wait_s = 0.0
 			robot.set_command(0.0, 0.0)
 			state = Config.RobotState.ARRIVED
-			overlay.show_detections([], Config.state_name(state), _connected)
+			overlay.show_detections([], _display_state_name(), _connected)
 			return
 	_policy_accum += delta
 	if _policy_accum < RLPolicyClientScript.STEP_DT_S:
 		return
 	_policy_accum = fmod(_policy_accum, RLPolicyClientScript.STEP_DT_S)
 	var search: bool = _is_search_phase()
-	var target_p: CharacterBody3D = current_target_patient if current_target_patient != null else human
+	var target_p: CharacterBody3D = active_escorted_patient if active_escorted_patient != null else (current_target_patient if current_target_patient != null else human)
 	_policy.send_state(
 		robot.global_position, robot.rotation.y, robot.get_real_velocity().length(), robot.omega,
 		robot.get_lidar_readings(), target_p.global_position,
@@ -330,6 +353,8 @@ func _on_policy_action(v: float, omega: float, phase: int) -> void:
 		if state == Config.RobotState.ARRIVED:
 			return
 		state = Config.RobotState.APPROACH if phase == RLEnvBridgeScript.TaskPhase.APPROACH_PATIENT else Config.RobotState.SEARCH
+	else:
+		state = Config.RobotState.APPROACH
 	robot.set_command(v, omega)
 
 
@@ -342,6 +367,12 @@ func _on_dialogue_turn_completed(row: Dictionary) -> void:
 
 	var speaking_pat: CharacterBody3D = get_active_speaking_patient()
 
+	if escort_only_mode and act != "guide":
+		act = "guide"
+		var fallback_targets = ["110", "112", "nha_thuoc", "201", "204", "205", "210", "220", "301", "302", "303", "315"]
+		target_key = fallback_targets[_rng.randi_range(0, fallback_targets.size() - 1)]
+		fl = Room.get_room_floor(target_key)
+
 	if inspection_panel != null:
 		inspection_panel.update_dialogue(
 			dialogue != null and dialogue.stt != null and dialogue.stt.connected,
@@ -353,10 +384,13 @@ func _on_dialogue_turn_completed(row: Dictionary) -> void:
 		)
 	if act == "guide" or act == "call_staff" or act == "emergency":
 		active_escorted_patient = speaking_pat
+		current_target_patient = speaking_pat
 		_rl_bridge.begin_post_dialogue_task(act, target_key, fl, active_escorted_patient)
 		_task_elapsed_s = 0.0  # đích đổi từ bệnh nhân sang phòng / nhân viên
 		_task_best_dist = -1.0
-		overlay.set_status("Bắt đầu dẫn đường bệnh nhân tới: %s" % _rl_bridge.goal_key)
+		state = Config.RobotState.APPROACH
+		overlay.set_status("Bắt đầu dẫn đường bệnh nhân tới: %s (Tầng %d)" % [_rl_bridge.goal_key, fl])
+		overlay.show_detections([], _display_state_name(), _connected)
 	else:
 		if act in ["answer", "repeat", "refuse", "adjust"]:
 			_rl_bridge.cumulative_team_reward += RLEnvBridgeScript.REWARD_ANSWER
@@ -697,7 +731,7 @@ func reset_positions(is_task_transition: bool = false) -> void:
 		npc.reset()
 	_last_seen_ms = -1
 	_last_result_ms = Time.get_ticks_msec()
-	overlay.show_detections([], Config.state_name(state), _connected)
+	overlay.show_detections([], _display_state_name(), _connected)
 	_update_viewer_camera()
 
 
@@ -725,6 +759,22 @@ func _setup_hospital_npcs() -> void:
 					h_npc.setup_robot(robot, func() -> int: return Config.RobotState.SEARCH if is_task_busy() else state)
 					if dialogue != null and h_npc.has_npc():
 						dialogue.register_npc(h_npc.get_npc())
+	if escort_only_mode:
+		_apply_escort_only_mode()
+
+
+func _apply_escort_only_mode() -> void:
+	if human != null:
+		var n: Node = human.get_node_or_null(^"Npc")
+		if n != null and "escort_only" in n:
+			n.set("escort_only", true)
+	var furn: Node = room.get_node_or_null(^"Furniture") if room != null else null
+	if furn != null:
+		for child: Node in furn.get_children():
+			if child is HospitalNpc and (child as HospitalNpc).has_npc():
+				var n: Node = (child as HospitalNpc).get_npc()
+				if n != null and "escort_only" in n:
+					n.set("escort_only", true)
 
 
 func _nearest_person_distance() -> float:
@@ -776,7 +826,7 @@ func _on_detections(frame_id: int, dets: Array, infer_ms: float) -> void:
 		cmd = {"state": state, "v": pol_cmd.x, "omega": pol_cmd.y, "target": {}}
 	else:
 		cmd = _apply(_controller.step(state, dets, _time_since_seen_s(now)))
-	overlay.show_detections(dets, Config.state_name(state), _connected)
+	overlay.show_detections(dets, _display_state_name(), _connected)
 	if inspection_panel != null and inspection_panel.is_open:
 		inspection_panel.update_vision(dets)
 	if logger != null:
@@ -791,7 +841,15 @@ func _on_connection_changed(connected: bool) -> void:
 		robot.set_command(0.0, 0.0)  # giữ nguyên trạng thái
 	else:
 		_last_result_ms = Time.get_ticks_msec()
-	overlay.show_detections([], Config.state_name(state), connected)
+	overlay.show_detections([], _display_state_name(), connected)
+
+
+func _display_state_name() -> String:
+	if _rl_bridge != null and _rl_bridge.task_phase == RLEnvBridgeScript.TaskPhase.GUIDE_ESCORT:
+		return "ESCORT: %s" % _rl_bridge.goal_key
+	elif _rl_bridge != null and _rl_bridge.task_phase == RLEnvBridgeScript.TaskPhase.CALL_STAFF:
+		return "CALL_STAFF"
+	return Config.state_name(state)
 
 
 ## LISTEN / THINK / RESPOND (Mục 2.3 Sim_Voice).
@@ -810,7 +868,7 @@ func set_dialogue_state(s: int) -> void:
 		if _policy_active():
 			reset_positions(true)
 	_last_result_ms = Time.get_ticks_msec()
-	overlay.show_detections([], Config.state_name(state), _connected)
+	overlay.show_detections([], _display_state_name(), _connected)
 
 
 ## Áp an toàn rồi gửi lệnh cho robot; trả lệnh cuối cùng.

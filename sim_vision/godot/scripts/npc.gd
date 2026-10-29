@@ -20,6 +20,9 @@ const IDLE_ANIM: StringName = &"human/idle"
 @export var clip_id: String = ""     # rỗng = chọn ngẫu nhiên trong các clip của speaker
 @warning_ignore("shadowed_global_identifier")
 @export var seed: int = -1
+@export var escort_only: bool = false  # true = chỉ chọn clip hỏi đường / dẫn đường (hoi_phong, hoi_khoa, dan_duong)
+
+const ESCORT_INTENTS: Array[String] = ["hoi_phong", "hoi_khoa", "dan_duong"]
 
 var state: String = IDLE
 var cooldown_left: float = 0.0
@@ -97,12 +100,18 @@ static func yaw_towards(from: Vector3, to: Vector3) -> float:
 
 ## Chọn clip của `speaker`, ưu tiên intent chưa dùng; dùng hết thì dùng lại từ đầu. Không có clip ➔ "".
 static func pick_clip(clips: Dictionary, spk: String, used_intents: Array[String],
-		rng: RandomNumberGenerator) -> String:
+		rng: RandomNumberGenerator, escort_filter: bool = false) -> String:
 	var mine: Array[String] = []
 	for id: String in clips:
 		if str(clips[id].get("speaker", "")) == spk:
+			if escort_filter:
+				var it: String = str(clips[id].get("intent", ""))
+				if not ESCORT_INTENTS.has(it):
+					continue
 			mine.append(id)
 	if mine.is_empty():
+		if spk != "A":
+			return pick_clip(clips, "A", used_intents, rng, escort_filter)
 		return ""
 	mine.sort()
 	var fresh: Array[String] = mine.filter(func(id: String) -> bool:
@@ -220,9 +229,9 @@ func _start_talk() -> void:
 		return
 	if _clips.is_empty() and clip_id == "":
 		_clips = Npc.load_clips(voices_dir.path_join("clips.json"))
-	var id: String = clip_id if clip_id != "" else Npc.pick_clip(_clips, speaker, _used_intents, _rng)
+	var id: String = clip_id if clip_id != "" else Npc.pick_clip(_clips, speaker, _used_intents, _rng, escort_only)
 	if id == "" and speaker != "A":
-		id = Npc.pick_clip(_clips, "A", _used_intents, _rng)
+		id = Npc.pick_clip(_clips, "A", _used_intents, _rng, escort_only)
 	var stream: AudioStream = Npc.load_voice(id, voices_dir) if id != "" else null
 	if stream == null:
 		push_error("Npc: cannot load voice clip '%s' (speaker %s)" % [id, speaker])

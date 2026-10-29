@@ -221,6 +221,11 @@ def main() -> None:
         action="store_true",
         help="Run simulation with exactly 1 active patient and robot spawning nearby (no doctor/crowd)",
     )
+    parser.add_argument(
+        "--escort-only",
+        action="store_true",
+        help="Patients strictly request escort to hospital clinic rooms across Floors 1, 2, and 3",
+    )
     args = parser.parse_args()
 
     # Register exit hooks
@@ -320,6 +325,9 @@ def main() -> None:
     if args.solo_patient:
         extra_godot_args.append("--solo-patient")
         log("[Launcher] Solo Patient Mode active: 1 patient only, robot nearby spawn, no extra crowd.")
+    if args.escort_only:
+        extra_godot_args.append("--escort-only")
+        log("[Launcher] Escort Only Mode active: Patients strictly request escort to clinic rooms across Floors 1-3.")
     if extra_godot_args:
         godot_cmd.append("--")
         godot_cmd.extend(extra_godot_args)

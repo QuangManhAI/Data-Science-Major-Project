@@ -218,15 +218,42 @@ def main() -> None:
     )
     parser.add_argument(
         "--solo-patient",
+        "--solo_patient",
+        "--solo",
+        dest="solo_patient",
         action="store_true",
         help="Run simulation with exactly 1 active patient and robot spawning nearby (no doctor/crowd)",
     )
     parser.add_argument(
         "--escort-only",
+        "--escort_only",
+        "--escort",
+        dest="escort_only",
         action="store_true",
         help="Patients strictly request escort to hospital clinic rooms across Floors 1, 2, and 3",
     )
-    args = parser.parse_args()
+
+    # Sanitize sys.argv against accidental quotes, trailing spaces, or Unicode dashes
+    clean_argv: List[str] = []
+    dash_chars = str.maketrans({
+        "\u2010": "-",
+        "\u2011": "-",
+        "\u2012": "-",
+        "\u2013": "-",
+        "\u2014": "-",
+        "\u2015": "-",
+        "\u2212": "-",
+        "\ufe58": "-",
+        "\uff0d": "-",
+    })
+    for a in sys.argv[1:]:
+        s = a.translate(dash_chars).strip()
+        if (s.startswith('"') and s.endswith('"')) or (s.startswith("'") and s.endswith("'")):
+            s = s[1:-1].strip()
+        if s:
+            clean_argv.append(s)
+
+    args = parser.parse_args(clean_argv)
 
     # Register exit hooks
     atexit.register(cleanup)

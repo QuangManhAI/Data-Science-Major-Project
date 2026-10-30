@@ -49,12 +49,15 @@ def run_training():
     parser.add_argument("--imgsz", type=int, default=640, help="Độ phân giải đầu vào")
     parser.add_argument("--device", type=str, default="0" if torch.cuda.is_available() else "cpu", help="Thiết bị tính toán")
     parser.add_argument("--model", type=str, default=str(REPO_ROOT / "models/yolo26n/yolo26n.pt"), help="File weights khởi tạo")
+    parser.add_argument("--data", type=str, default=str(REPO_ROOT / "configs/hospital_unified_17class.yaml"), help="File YAML cấu hình dataset")
+    parser.add_argument("--run-name", type=str, default="yolo26n_verified_17class_v1", help="Tên phiên chạy huấn luyện")
+    parser.add_argument("--save-json", type=str, default=str(REPO_ROOT / "experiments/results/verified_17class_metrics.json"), help="Đường dẫn file JSON lưu kết quả")
     parser.add_argument("--resume", action="store_true", help="Tiếp tục huấn luyện từ checkpoint last.pt")
     args = parser.parse_args()
 
-    data_yaml = REPO_ROOT / "configs/hospital_unified_17class.yaml"
+    data_yaml = Path(args.data).resolve()
     project_dir = REPO_ROOT / "experiments/runs/train_hospital"
-    run_name = "yolo26n_verified_17class_v1"
+    run_name = args.run_name
     run_dir = project_dir / run_name
 
     print("==================================================================")
@@ -144,19 +147,24 @@ def run_training():
     f1_all = 2 * (p_all * r_all) / max(1e-6, (p_all + r_all))
 
     per_class_stats = {}
-    maps50 = getattr(box, "maps50", None)
-    maps50_95 = getattr(box, "maps", None)
-    p_per_cls = getattr(box, "p", None)
-    r_per_cls = getattr(box, "r", None)
-    f1_per_cls = getattr(box, "f1", None)
+    ap_indices = list(box.ap_class_index) if hasattr(box, "ap_class_index") and box.ap_class_index is not None else []
+    ap50 = getattr(box, "ap50", None)
+    maps = getattr(box, "maps", None)
+    p = getattr(box, "p", None)
+    r = getattr(box, "r", None)
+    f1 = getattr(box, "f1", None)
 
     for cid in sorted(UNIFIED_CLASSES.keys()):
         cname = UNIFIED_CLASSES[cid]
-        c_map50 = float(maps50[cid]) if maps50 is not None and cid < len(maps50) else 0.0
-        c_map50_95 = float(maps50_95[cid]) if maps50_95 is not None and cid < len(maps50_95) else 0.0
-        c_p = float(p_per_cls[cid]) if p_per_cls is not None and cid < len(p_per_cls) else 0.0
-        c_r = float(r_per_cls[cid]) if r_per_cls is not None and cid < len(r_per_cls) else 0.0
-        c_f1 = float(f1_per_cls[cid]) if f1_per_cls is not None and cid < len(f1_per_cls) else 0.0
+        if cid in ap_indices:
+            idx = ap_indices.index(cid)
+            c_map50 = float(ap50[idx]) if ap50 is not None and idx < len(ap50) else 0.0
+            c_map50_95 = float(maps[idx]) if maps is not None and idx < len(maps) else 0.0
+            c_p = float(p[idx]) if p is not None and idx < len(p) else 0.0
+            c_r = float(r[idx]) if r is not None and idx < len(r) else 0.0
+            c_f1 = float(f1[idx]) if f1 is not None and idx < len(f1) else 0.0
+        else:
+            c_map50 = c_map50_95 = c_p = c_r = c_f1 = 0.0
 
         per_class_stats[cname] = {
             "class_id": cid,
@@ -206,7 +214,7 @@ def run_training():
         "best_weights": str(best_weights)
     }
 
-    results_json_path = REPO_ROOT / "experiments/results/verified_17class_metrics.json"
+    results_json_path = Path(args.save_json).resolve()
     results_json_path.parent.mkdir(parents=True, exist_ok=True)
     with open(results_json_path, "w", encoding="utf-8") as f:
         json.dump(results_data, f, indent=2, ensure_ascii=False)

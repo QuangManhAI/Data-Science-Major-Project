@@ -1,0 +1,196 @@
+{
+  "timestamp": "2026-10-30T16:16:07Z",
+  "model_name": "YOLO26n-Unified-17Class-VerifiedGT",
+  "dataset": "hospital_unified_3120_17class",
+  "total_classes": 17,
+  "test_frames": 468,
+  "hardware": {
+    "device": "0",
+    "device_name": "NVIDIA GeForce RTX 3050 Laptop GPU",
+    "vram_gb": 3.73
+  },
+  "training_config": {
+    "epochs": 45,
+    "batch_size": 16,
+    "imgsz": 640,
+    "optimizer": "AdamW",
+    "box_gain": 8.0,
+    "copy_paste": 0.3,
+    "mosaic": 1.0,
+    "close_mosaic": 10,
+    "mixup": 0.15,
+    "scale": 0.5,
+    "initial_weights": "models/yolo26n/yolo26n.pt"
+  },
+  "metrics": {
+    "mAP50": 0.942,
+    "mAP50_95": 0.6494,
+    "precision": 0.9197,
+    "recall": 0.9298,
+    "f1": 0.9247,
+    "speed": {
+      "preprocess": 0.92,
+      "inference": 3.64,
+      "loss": 0.0,
+      "postprocess": 0.82
+    },
+    "classes_above_90_count": 14,
+    "per_class": {
+      "patient": {
+        "class_id": 0,
+        "mAP50": 0.9172,
+        "mAP50_95": 0.5436,
+        "precision": 0.9232,
+        "recall": 0.8581,
+        "f1": 0.8895,
+        "pass_90": true
+      },
+      "doctor": {
+        "class_id": 1,
+        "mAP50": 0.995,
+        "mAP50_95": 0.644,
+        "precision": 0.9952,
+        "recall": 1.0,
+        "f1": 0.9976,
+        "pass_90": true
+      },
+      "wheelchair": {
+        "class_id": 2,
+        "mAP50": 0.9056,
+        "mAP50_95": 0.5124,
+        "precision": 0.8933,
+        "recall": 0.8562,
+        "f1": 0.8744,
+        "pass_90": true
+      },
+      "queue_kiosk": {
+        "class_id": 3,
+        "mAP50": 0.9932,
+        "mAP50_95": 0.6913,
+        "precision": 0.9653,
+        "recall": 1.0,
+        "f1": 0.9824,
+        "pass_90": true
+      },
+      "reception_counter": {
+        "class_id": 4,
+        "mAP50": 0.9906,
+        "mAP50_95": 0.7774,
+        "precision": 0.9714,
+        "recall": 1.0,
+        "f1": 0.9855,
+        "pass_90": true
+      },
+      "sanitizer_stand": {
+        "class_id": 5,
+        "mAP50": 0.9944,
+        "mAP50_95": 0.8296,
+        "precision": 0.9813,
+        "recall": 0.9905,
+        "f1": 0.9859,
+        "pass_90": true
+      },
+      "pccc_station": {
+        "class_id": 6,
+        "mAP50": 0.9802,
+        "mAP50_95": 0.8435,
+        "precision": 0.9423,
+        "recall": 1.0,
+        "f1": 0.9703,
+        "pass_90": true
+      },
+      "medical_waste_bin": {
+        "class_id": 7,
+        "mAP50": 0.9798,
+        "mAP50_95": 0.7527,
+        "precision": 0.9613,
+        "recall": 0.9599,
+        "f1": 0.9606,
+        "pass_90": true
+      },
+      "water_dispenser": {
+        "class_id": 8,
+        "mAP50": 0.9307,
+        "mAP50_95": 0.5035,
+        "precision": 0.8727,
+        "recall": 0.8232,
+        "f1": 0.8473,
+        "pass_90": true
+      },
+      "wc_station": {
+        "class_id": 9,
+        "mAP50": 0.995,
+        "mAP50_95": 0.7561,
+        "precision": 0.9643,
+        "recall": 1.0,
+        "f1": 0.9818,
+        "pass_90": true
+      },
+      "elevator_doors": {
+        "class_id": 10,
+        "mAP50": 0.995,
+        "mAP50_95": 0.8902,
+        "precision": 0.9695,
+        "recall": 1.0,
+        "f1": 0.9845,
+        "pass_90": true
+      },
+      "hospital_bed": {
+        "class_id": 11,
+        "mAP50": 0.9508,
+        "mAP50_95": 0.4957,
+        "precision": 0.9139,
+        "recall": 1.0,
+        "f1": 0.955,
+        "pass_90": true
+      },
+      "stretcher_cart": {
+        "class_id": 12,
+        "mAP50": 0.795,
+        "mAP50_95": 0.5828,
+        "precision": 1.0,
+        "recall": 0.7903,
+        "f1": 0.8828,
+        "pass_90": false
+      },
+      "iv_stand": {
+        "class_id": 13,
+        "mAP50": 0.7981,
+        "mAP50_95": 0.3352,
+        "precision": 0.7129,
+        "recall": 0.8182,
+        "f1": 0.7619,
+        "pass_90": false
+      },
+      "medical_trolley": {
+        "class_id": 14,
+        "mAP50": 0.869,
+        "mAP50_95": 0.5618,
+        "precision": 0.8324,
+        "recall": 0.8158,
+        "f1": 0.824,
+        "pass_90": false
+      },
+      "vital_monitor": {
+        "class_id": 15,
+        "mAP50": 0.982,
+        "mAP50_95": 0.7109,
+        "precision": 0.8399,
+        "recall": 0.9715,
+        "f1": 0.9009,
+        "pass_90": true
+      },
+      "hospital_chair": {
+        "class_id": 16,
+        "mAP50": 0.9429,
+        "mAP50_95": 0.6086,
+        "precision": 0.8961,
+        "recall": 0.9237,
+        "f1": 0.9097,
+        "pass_90": true
+      }
+    }
+  },
+  "training_time_sec": 1453.9,
+  "best_weights": "/home/bush/Projects/Data-Science-Major-Project/experiments/runs/train_hospital/yolo26n_expanded_verified_17class_v2/weights/best.pt"
+}

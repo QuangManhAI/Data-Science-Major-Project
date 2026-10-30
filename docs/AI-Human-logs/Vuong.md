@@ -751,6 +751,33 @@
 - **Touches:** `docs/AI-Human-logs/Vuong.md`, `src/training/hospital_env_vision.py`, `src/training/train_visual_rl.py`
 - **Evidence:** Recorded interview consensus; architectural design verified against Pinhole optics, PPO sample complexity, and Godot 3D camera parameters.
 
+### D-045 — Implementation of Pure Visual Search RL Environment, Training Pipeline, and Hospital Duty Cycle
+- **Status:** accepted
+- **When:** 2026-10-30T09:35:00+07:00
+- **Decided by:** human-directed implementation on branch `feat/pure-visual-rl`
+- **Trigger:** Implementation of approved plan `pure_visual_search_rl_plan.md` to eliminate oracle patient coordinate dispatch and fix multi-floor duty cycle.
+- **Decision:**
+  1. **Analytical Pinhole Perspective Camera Model (`src/training/camera_vision_model.py`):**
+     - Implemented `compute_pinhole_detection()` modeling 70° VFOV, 86.4° HFOV camera at 1.0 m height matching Godot `robot.tscn`.
+     - Projects 3D human bounding cylinders to normalized 2D image coordinates $[c_x, h]$ with line-of-sight raycasts against hospital walls.
+     - Adds domain randomization: $\pm 4\%$ coordinate noise, $2\%$ random frame drop, and distance-dependent confidence ($0.95 - 0.03 \times d$).
+  2. **Pure Visual-Search RL Environment (`src/training/hospital_env_vision.py`):**
+     - Subclasses `HospitalShiftEnv`, strictly zeroing out oracle goal features (`obs[25..27] = [0.0, 0.0, 0.0]`) during `SEARCH_PATIENT` and `APPROACH_PATIENT`.
+     - Reserves `obs[17..20]` for vision features `[has_det, cx_offset, h, conf]`.
+     - Shaped visual rewards: $+2.0$ for first spotting, $-0.1 \times |c_x|$ camera centering penalty, and $+1.5 \times \Delta h$ approach expansion.
+     - Grid cell coverage reward ($+0.05$ per newly visited $1\,\text{m} \times 1\,\text{m}$ tile) to motivate broad corridor and lobby exploration.
+  3. **Dedicated Visual Training Pipeline (`src/training/train_visual_rl.py`):**
+     - Supports `--episodes` (default 2000), warm-start from converged 3-floor checkpoint, `--device cuda`, and `--smoke` verification.
+     - Implemented visual evaluation metrics (`spotting_rate`, `mean_search_time_s`, `r_team`, `patients_helped`).
+  4. **Godot Runtime & Duty Cycle Fixes (`main.gd`, `rl_policy_client.gd`, `rl_policy_server.py`):**
+     - Escorted patient arrival: When reaching clinic room destination, patient is marked `set_meta("helped", true)`, displays thank-you subtitle ("Cảm ơn robot, tôi đã tới nơi khám!"), and is excluded from `get_available_patients()`.
+     - Multi-floor duty cycle: When robot completes escort on Floor 2 or Floor 3, it automatically calls the elevator and rides down alone (`with_patient = false`) to Floor 1 Lobby, resuming `SEARCH_PATIENT` for newly waiting outpatients.
+     - In `rl_policy_server.py`, enforces zero-oracle observation vector during search, ensuring policy receives YOLO detections without leaked patient coordinates.
+- **Why:** Solves both the repeated-dialogue issue at destination rooms, enables autonomous return to Floor 1, and removes the oracle coordinate cheat so the robot truly learns visual exploration and perception-driven approach.
+- **Touches:** `src/training/camera_vision_model.py`, `src/training/hospital_env_vision.py`, `src/training/train_visual_rl.py`, `sim_vision/python/rl_policy_server.py`, `sim_vision/godot/scripts/rl_policy_client.gd`, `sim_vision/godot/scripts/main.gd`, `tests/test_camera_vision_model.py`, `tests/test_hospital_env_vision.py`, `docs/AI-Human-logs/Vuong.md`
+- **Evidence:** 10/10 vision unit tests pass; all 323 pytest unit tests pass (1 skipped); all 163 Godot GUT unit tests pass (18,873 asserts, 0 failures); verified 2-episode GPU smoke training run on RTX 4060.
+
+
 
 
 

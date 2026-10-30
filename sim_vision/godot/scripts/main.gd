@@ -48,6 +48,7 @@ var _connected: bool = false
 var _last_seen_ms: int = -1             # −1 = chưa thấy người lần nào
 var _last_result_ms: int = -1
 var _start_ms: int = 0
+var _latest_yolo_dets: Array = []
 
 @onready var room: Room = $Room
 @onready var human: Human = $Human
@@ -262,7 +263,17 @@ func _physics_process(delta: float) -> void:
 			overlay.set_status("Đã dẫn tới: %s (R_team=%.0f)" % [_rl_bridge.goal_key, _rl_bridge.cumulative_team_reward])
 			if esc_pat.has_method("end_escort"):
 				esc_pat.end_escort()
+			esc_pat.set_meta("helped", true)
+			if dialogue != null:
+				dialogue.show_subtitle("Bệnh nhân", "Cảm ơn robot, tôi đã tới nơi khám!", 4.0)
 			active_escorted_patient = null
+
+			var cur_floor: int = Room.get_floor(robot.global_position)
+			if cur_floor > 1:
+				print("[ESCORT_DEBUG] >>> Escort completed on Floor %d. Returning robot to Floor 1 lobby via elevator..." % cur_floor)
+				overlay.set_status("Hoàn thành dẫn đường Tầng %d. Đang quay về Sảnh Tầng 1..." % cur_floor)
+				_execute_elevator_transit(cur_floor, 1, false)
+				return
 			reset_positions(true)
 			return
 		if not _policy_active():
@@ -340,16 +351,29 @@ static func get_patient_interaction_pos(pat: CharacterBody3D) -> Vector3:
 func get_available_patients() -> Array[CharacterBody3D]:
 	var list: Array[CharacterBody3D] = []
 	if solo_patient_mode:
-		if human != null:
+		if human != null and not human.get_meta("helped", false):
+			list.append(human)
+		elif human != null:
+			human.set_meta("helped", false)
 			list.append(human)
 		return list
 	var furn: Node = room.get_node_or_null(^"Furniture") if room != null else null
 	if furn != null:
 		for child: Node in furn.get_children():
-			if child is HospitalNpc and (child as HospitalNpc).staff_role == "patient" and child.visible:
+			if child is HospitalNpc and (child as HospitalNpc).staff_role == "patient" and child.visible and not child.get_meta("helped", false):
 				list.append(child as CharacterBody3D)
-	if human != null and human.visible:
+	if human != null and human.visible and not human.get_meta("helped", false):
 		list.append(human)
+	if list.is_empty():
+		# Tất cả bệnh nhân đã được phục vụ -> làm mới để bệnh viện vận hành liên tục
+		if furn != null:
+			for child: Node in furn.get_children():
+				if child is HospitalNpc and (child as HospitalNpc).staff_role == "patient" and child.visible:
+					child.set_meta("helped", false)
+					list.append(child as CharacterBody3D)
+		if human != null and human.visible:
+			human.set_meta("helped", false)
+			list.append(human)
 	return list
 
 
@@ -410,12 +434,20 @@ func _step_policy(delta: float) -> void:
 	var search: bool = _is_search_phase()
 	var target_p: CharacterBody3D = active_escorted_patient if active_escorted_patient != null else (current_target_patient if current_target_patient != null else human)
 	var pat_pos: Vector3 = target_p.global_position if active_escorted_patient != null else Main.get_patient_interaction_pos(target_p)
+	var yolo_feat: Array = []
+	if not _latest_yolo_dets.is_empty():
+		var best_det: Dictionary = _latest_yolo_dets[0]
+		var cx: float = ((float(best_det.get("x1", 0.0)) + float(best_det.get("x2", 0.0))) / 2.0) - 0.5
+		var h: float = float(best_det.get("y2", 0.0)) - float(best_det.get("y1", 0.0))
+		var conf: float = float(best_det.get("conf", 0.9))
+		yolo_feat = [1.0, cx, h, conf]
 	_policy.send_state(
 		robot.global_position, robot.rotation.y, robot.get_real_velocity().length(), robot.omega,
 		robot.get_lidar_readings(), pat_pos,
 		RLEnvBridgeScript.TaskPhase.SEARCH_PATIENT if search else _rl_bridge.task_phase,
 		pat_pos if search else _rl_bridge.goal_position,
-		_rl_bridge.patients_helped
+		_rl_bridge.patients_helped,
+		yolo_feat
 	)
 
 
@@ -590,16 +622,22 @@ func _execute_elevator_transit(from_floor: int, to_floor: int, with_patient: boo
 	)
 	seq.tween_interval(0.9)
 
-	# 8. Đóng cửa thang máy tầng đích, chuyển goal sang phòng khám cuối cùng
+	# 8. Đóng cửa thang máy tầng đích, chuyển goal sang phòng khám cuối cùng (hoặc sảnh tìm bệnh nhân)
 	seq.tween_callback(func():
 		station_to.close_doors()
 		if with_patient:
 			_rl_bridge.goal_key = _rl_bridge.final_target_key
 			_rl_bridge.goal_position = room.get_room_waypoint(_rl_bridge.final_target_key)
+			overlay.set_status("Đã đến Tầng %d, tiếp tục tới: %s" % [to_floor, _rl_bridge.goal_key])
+		else:
+			_rl_bridge.task_phase = RLEnvBridgeScript.TaskPhase.SEARCH_PATIENT
+			_rl_bridge.goal_key = "patient"
+			state = Config.RobotState.SEARCH
+			current_target_patient = pick_next_target_patient()
+			overlay.set_status("Đã trở về Sảnh Tầng 1, tiếp tục tìm bệnh nhân...")
 		_is_in_elevator_transit = false
 		_task_elapsed_s = 0.0  # chặng mới sau thang máy
 		_task_best_dist = -1.0
-		overlay.set_status("Đã đến Tầng %d, tiếp tục tới: %s" % [to_floor, _rl_bridge.goal_key])
 	)
 
 
@@ -905,6 +943,7 @@ func build_log_row(frame_id: int, dets: Array, cmd: Dictionary, infer_ms: float,
 
 
 func _on_detections(frame_id: int, dets: Array, infer_ms: float) -> void:
+	_latest_yolo_dets = dets
 	var now: int = Time.get_ticks_msec()
 	_last_result_ms = now
 	if not dets.is_empty():

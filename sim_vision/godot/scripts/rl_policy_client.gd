@@ -46,7 +46,7 @@ func _set_connected(value: bool) -> void:
 
 ## Gửi một bước quan sát; bỏ qua nếu bước trước chưa có trả lời (không dồn hàng đợi).
 func send_state(robot_pos: Vector3, robot_yaw: float, v: float, omega: float, lidar: PackedFloat32Array,
-		patient_pos: Vector3, phase: int, goal_pos: Vector3, task_id: int) -> void:
+		patient_pos: Vector3, phase: int, goal_pos: Vector3, task_id: int, yolo: Array = []) -> void:
 	if not _connected or _waiting:
 		return
 	var msg: Dictionary = {
@@ -56,6 +56,8 @@ func send_state(robot_pos: Vector3, robot_yaw: float, v: float, omega: float, li
 		"patient": [patient_pos.x, patient_pos.z],
 		"phase": phase, "goal": [goal_pos.x, goal_pos.z], "task_id": task_id,
 	}
+	if not yolo.is_empty():
+		msg["yolo"] = yolo
 	if _ws.send_text(JSON.stringify(msg)) == OK:
 		_waiting = true
 		_next_id += 1

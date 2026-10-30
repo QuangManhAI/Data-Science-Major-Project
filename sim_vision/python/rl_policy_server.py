@@ -68,18 +68,28 @@ class PolicyRunner:
         if phase in (TaskPhase.GUIDE_ESCORT, TaskPhase.CALL_STAFF):
             env.task_phase = TaskPhase(phase)
             final_x, final_z = (float(t) for t in msg["goal"])
+            env.set_nav_target(final_x, final_z)  # sub-goal + path length on the same grid planner as training
         else:
             # Giữ chốt APPROACH (env._get_obs tự chuyển SEARCH ➔ APPROACH khi "thấy" bệnh nhân)
             if env.task_phase not in (TaskPhase.SEARCH_PATIENT, TaskPhase.APPROACH_PATIENT):
                 env.task_phase = TaskPhase.SEARCH_PATIENT
             final_x, final_z = env.patient_x, env.patient_z
-        env.set_nav_target(final_x, final_z)  # sub-goal + path length on the same grid planner as training
 
         obs = env._get_obs()
         if self.lidar_source == "godot":
             lidar = np.asarray(msg["lidar"], dtype=np.float32)
             if lidar.shape == (17,):
                 obs[0:17] = np.clip(lidar, 0.0, 1.0)
+
+        # Zero-Oracle Pure Visual Search mode:
+        if env.task_phase in (TaskPhase.SEARCH_PATIENT, TaskPhase.APPROACH_PATIENT):
+            obs[25:28] = 0.0  # Mask out patient coordinates
+            if "yolo" in msg and len(msg["yolo"]) == 4:
+                obs[17:21] = np.asarray(msg["yolo"], dtype=np.float32)
+                if obs[17] > 0.5:
+                    env.task_phase = TaskPhase.APPROACH_PATIENT
+                    obs[21:25] = 0.0
+                    obs[22] = 1.0  # one-hot APPROACH_PATIENT
 
         with torch.no_grad():
             action, _, _, _ = self.agent.get_action_and_value(

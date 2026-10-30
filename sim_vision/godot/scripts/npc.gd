@@ -67,7 +67,8 @@ func _process(delta: float) -> void:
 	cooldown_left = maxf(cooldown_left - delta, 0.0)
 	if robot == null or not robot_state_fn.is_valid():
 		return
-	var dist: float = Human.flat_distance(human.global_position, robot.global_position)
+	var h_pos: Vector3 = human.get_interaction_position() if (human != null and human.has_method("get_interaction_position")) else (human.global_position if human != null else Vector3.ZERO)
+	var dist: float = Human.flat_distance(h_pos, robot.global_position)
 	var r_state: int = robot_state_fn.call()
 	if r_state == Config.RobotState.APPROACH and dist <= Config.SAFE_DIST_HUMAN + 0.35 and robot.get("v") != null and absf(robot.v) < 0.05:
 		r_state = Config.RobotState.ARRIVED

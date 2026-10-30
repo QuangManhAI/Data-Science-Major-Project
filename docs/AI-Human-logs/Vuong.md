@@ -53,6 +53,9 @@
 | [D-037](#d-037--dedicated-3-floor-patient-escort-ppo-training--distraction-guard) | Dedicated 3-Floor Patient Escort PPO Training & Distraction Guard | human-approved via /grill-me | accepted |
 | [D-038](#d-038--escort-only-inference-mode-overlay-hud-escort-label-and-manual-test-hotkey) | Escort-Only inference mode, overlay HUD escort label, and manual test hotkey | human | accepted |
 | [D-039](#d-039--fix-solo-patient-targeting-busy-guard-and-dialogue-to-escort-transition) | Fix solo patient targeting, busy guard, and dialogue-to-escort transition | human-approved via /grill-me | accepted |
+| [D-040](#d-040--fix-gdscript-stt-tts-connection-property-crash-in-dialogue-turn-completed) | Fix GDScript STT/TTS connection property crash in dialogue turn completed | human-directed log analysis | accepted |
+| [D-041](#d-041--fix-escort-patient-trapping-behind-furniture-and-dynamic-trail-pruning) | Fix escort patient trapping behind furniture and dynamic trail pruning | human log observation | accepted |
+| [D-042](#d-042--seated-patient-interaction-position-stand-up-transition-and-physics-collision-fix) | Seated patient interaction position, stand-up transition, and physics collision fix | AI-pair (Manh + Antigravity) | accepted |
 
 ---
 
@@ -677,6 +680,27 @@
 - **Why:** Ensures the patient spawns in open walkable areas with clear access to the robot, and allows breadcrumb following to smoothly progress along the robot's trail without getting stuck on past crumbs.
 - **Touches:** `sim_vision/godot/scripts/room.gd`, `sim_vision/godot/scripts/main.gd`, `sim_vision/godot/scripts/rl_env_bridge.gd`, `docs/AI-Human-logs/Vuong.md`
 - **Evidence:** 163/163 GUT unit tests pass (18,873 asserts, 140.3s). Patient now has direct, open access to follow robot along the breadcrumbs.
+
+### D-042 — Seated Patient Interaction Position, Stand-Up Transition, and Physics Collision Fix
+- **Status:** accepted
+- **When:** 2026-10-30T08:15:00+07:00
+- **Decided by:** AI-pair (Manh + Antigravity)
+- **Trigger:** "ok, this time I run without solo patient, and the robot pick up a random patient, but its did not follow ... Robot=(-0.99, 3.44) Patient=(-3.59, 3.50) tether=2.60m"
+- **Decision:**
+  1. **Root Cause Analysis from Telemetry:**
+     - In full hospital simulation (with crowd NPCs), the robot selected `Patient_01` who was seated on `WaitingBenchWest` at $X = -4.55, Z = 4.20$.
+     - `main.gd` previously passed raw `target_p.global_position` ($Z = 4.20$) to the RL policy and distance metrics. During Python training (`hospital_env.py:761`), seated targets were explicitly placed at `cand_z = chosen["z"] - 0.9` ($Z = 3.3$, in the open corridor aisle). In Godot, raw bench coordinates caused the robot to approach from the north passage behind the bench and stop at `Robot=(-3.47, 4.99)`.
+     - Dialogue triggered across the backrest of the bench. When escort started, the robot moved towards the elevator, dropping its initial crumb behind the bench. `Patient_01` stood up at $Z = 3.50$ and attempted to move north towards the crumb, physically colliding with `WaitingBenchWest` ($Z \in [3.89, 4.51]$).
+     - Furthermore, in `hospital_npc.gd:226-230`, `global_position += disp` ran unconditionally without an `else` branch after `move_and_slide()`, forcing the character capsule directly into the static bench collision geometry every frame and inducing physics lockup.
+  2. **Code Resolution:**
+     - **Interaction Position (`hospital_npc.gd`):** Added `get_interaction_position() -> Vector3`. If `is_seated`, returns `waypoints[1]` (which is explicitly placed in the open corridor aisle at $Z = 2.50$) or an offset $0.9\,\text{m}$ in front of the seat, matching training assumptions.
+     - **Stand-Up Transition (`hospital_npc.gd`):** In `set_state(State.ESCORTED)` and `escort_step_towards()`, if `is_seated`, automatically clears seated state and places the NPC at their open aisle waypoint (`waypoints[1]`) before movement begins.
+     - **Physics Collision Preservation (`hospital_npc.gd`):** Fixed `escort_step_towards()` and `_move_step_towards()` to place `global_position += disp` inside an `else:` branch, allowing Godot's `move_and_slide()` to resolve collisions naturally without forced penetration.
+     - **Dialogue & Policy Alignment (`main.gd` & `npc.gd`):** Updated `_step_policy()`, `human_distance()`, `human_angle_deg()`, and `npc.gd:_process()` to use `get_interaction_position()`, ensuring the robot approaches the patient from the open corridor in front of the bench.
+     - **Crumb Clearance (`rl_env_bridge.gd`):** Updated `ESCORT_CRUMB_REACH_M = 0.45` to permit smooth capsule navigation around lobby furniture.
+- **Why:** Ensures seated patients are approached from the open aisle rather than from behind furniture, cleanly stand up into walkable space when escort begins, and smoothly follow the breadcrumb trail without physics collisions.
+- **Touches:** `sim_vision/godot/scripts/hospital_npc.gd`, `sim_vision/godot/scripts/main.gd`, `sim_vision/godot/scripts/npc.gd`, `sim_vision/godot/scripts/rl_env_bridge.gd`, `docs/AI-Human-logs/Vuong.md`
+- **Evidence:** GUT unit tests passing; verified patient stands up in the corridor and follows breadcrumbs without colliding into bench geometry.
 
 
 

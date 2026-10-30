@@ -20,7 +20,7 @@ const TETHER_MAX_M: float = 2.5
 # Bệnh nhân đi theo dấu robot (khớp ESCORT_* trong src/training/hospital_env.py)
 const ESCORT_STOP_DIST_M: float = 0.9
 const ESCORT_CRUMB_SPACING_M: float = 0.25
-const ESCORT_CRUMB_REACH_M: float = 0.3
+const ESCORT_CRUMB_REACH_M: float = 0.45
 const ESCORT_TRAIL_JUMP_M: float = 5.0
 const ESCORT_TRAIL_MAX: int = 400
 const GOAL_ARRIVE_ROBOT_M: float = 1.4     # = hospital_env.GOAL_ARRIVE_ROBOT_M

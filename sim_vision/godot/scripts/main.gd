@@ -159,6 +159,8 @@ func trigger_test_escort(dest_key: String = "") -> void:
 	var pat: CharacterBody3D = active_escorted_patient if active_escorted_patient != null else (current_target_patient if current_target_patient != null else human)
 	active_escorted_patient = pat
 	current_target_patient = pat
+	if active_escorted_patient != null and active_escorted_patient.has_method("set_state"):
+		active_escorted_patient.set_state(HospitalNpc.State.ESCORTED)
 	_rl_bridge.begin_post_dialogue_task("guide", target, fl, active_escorted_patient)
 	_task_elapsed_s = 0.0
 	_task_best_dist = -1.0
@@ -226,7 +228,8 @@ func _physics_process(delta: float) -> void:
 	if not Main.is_dialogue_state(state) and state != Config.RobotState.ARRIVED:
 		_task_elapsed_s += delta
 		var current_pat: CharacterBody3D = active_escorted_patient if active_escorted_patient != null else (current_target_patient if current_target_patient != null else human)
-		var task_target: Vector3 = current_pat.global_position if _is_search_phase() else _rl_bridge.goal_position
+		var pat_target_pos: Vector3 = current_pat.global_position if active_escorted_patient != null else Main.get_patient_interaction_pos(current_pat)
+		var task_target: Vector3 = pat_target_pos if _is_search_phase() else _rl_bridge.goal_position
 		var d_task: float = Human.flat_distance(robot.global_position, _leg_target(task_target))
 		if _task_best_dist < 0.0 or d_task < _task_best_dist - TASK_PROGRESS_M:
 			_task_best_dist = d_task
@@ -326,6 +329,14 @@ func get_active_speaking_patient() -> CharacterBody3D:
 	return current_target_patient if current_target_patient != null else human
 
 
+static func get_patient_interaction_pos(pat: CharacterBody3D) -> Vector3:
+	if pat == null:
+		return Vector3.ZERO
+	if pat.has_method("get_interaction_position"):
+		return pat.get_interaction_position()
+	return pat.global_position
+
+
 func get_available_patients() -> Array[CharacterBody3D]:
 	var list: Array[CharacterBody3D] = []
 	if solo_patient_mode:
@@ -398,11 +409,12 @@ func _step_policy(delta: float) -> void:
 	_policy_accum = fmod(_policy_accum, RLPolicyClientScript.STEP_DT_S)
 	var search: bool = _is_search_phase()
 	var target_p: CharacterBody3D = active_escorted_patient if active_escorted_patient != null else (current_target_patient if current_target_patient != null else human)
+	var pat_pos: Vector3 = target_p.global_position if active_escorted_patient != null else Main.get_patient_interaction_pos(target_p)
 	_policy.send_state(
 		robot.global_position, robot.rotation.y, robot.get_real_velocity().length(), robot.omega,
-		robot.get_lidar_readings(), target_p.global_position,
+		robot.get_lidar_readings(), pat_pos,
 		RLEnvBridgeScript.TaskPhase.SEARCH_PATIENT if search else _rl_bridge.task_phase,
-		target_p.global_position if search else _rl_bridge.goal_position,
+		pat_pos if search else _rl_bridge.goal_position,
 		_rl_bridge.patients_helped
 	)
 
@@ -446,6 +458,8 @@ func _on_dialogue_turn_completed(row: Dictionary) -> void:
 	if act == "guide" or act == "call_staff" or act == "emergency":
 		active_escorted_patient = speaking_pat
 		current_target_patient = speaking_pat
+		if active_escorted_patient != null and active_escorted_patient.has_method("set_state"):
+			active_escorted_patient.set_state(HospitalNpc.State.ESCORTED)
 		_rl_bridge.begin_post_dialogue_task(act, target_key, fl, active_escorted_patient)
 		_task_elapsed_s = 0.0  # đích đổi từ bệnh nhân sang phòng / nhân viên
 		_task_best_dist = -1.0
@@ -715,7 +729,8 @@ func _update_inspection_panel() -> void:
 	inspection_panel.update_lidar(robot.get_lidar_readings())
 	var current_pat: CharacterBody3D = active_escorted_patient if active_escorted_patient != null else (current_target_patient if current_target_patient != null else human)
 	var search: bool = _is_search_phase()
-	var g_pos: Vector3 = current_pat.global_position if (search or _rl_bridge == null) else _rl_bridge.goal_position
+	var pat_pos: Vector3 = current_pat.global_position if active_escorted_patient != null else Main.get_patient_interaction_pos(current_pat)
+	var g_pos: Vector3 = pat_pos if (search or _rl_bridge == null) else _rl_bridge.goal_position
 	var r_pos: Vector3 = robot.global_position
 	var d_goal: float = Human.flat_distance(r_pos, g_pos)
 	var r_yaw: float = robot.rotation.y
@@ -811,7 +826,8 @@ func reset_positions(is_task_transition: bool = false) -> void:
 func human_distance() -> float:
 	var spk: CharacterBody3D = get_active_speaking_patient() if Main.is_dialogue_state(state) else null
 	var target_pat: CharacterBody3D = spk if spk != null else (active_escorted_patient if active_escorted_patient != null else (current_target_patient if current_target_patient != null else human))
-	return Human.flat_distance(robot.global_position, target_pat.global_position)
+	var target_pos: Vector3 = target_pat.global_position if active_escorted_patient != null else Main.get_patient_interaction_pos(target_pat)
+	return Human.flat_distance(robot.global_position, target_pos)
 
 
 func _setup_hospital_npcs() -> void:
@@ -869,7 +885,8 @@ func _nearest_person_distance() -> float:
 func human_angle_deg() -> float:
 	var spk: CharacterBody3D = get_active_speaking_patient() if Main.is_dialogue_state(state) else null
 	var target_pat: CharacterBody3D = spk if spk != null else (active_escorted_patient if active_escorted_patient != null else (current_target_patient if current_target_patient != null else human))
-	return RunLogger.signed_angle_deg(-robot.global_transform.basis.z, target_pat.global_position - robot.global_position)
+	var target_pos: Vector3 = target_pat.global_position if active_escorted_patient != null else Main.get_patient_interaction_pos(target_pat)
+	return RunLogger.signed_angle_deg(-robot.global_transform.basis.z, target_pos - robot.global_position)
 
 
 ## Một dòng log G9: kết quả nhận diện (target do controller chọn) + ground truth + lệnh sau an toàn.

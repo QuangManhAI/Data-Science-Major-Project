@@ -235,7 +235,18 @@ func _physics_process(delta: float) -> void:
 		if _task_best_dist < 0.0 or d_task < _task_best_dist - TASK_PROGRESS_M:
 			_task_best_dist = d_task
 			_task_elapsed_s = 0.0
-		if _task_elapsed_s > TASK_TIMEOUT_S:
+
+		var cur_floor_now: int = Room.get_floor(robot.global_position)
+		# KHÔNG tự reset episode khi robot đang tìm kiếm / quay về ở tầng trên (cur_floor > 1)
+		# Robot có thể tự tìm đường quay về thang máy hoặc tìm bệnh nhân tầng trên mà không bị cưỡng chế reset
+		if cur_floor_now > 1 and _is_search_phase():
+			_task_elapsed_s = 0.0
+		elif _policy_active():
+			# Trong chế độ RL inference: không ép reset vị trí làm gián đoạn thử nghiệm
+			if _task_elapsed_s > TASK_TIMEOUT_S:
+				_task_elapsed_s = 0.0
+				print("[ESCORT_DEBUG] >>> RL Inference: timeout suppressed to keep policy exploring without auto-reset.")
+		elif _task_elapsed_s > TASK_TIMEOUT_S:
 			print("[ESCORT_DEBUG] >>> Task TIMED OUT! elapsed=%.1fs > %.1fs, Goal=%s" % [_task_elapsed_s, TASK_TIMEOUT_S, _rl_bridge.goal_key])
 			overlay.set_status("Hủy nhiệm vụ %s: kẹt quá %.0fs" % [_rl_bridge.goal_key, TASK_TIMEOUT_S])
 			# Như kết thúc episode lúc train: đặt lại cả robot; chỉ dời bệnh nhân thì robot kẹt góc quay vòng mãi
@@ -265,7 +276,10 @@ func _physics_process(delta: float) -> void:
 				esc_pat.end_escort()
 			esc_pat.set_meta("helped", true)
 			if dialogue != null:
-				dialogue.show_subtitle("Bệnh nhân", "Cảm ơn robot, tôi đã tới nơi khám!", 4.0)
+				if dialogue.has_method("show_subtitle"):
+					dialogue.show_subtitle("Bệnh nhân", "Cảm ơn robot, tôi đã tới nơi khám!", 4.0)
+				elif dialogue.get("subtitle") != null and dialogue.subtitle != null:
+					dialogue.subtitle.show_reply("", "Bệnh nhân: Cảm ơn robot, tôi đã tới nơi khám!", 4.0)
 			active_escorted_patient = null
 
 			var cur_floor: int = Room.get_floor(robot.global_position)

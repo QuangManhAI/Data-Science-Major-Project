@@ -321,3 +321,9 @@ func register_npc(other_npc: Npc) -> void:
 		active_npc = other_npc
 		_on_utterance_finished(clip_id)
 	)
+
+
+func show_subtitle(speaker: String, text: String, duration: float = Config.SUBTITLE_S) -> void:
+	if subtitle != null:
+		var line: String = "%s: %s" % [speaker, text] if speaker != "" else text
+		subtitle.show_reply("", line, duration)

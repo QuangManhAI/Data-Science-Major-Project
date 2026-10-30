@@ -265,6 +265,8 @@ def run_train_visual_rl(
         else:
             log_print(" Training Mode       : From Scratch (Random initialization)")
 
+    regular_save_interval = max(1, episodes // 5)
+
     log_print("=" * 86)
     log_print(f" PPO PURE VISUAL-SEARCH TRAINING -- {episodes} EPISODES (Start Ep: {start_ep})")
     log_print(f" Zero-Oracle Mode    : Patient coordinates MASKED to 0 during search")
@@ -276,6 +278,7 @@ def run_train_visual_rl(
     log_print(f" Shift Duration      : {shift_duration_s:.1f}s ({int(shift_duration_s / 0.2)} steps)")
     log_print(f" PPO Batch Update    : Every {update_freq_episodes} episodes | PPO Epochs: {ppo_epochs} | Batch: {batch_size}")
     log_print(f" Learning Rate       : {lr_init:.1e} -> {lr_min:.1e} (Cosine Annealing)")
+    log_print(f" Checkpoint Saving   : Every {regular_save_interval} episodes (5 periodic checkpoints) + best/last")
 
     batch_obs: list[np.ndarray] = []
     batch_act: list[np.ndarray] = []
@@ -544,6 +547,22 @@ def run_train_visual_rl(
                 best_eval = eval_metrics["score"]
                 torch.save(ckpt_data, ckpt_dir / f"{ckpt_prefix}_best.pt")
                 log_print(f" ★ New Best Eval Checkpoint! Score: {best_eval:.2f}")
+
+        # Periodic regular checkpoint saving (adapts to total episodes, saving 5 evenly spaced checkpoints)
+        if ep % regular_save_interval == 0:
+            periodic_ckpt_data = {
+                "episode": ep,
+                "model_state_dict": agent.state_dict(),
+                "optimizer_state_dict": optimizer.state_dict(),
+                "best_roll20": best_roll20,
+                "best_eval_score": best_eval,
+                "peak_r_team": peak_r_team,
+                "git_commit": get_git_commit(),
+                "rng_state": capture_rng_state(seed),
+            }
+            periodic_ckpt_path = ckpt_dir / f"{ckpt_prefix}_ep{ep}.pt"
+            torch.save(periodic_ckpt_data, periodic_ckpt_path)
+            log_print(f" [CKPT] Saved periodic checkpoint ({ep}/{episodes}): {periodic_ckpt_path.name}")
 
     log_print("=" * 86)
     log_print(f" Training complete! Total episodes: {episodes}")

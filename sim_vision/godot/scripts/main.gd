@@ -903,7 +903,7 @@ func _setup_hospital_npcs() -> void:
 		human.setup_robot(robot)
 		var h_npc_node: Node = human.get_node_or_null(^"Npc")
 		if h_npc_node != null and h_npc_node.has_method("setup"):
-			h_npc_node.setup(robot, func() -> int: return Config.RobotState.SEARCH if is_task_busy() else state)
+			h_npc_node.setup(robot, func() -> int: return Config.RobotState.SEARCH if (is_task_busy() or Main.is_dialogue_state(state)) else state)
 	var furn: Node = room.get_node_or_null(^"Furniture") if room != null else null
 	if furn != null:
 		for child: Node in furn.get_children():
@@ -915,7 +915,7 @@ func _setup_hospital_npcs() -> void:
 					for col: Node in h_npc.find_children("*", "CollisionShape3D", true, false):
 						(col as CollisionShape3D).disabled = true
 				else:
-					h_npc.setup_robot(robot, func() -> int: return Config.RobotState.SEARCH if is_task_busy() else state)
+					h_npc.setup_robot(robot, func() -> int: return Config.RobotState.SEARCH if (is_task_busy() or Main.is_dialogue_state(state)) else state)
 					if dialogue != null and h_npc.has_npc():
 						dialogue.register_npc(h_npc.get_npc())
 	if escort_only_mode:

@@ -152,7 +152,7 @@ func build_log_row(r: Dictionary, error: String) -> Dictionary:
 
 
 func _on_talk_started(clip_id: String) -> void:
-	if main != null and main.has_method("is_task_busy") and main.is_task_busy():
+	if main != null and (main.is_task_busy() or Main.is_dialogue_state(main.state)):
 		return
 	print("[ESCORT_DEBUG] >>> NPC talk started: clip_id='%s', robot_state=%s" % [clip_id, Config.state_name(main.state)])
 	if main.state == Config.RobotState.ARRIVED or main.state in [Config.RobotState.APPROACH, Config.RobotState.SEARCH]:
@@ -172,6 +172,8 @@ func _on_talk_aborted(_clip_id: String) -> void:
 
 
 func _on_utterance_finished(clip_id: String) -> void:
+	if main.state != Config.RobotState.LISTEN:
+		return
 	utt_id += 1
 	pending_clip = clip_id
 	var speaker_node: Node3D = active_npc.human if (active_npc != null and active_npc.human != null) else npc.human
@@ -312,16 +314,21 @@ func register_npc(other_npc: Npc) -> void:
 		return
 	_registered_npcs.append(other_npc)
 	other_npc.talk_started.connect(func(clip_id: String) -> void:
-		if main != null and main.has_method("is_task_busy") and main.is_task_busy():
+		if main != null and (main.is_task_busy() or Main.is_dialogue_state(main.state)):
+			return
+		if active_npc != null and active_npc != other_npc and Main.is_dialogue_state(main.state):
 			return
 		active_npc = other_npc
 		_on_talk_started(clip_id)
 	)
 	other_npc.talk_aborted.connect(func(clip_id: String) -> void:
+		if active_npc != other_npc:
+			return
 		_on_talk_aborted(clip_id)
 	)
 	other_npc.utterance_finished.connect(func(clip_id: String) -> void:
-		active_npc = other_npc
+		if active_npc != other_npc:
+			return
 		_on_utterance_finished(clip_id)
 	)
 

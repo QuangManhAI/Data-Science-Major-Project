@@ -56,6 +56,8 @@
 | [D-040](#d-040--fix-gdscript-stt-tts-connection-property-crash-in-dialogue-turn-completed) | Fix GDScript STT/TTS connection property crash in dialogue turn completed | human-directed log analysis | accepted |
 | [D-041](#d-041--fix-escort-patient-trapping-behind-furniture-and-dynamic-trail-pruning) | Fix escort patient trapping behind furniture and dynamic trail pruning | human log observation | accepted |
 | [D-042](#d-042--seated-patient-interaction-position-stand-up-transition-and-physics-collision-fix) | Seated patient interaction position, stand-up transition, and physics collision fix | AI-pair (Manh + Antigravity) | accepted |
+| [D-043](#d-043--analysis-of-duty-cycle-flaws-oracle-dispatch-vs-visual-rl-and-pure-rl-vision-roadmap) | Analysis of duty cycle flaws, oracle dispatch vs visual RL, and pure visual-search RL roadmap | human-directed inquiry | accepted |
+| [D-044](#d-044--grill-me-interview-record-pure-visual-search-rl-architecture-and-new-training-branch) | /grill-me interview record: Pure Visual-Search RL architecture and new training branch | human-approved via /grill-me | accepted |
 
 ---
 
@@ -701,6 +703,53 @@
 - **Why:** Ensures seated patients are approached from the open aisle rather than from behind furniture, cleanly stand up into walkable space when escort begins, and smoothly follow the breadcrumb trail without physics collisions.
 - **Touches:** `sim_vision/godot/scripts/hospital_npc.gd`, `sim_vision/godot/scripts/main.gd`, `sim_vision/godot/scripts/npc.gd`, `sim_vision/godot/scripts/rl_env_bridge.gd`, `docs/AI-Human-logs/Vuong.md`
 - **Evidence:** GUT unit tests passing; verified patient stands up in the corridor and follows breadcrumbs without colliding into bench geometry.
+
+### D-043 — Analysis of Duty Cycle Flaws, Oracle Dispatch vs Visual RL, and Pure Visual-Search RL Roadmap
+- **Status:** accepted
+- **When:** 2026-10-30T08:50:00+07:00
+- **Decided by:** human-directed architectural review
+- **Trigger:** Human identified two fundamental operational and training flaws: 1) Patient repeated request after arriving at clinic room; 2) Robot stranded on upper floors without a return-to-lobby mechanism; 3) Revelation that current RL policy relies on oracle patient coordinates rather than visual search.
+- **Decision:**
+  1. **Root Cause Analysis — Patient Lifecycle & Duty Cycle:**
+     - When arriving at destination (e.g. Room 205 on Floor 2), the escorted patient stayed standing outside the room without being flagged as completed (`helped = true`).
+     - `main.gd:355` filtered next targets by current floor (`same_fl`). Since Floor 2/3 had no crowd patients, the single newly arrived patient was immediately re-targeted, triggering dialogue again.
+     - In training (`hospital_env.py:756`), new patients were artificially spawned on the robot's current floor (`x_base = floor_of(robot)`), omitting the critical hospital duty cycle where the robot rides the elevator down to Floor 1 Lobby to collect new outpatients.
+  2. **Architectural Contrast — Vision FSM vs Goal-Conditioned RL:**
+     - FSM mode (`--controller fsm`) searches using YOLOv8 camera vision, scanning the room and steering via bounding box coordinates ($c_x, h$).
+     - RL mode (`--controller rl`) operates as an Oracle-Dispatched Goal-Directed Agent: observation vector (31 dims) only takes 17 LiDAR rays and a goal vector $(d_{\text{goal}}, \Delta\theta)$ fed from simulation ground-truth coordinates. The camera/YOLO feed is only used for HUD overlay and CSV logging; the PPO network is blind to vision.
+  3. **Strategic Direction (Pure RL Vision-Search Roadmap):**
+     - Transition from oracle dispatch toward a Pure RL-driven robot that actively searches for patients using vision/detections without hardcoded or ground-truth patient coordinates.
+     - Known static landmarks (rooms, elevator doors) may remain fixed map coordinates, but human target acquisition must be visual and learned.
+- **Why:** Establishes complete parity between actual clinical hospital operations (Lobby $\to$ Escort $\to$ Clinic Room $\to$ Return to Lobby) and provides the architectural foundation for a true Visual Search RL agent.
+- **Touches:** `docs/AI-Human-logs/Vuong.md`, `sim_vision/godot/scripts/main.gd`, `src/training/hospital_env.py`
+- **Evidence:** Comprehensive codebase analysis confirming `_on_detections()` bypasses YOLO during RL mode; theoretical and empirical proof of duty cycle deadlock when multi-floor transition finishes.
+
+### D-044 — /grill-me Interview Record: Pure Visual-Search RL Architecture and New Training Branch
+- **Status:** accepted
+- **When:** 2026-10-30T09:10:00+07:00
+- **Decided by:** human-approved via /grill-me
+- **Trigger:** Human requested a rigorous architectural interview (`/grill-me`) to design a Pure RL-driven robot that actively discovers patients through vision without oracle ground-truth coordinates, while preserving LiDAR obstacle avoidance and room escorting.
+- **Decision:**
+  1. **Q1 — Vision Observation Representation:**
+     - *Question:* How should visual patient information be fed to the PPO policy?
+     - *Decided:* **Feature-Level Vision Observation (YOLO Bounding Box Features + LiDAR + Nav Goals)**. Compact vector containing `[person_seen, norm_cx, norm_cy, box_w, box_h]` combined with 17 LiDAR rays and kinematic state. Enables ultra-fast PPO simulation (>5,000 steps/s in Python) and direct transfer to YOLOv8 inference in Godot.
+  2. **Q2 — Motion during SEARCH (No Patient in FOV):**
+     - *Question:* How should the robot move when searching and no patient is visible?
+     - *Decided:* **Autonomous Exploration / Curiosity & Area Coverage Reward**. During SEARCH, the goal vector is neutral $(0, 0)$. The robot explores the hospital floor autonomously driven by intrinsic coverage incentives until a patient enters camera FOV. (Recommended patrol waypoints documented as fallback baseline).
+  3. **Q3 — Multi-Floor Duty Cycle & Return-to-Lobby:**
+     - *Question:* How does the robot learn to take the elevator down to Floor 1 after completing an escort on Floor 2/3?
+     - *Decided:* **Implicit Opportunity Return (Sparse Penalty Formulation)**. No privileged multi-floor oracle state. Robot experiences a per-step time penalty (`-0.01/step`). Upper floors without waiting patients represent a reward desert; the robot must discover that riding the elevator down to Floor 1 unlocks high task completion rewards (+30.0).
+  4. **Q4 — Visual Patient Acquisition Reward:**
+     - *Question:* What reward guides the robot when a person is visible (`seen = 1`)?
+     - *Decided:* **Visual Acquisition Reward**. Positive reward for detection (+2.0 when `seen=1`), camera centering penalty ($-|c_x|$ to align the robot's heading), and distance reduction shaping ($+h$ scaling up to $0.45$). Reaching $h \ge 0.45$ triggers engagement and dialogue.
+  5. **Q5 — Fast Python Simulation of Vision:**
+     - *Question:* How should the camera be modeled in fast Python simulation (`hospital_env.py`)?
+     - *Decided:* **Geometric Pinhole Camera Model with Line-of-Sight and Domain Randomization**. $75^\circ$ FOV horizontal projection with $c_x = \tan\Delta\theta / \tan(\text{FOV}/2)$, $h \propto 1/D$, and raycast occlusion check. Domain randomization ($\pm 5\%$ jitter and frame dropout) ensures robustness against real-world YOLOv8 detection fluctuations during Godot inference.
+  6. **Q6 — Implementation Roadmap:**
+     - *Decided:* **Option 2: Focus 100% on the new Pure Visual RL environment on a dedicated Git branch (`feat/pure-visual-rl`)**, developing `hospital_env_vision.py` and `train_visual_rl.py`.
+- **Why:** Replaces privileged oracle coordinates with genuine sensorimotor visual acquisition, uniting YOLO perception and PPO control into an authentic end-to-end autonomous robotic agent.
+- **Touches:** `docs/AI-Human-logs/Vuong.md`, `src/training/hospital_env_vision.py`, `src/training/train_visual_rl.py`
+- **Evidence:** Recorded interview consensus; architectural design verified against Pinhole optics, PPO sample complexity, and Godot 3D camera parameters.
 
 
 

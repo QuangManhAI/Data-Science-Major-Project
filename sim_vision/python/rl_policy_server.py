@@ -152,7 +152,7 @@ class PolicyRunner:
         v_out = float(np.clip((a_v + 1.0) * 0.5 * (ESCORT_WALK_SPEED if env.task_phase == TaskPhase.GUIDE_ESCORT else V_MAX), 0.0, ESCORT_WALK_SPEED if env.task_phase == TaskPhase.GUIDE_ESCORT else V_MAX))
         omega_out = float(np.clip(a_omega * OMEGA_MAX, -OMEGA_MAX, OMEGA_MAX))
         self.n_steps += 1
-        if self.trace and (env.task_phase == TaskPhase.GUIDE_ESCORT or self.n_steps % 5 == 0):
+        if self.trace and (env.task_phase in (TaskPhase.GUIDE_ESCORT, TaskPhase.CALL_STAFF) or self.n_steps % 5 == 0):
             d_p = np.hypot(env.patient_x - x, env.patient_z - z)
             d_g = np.hypot(final_x - x, final_z - z)
             print(

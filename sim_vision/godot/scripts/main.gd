@@ -288,15 +288,14 @@ func _physics_process(delta: float) -> void:
 
 			var cur_floor: int = Room.get_floor(robot.global_position)
 			if cur_floor > 1:
-				print("[ESCORT_DEBUG] >>> Escort completed on Floor %d. Routing robot to Floor %d elevator to return to Floor 1..." % [cur_floor, cur_floor])
-				var elev_key: String = "thang_may_t%d" % cur_floor
-				_rl_bridge.goal_key = elev_key
-				_rl_bridge.goal_position = room.get_room_waypoint(elev_key) if room != null else Vector3.ZERO
+				print("[ESCORT_DEBUG] >>> Escort completed on Floor %d. Routing robot to return to Floor 1 via elevator..." % cur_floor)
+				_rl_bridge.goal_key = "tiep_don"
+				_rl_bridge.goal_position = room.get_room_waypoint("tiep_don") if room != null else Vector3.ZERO
 				_rl_bridge.final_target_key = "tiep_don"
-				_rl_bridge.task_phase = RLEnvBridgeScript.TaskPhase.GUIDE_ESCORT
+				_rl_bridge.task_phase = RLEnvBridgeScript.TaskPhase.CALL_STAFF
 				_task_elapsed_s = 0.0
 				_task_best_dist = -1.0
-				overlay.set_status("Đã dẫn bệnh nhân tới %s. Đang tự di chuyển về Thang máy Tầng %d..." % [_rl_bridge.goal_key, cur_floor])
+				overlay.set_status("Đã dẫn bệnh nhân tới %s. Đang tự di chuyển về Thang máy Tầng %d để xuống Sảnh..." % [_rl_bridge.goal_key, cur_floor])
 				return
 			reset_positions(true)
 			return
@@ -311,6 +310,7 @@ func _physics_process(delta: float) -> void:
 		var staff_floor: int = Room.get_floor(_rl_bridge.goal_position)
 		if staff_floor != robot_floor \
 				and Human.flat_distance(robot.global_position, _leg_target(_rl_bridge.goal_position)) <= RLEnvBridgeScript.GOAL_ARRIVE_ROBOT_M:
+			print("[ESCORT_DEBUG] >>> Elevator transit triggered: Floor %d -> Floor %d (Solo Return)" % [robot_floor, staff_floor])
 			_execute_elevator_transit(robot_floor, staff_floor, false)
 			return
 		var d_goal: float = Human.flat_distance(robot.global_position, _rl_bridge.goal_position)
@@ -324,6 +324,9 @@ func _physics_process(delta: float) -> void:
 			return
 		if not _policy_active():
 			var cmd_vec: Vector2 = RLControllerScript.step_towards_goal_with_lidar(
+				robot.global_position, robot.rotation.y, _leg_target(_rl_bridge.goal_position), robot.get_lidar_readings(), 0.0, false
+			)
+			robot.set_command(cmd_vec.x, cmd_vec.y)
 				robot.global_position, robot.rotation.y, _rl_bridge.goal_position, robot.get_lidar_readings(), 0.0, false
 			)
 			robot.set_command(cmd_vec.x, cmd_vec.y)
@@ -462,7 +465,7 @@ func _step_policy(delta: float) -> void:
 	_policy_accum = fmod(_policy_accum, RLPolicyClientScript.STEP_DT_S)
 	var search: bool = _is_search_phase()
 	var target_p: CharacterBody3D = active_escorted_patient if active_escorted_patient != null else (current_target_patient if current_target_patient != null else human)
-	var pat_pos: Vector3 = target_p.global_position if active_escorted_patient != null else Main.get_patient_interaction_pos(target_p)
+	var pat_pos: Vector3 = target_p.global_position if active_escorted_patient != null else (robot.global_position if not search else Main.get_patient_interaction_pos(target_p))
 	var yolo_feat: Array = []
 	if not _latest_yolo_dets.is_empty():
 		var best_det: Dictionary = _latest_yolo_dets[0]
@@ -474,7 +477,7 @@ func _step_policy(delta: float) -> void:
 		robot.global_position, robot.rotation.y, robot.get_real_velocity().length(), robot.omega,
 		robot.get_lidar_readings(), pat_pos,
 		RLEnvBridgeScript.TaskPhase.SEARCH_PATIENT if search else _rl_bridge.task_phase,
-		pat_pos if search else _rl_bridge.goal_position,
+		pat_pos if search else _leg_target(_rl_bridge.goal_position),
 		_rl_bridge.patients_helped,
 		yolo_feat
 	)

@@ -22,6 +22,7 @@ PYTHON_DIR = REPO_ROOT / "sim_vision" / "python"
 GODOT_DIR = REPO_ROOT / "sim_vision" / "godot"
 
 CHILD_PROCESSES: List[subprocess.Popen] = []
+OPEN_LOG_FILES: List[Any] = []
 
 
 def log(msg: str) -> None:
@@ -29,9 +30,22 @@ def log(msg: str) -> None:
     print(msg, flush=True)
 
 
+def get_log_handle(
+    name: str, enable_file_logging: bool, log_dir: Path
+) -> tuple[Optional[Any], Optional[Path]]:
+    """Open a line-buffered file handle for process stdout/stderr redirection."""
+    if not enable_file_logging:
+        return None, None
+    log_dir.mkdir(parents=True, exist_ok=True)
+    log_path = log_dir / f"{name}.log"
+    f = open(log_path, "w", encoding="utf-8", buffering=1)
+    OPEN_LOG_FILES.append(f)
+    return f, log_path
+
+
 def cleanup() -> None:
-    """Terminate all spawned server subprocesses."""
-    if not CHILD_PROCESSES:
+    """Terminate all spawned server subprocesses and close file handles."""
+    if not CHILD_PROCESSES and not OPEN_LOG_FILES:
         return
     log("\n[Launcher] Shutting down background servers...")
     for p in CHILD_PROCESSES:
@@ -48,7 +62,15 @@ def cleanup() -> None:
             except Exception:
                 pass
     CHILD_PROCESSES.clear()
-    log("[Launcher] All servers stopped.")
+
+    for f in OPEN_LOG_FILES:
+        try:
+            f.flush()
+            f.close()
+        except Exception:
+            pass
+    OPEN_LOG_FILES.clear()
+    log("[Launcher] All servers stopped and log files closed.")
 
 
 def handle_signal(sig, frame) -> None:
@@ -147,6 +169,7 @@ def wait_for_ws(
     timeout: float = 180.0,
     desc: str = "",
     proc: Optional[subprocess.Popen] = None,
+    log_path: Optional[Path] = None,
 ) -> bool:
     """Wait until WebSocket server is ready and responds to handshake."""
     start = time.time()
@@ -155,6 +178,8 @@ def wait_for_ws(
     while time.time() - start < timeout:
         if proc is not None and proc.poll() is not None:
             log(f"[Launcher] -> {desc} exited unexpectedly with code {proc.returncode}!")
+            if log_path:
+                log(f"[Launcher] -> See details in log file: {log_path}")
             return False
         try:
             from websockets.sync.client import connect
@@ -165,6 +190,8 @@ def wait_for_ws(
         except Exception:
             time.sleep(0.5)
     log(f"[Launcher] -> {desc} timed out after {timeout}s!")
+    if log_path:
+        log(f"[Launcher] -> See details in log file: {log_path}")
     return False
 
 
@@ -232,6 +259,17 @@ def main() -> None:
         action="store_true",
         help="Patients strictly request escort to hospital clinic rooms across Floors 1, 2, and 3",
     )
+    parser.add_argument(
+        "--terminal-logs",
+        action="store_true",
+        help="Print server and Godot stdout/stderr to terminal instead of logging to .log files in logs/",
+    )
+    parser.add_argument(
+        "--log-dir",
+        type=str,
+        default=str(REPO_ROOT / "logs"),
+        help="Directory to store .log files for background servers and Godot (default: logs/)",
+    )
 
     # Sanitize sys.argv against accidental quotes, trailing spaces, or Unicode dashes
     clean_argv: List[str] = []
@@ -265,21 +303,35 @@ def main() -> None:
 
     sub_env = {**os.environ, "PYTHONUNBUFFERED": "1"}
 
+    enable_file_logging = not args.terminal_logs
+    log_dir = Path(args.log_dir).resolve()
+    if enable_file_logging:
+        log_dir.mkdir(parents=True, exist_ok=True)
+        log(f"[Launcher] Logging to files in: {log_dir}")
+
     # 1. Start YOLO server (Port 8765)
-    log("[Launcher] Starting YOLO server on port 8765...")
+    yolo_f, yolo_log_path = get_log_handle("yolo", enable_file_logging, log_dir)
+    log_info = f" (logging to {yolo_log_path.name})" if yolo_log_path else ""
+    log(f"[Launcher] Starting YOLO server on port 8765{log_info}...")
     yolo_proc = subprocess.Popen(
         [str(py_exe), "yolo_server.py"],
         cwd=PYTHON_DIR,
         env=sub_env,
+        stdout=yolo_f if yolo_f else None,
+        stderr=subprocess.STDOUT if yolo_f else None,
     )
     CHILD_PROCESSES.append(yolo_proc)
 
     # 2. Start STT + NLU server (Port 8766)
-    log(f"[Launcher] Starting STT + NLU server on port 8766 (NLU mode: {args.nlu})...")
+    stt_f, stt_log_path = get_log_handle("stt", enable_file_logging, log_dir)
+    log_info = f" (logging to {stt_log_path.name})" if stt_log_path else ""
+    log(f"[Launcher] Starting STT + NLU server on port 8766 (NLU mode: {args.nlu}){log_info}...")
     stt_proc = subprocess.Popen(
         [str(py_exe), "-m", "voice.stt_server", "--nlu", args.nlu],
         cwd=PYTHON_DIR,
         env=sub_env,
+        stdout=stt_f if stt_f else None,
+        stderr=subprocess.STDOUT if stt_f else None,
     )
     CHILD_PROCESSES.append(stt_proc)
 
@@ -287,13 +339,19 @@ def main() -> None:
     tts_onnx = REPO_ROOT / "models" / "Vie-neu-v3-turbo" / "onnx_update" / "vieneu_prefill.onnx"
     should_run_tts = (args.with_tts or (tts_onnx.is_file() and not args.no_tts)) and not args.no_tts
 
+    tts_proc = None
+    tts_log_path = None
     if should_run_tts:
         tts_py = find_tts_python(py_exe)
-        log(f"[Launcher] Starting TTS server on port 8767 (VieNeu-TTS v3 Turbo) via {tts_py}...")
+        tts_f, tts_log_path = get_log_handle("tts", enable_file_logging, log_dir)
+        log_info = f" (logging to {tts_log_path.name})" if tts_log_path else ""
+        log(f"[Launcher] Starting TTS server on port 8767 (VieNeu-TTS v3 Turbo){log_info} via {tts_py}...")
         tts_proc = subprocess.Popen(
             [str(tts_py), "-m", "tts.tts_server"],
             cwd=PYTHON_DIR,
             env=sub_env,
+            stdout=tts_f if tts_f else None,
+            stderr=subprocess.STDOUT if tts_f else None,
         )
         CHILD_PROCESSES.append(tts_proc)
     else:
@@ -301,20 +359,29 @@ def main() -> None:
 
     # 4. RL policy server (Port 8768) — PPO checkpoint lái robot trong Godot (--controller rl)
     rl_proc = None
+    rl_log_path = None
     if args.controller == "rl":
+        rl_f, rl_log_path = get_log_handle("rl_policy_server", enable_file_logging, log_dir)
+        log_info = f" (logging to {rl_log_path.name})" if rl_log_path else ""
         rl_cmd = [str(py_exe), "rl_policy_server.py", "--trace"]
         if args.rl_checkpoint:
             rl_cmd += ["--checkpoint", str(Path(args.rl_checkpoint).resolve())]
-        log(f"[Launcher] Starting RL policy server on port 8768 ({args.rl_checkpoint or 'default checkpoint'})...")
-        rl_proc = subprocess.Popen(rl_cmd, cwd=PYTHON_DIR, env=sub_env)
+        log(f"[Launcher] Starting RL policy server on port 8768 ({args.rl_checkpoint or 'default checkpoint'}){log_info}...")
+        rl_proc = subprocess.Popen(
+            rl_cmd,
+            cwd=PYTHON_DIR,
+            env=sub_env,
+            stdout=rl_f if rl_f else None,
+            stderr=subprocess.STDOUT if rl_f else None,
+        )
         CHILD_PROCESSES.append(rl_proc)
 
     # Wait for WebSocket servers to be healthy
-    ok_yolo = wait_for_ws(8765, desc="YOLO Server", proc=yolo_proc)
-    ok_stt = wait_for_ws(8766, desc="STT Server", proc=stt_proc)
-    if should_run_tts:
-        wait_for_ws(8767, desc="TTS Server", proc=tts_proc)
-    if rl_proc is not None and not wait_for_ws(8768, desc="RL Policy Server", proc=rl_proc):
+    ok_yolo = wait_for_ws(8765, desc="YOLO Server", proc=yolo_proc, log_path=yolo_log_path)
+    ok_stt = wait_for_ws(8766, desc="STT Server", proc=stt_proc, log_path=stt_log_path)
+    if should_run_tts and tts_proc is not None:
+        wait_for_ws(8767, desc="TTS Server", proc=tts_proc, log_path=tts_log_path)
+    if rl_proc is not None and not wait_for_ws(8768, desc="RL Policy Server", proc=rl_proc, log_path=rl_log_path):
         log("[Launcher] WARNING: RL policy server not ready; Godot falls back to the rule-based RL controller.")
 
     if not ok_yolo or not ok_stt:
@@ -342,7 +409,9 @@ def main() -> None:
         cleanup()
         sys.exit(1)
 
-    log(f"[Launcher] Launching Godot: {godot_exe} (controller={args.controller})")
+    godot_f, godot_log_path = get_log_handle("godot", enable_file_logging, log_dir)
+    log_info = f" (logging to {godot_log_path.name})" if godot_log_path else ""
+    log(f"[Launcher] Launching Godot: {godot_exe} (controller={args.controller}){log_info}")
     godot_cmd = [str(godot_exe), "--path", str(GODOT_DIR)]
     if args.scene:
         godot_cmd.append(args.scene)
@@ -359,7 +428,12 @@ def main() -> None:
         godot_cmd.append("--")
         godot_cmd.extend(extra_godot_args)
 
-    godot_proc = subprocess.Popen(godot_cmd)
+    godot_proc = subprocess.Popen(
+        godot_cmd,
+        stdout=godot_f if godot_f else None,
+        stderr=subprocess.STDOUT if godot_f else None,
+    )
+    CHILD_PROCESSES.append(godot_proc)
     CHILD_PROCESSES.append(godot_proc)
 
     try:

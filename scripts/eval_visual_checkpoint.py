@@ -54,6 +54,15 @@ def run_benchmark(
 ) -> dict[str, Any]:
     agent = load_agent(checkpoint_path)
 
+    log_dir = REPO_ROOT / "logs"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    log_file = (log_dir / "eval_visual_benchmark.log").open("a", encoding="utf-8")
+
+    def log_print(msg: str = "") -> None:
+        print(msg, flush=True)
+        log_file.write(msg + "\n")
+        log_file.flush()
+
     r_team_list: list[float] = []
     tasks_list: list[int] = []
     collisions_list: list[int] = []
@@ -62,10 +71,10 @@ def run_benchmark(
     search_times_s: list[float] = []
     floor_helped = {1: 0, 2: 0, 3: 0}
 
-    print("=" * 80)
-    print(f"BENCHMARKING PURE VISUAL RL CHECKPOINT: {checkpoint_path.name}")
-    print(f"Episodes: {n_episodes} | Shift Duration: {shift_duration_s:.1f}s | Seed Base: {EVAL_SEED_BASE}")
-    print("=" * 80)
+    log_print("=" * 80)
+    log_print(f"BENCHMARKING PURE VISUAL RL CHECKPOINT: {checkpoint_path.name}")
+    log_print(f"Episodes: {n_episodes} | Shift Duration: {shift_duration_s:.1f}s | Seed Base: {EVAL_SEED_BASE}")
+    log_print("=" * 80)
 
     for ep in range(n_episodes):
         seed = EVAL_SEED_BASE + ep * 7919
@@ -121,7 +130,7 @@ def run_benchmark(
 
         if verbose and (ep < 10 or (ep + 1) % 10 == 0 or ep == n_episodes - 1):
             spot_str = f"{first_spot_time_s:4.1f}s" if first_spot_time_s is not None else "  NONE"
-            print(
+            log_print(
                 f"[Shift {ep + 1:02d}/{n_episodes:02d}] R_team: {r_team:+6.1f} | Helped: {tasks} | "
                 f"Col: {cols:2d} | Spot: {spot_str} | Exit: {info.get('exit_reason', 'N/A')}"
             )
@@ -135,16 +144,20 @@ def run_benchmark(
     stag_rate = stagnation_count / n_episodes
     mean_search_time = float(np.mean(search_times_s)) if search_times_s else 0.0
 
-    print("-" * 80)
-    print("BENCHMARK SUMMARY RESULTS:")
-    print(f"  Team Reward (R_team)      : {mean_r:+.2f} +/- {std_r:.2f}")
-    print(f"  Patients Helped / Shift   : {mean_tasks:.2f} +/- {std_tasks:.2f} (Total: {sum(tasks_list)})")
-    print(f"  Visual Spotting Rate      : {spot_rate * 100:.1f}% ({spotted_count}/{n_episodes})")
-    print(f"  Mean Search Latency       : {mean_search_time:.2f} s")
-    print(f"  Stagnation Rate           : {stag_rate * 100:.1f}% ({stagnation_count}/{n_episodes})")
-    print(f"  Mean Collisions / Shift   : {mean_cols:.2f}")
-    print(f"  Escorts Completed by Floor: Floor 1: {floor_helped[1]}, Floor 2: {floor_helped[2]}, Floor 3: {floor_helped[3]}")
-    print("=" * 80)
+    log_print("-" * 80)
+    log_print("BENCHMARK SUMMARY RESULTS:")
+    log_print(f"  Team Reward (R_team)      : {mean_r:+.2f} +/- {std_r:.2f}")
+    log_print(f"  Patients Helped / Shift   : {mean_tasks:.2f} +/- {std_tasks:.2f} (Total: {sum(tasks_list)})")
+    log_print(f"  Visual Spotting Rate      : {spot_rate * 100:.1f}% ({spotted_count}/{n_episodes})")
+    log_print(f"  Mean Search Latency       : {mean_search_time:.2f} s")
+    log_print(f"  Stagnation Rate           : {stag_rate * 100:.1f}% ({stagnation_count}/{n_episodes})")
+    log_print(f"  Mean Collisions / Shift   : {mean_cols:.2f}")
+    log_print(f"  Escorts Completed by Floor: Floor 1: {floor_helped[1]}, Floor 2: {floor_helped[2]}, Floor 3: {floor_helped[3]}")
+    log_print("=" * 80)
+    try:
+        log_file.close()
+    except Exception:
+        pass
 
     return {
         "mean_r_team": mean_r,

@@ -229,13 +229,26 @@ def run_train_visual_rl(
                             rolling_20.append(float(data["r_team"]))
                     except Exception:
                         pass
-        print(f" Resumed Training    : Continuing from Ep {start_ep} in {run_dir.name}", flush=True)
+        log_file = (run_dir / "train.log").open("a", encoding="utf-8")
+
+        def log_print(msg: str = "") -> None:
+            print(msg, flush=True)
+            log_file.write(msg + "\n")
+            log_file.flush()
+
+        log_print(f" Resumed Training    : Continuing from Ep {start_ep} in {run_dir.name}")
     else:
         timestamp = dt.datetime.now().strftime("%Y%m%d_%H%M%S")
         run_dir = Path(experiments_root) / "runs" / f"{timestamp}_{ckpt_prefix}"
         ckpt_dir = run_dir / "checkpoints"
         ckpt_dir.mkdir(parents=True, exist_ok=True)
         metrics_file = run_dir / "metrics.jsonl"
+        log_file = (run_dir / "train.log").open("a", encoding="utf-8")
+
+        def log_print(msg: str = "") -> None:
+            print(msg, flush=True)
+            log_file.write(msg + "\n")
+            log_file.flush()
 
         if warmstart_path:
             w_path = Path(warmstart_path)
@@ -246,23 +259,23 @@ def run_train_visual_rl(
                 else:
                     agent.load_state_dict(checkpoint)
                 warmstart_loaded = True
-                print(f" Warm-start Weights  : Loaded successfully from {w_path.name}", flush=True)
+                log_print(f" Warm-start Weights  : Loaded successfully from {w_path.name}")
             else:
-                print(f" Warm-start Warning  : File not found at {w_path}. Starting from scratch.", flush=True)
+                log_print(f" Warm-start Warning  : File not found at {w_path}. Starting from scratch.")
         else:
-            print(" Training Mode       : From Scratch (Random initialization)", flush=True)
+            log_print(" Training Mode       : From Scratch (Random initialization)")
 
-    print("=" * 86, flush=True)
-    print(f" PPO PURE VISUAL-SEARCH TRAINING -- {episodes} EPISODES (Start Ep: {start_ep})", flush=True)
-    print(f" Zero-Oracle Mode    : Patient coordinates MASKED to 0 during search", flush=True)
-    print(f" Vision Sensor       : 70° VFOV Pinhole Camera Model (Simulated YOLOv8)", flush=True)
-    print(f" Output Directory    : {run_dir}", flush=True)
-    print(f" Compute Device      : {device} ({describe_device(device)}) | Rollout: cpu", flush=True)
-    print(f" Escort Only Mode    : {escort_only} (100% Escort Tasks across Floors 1, 2, 3)", flush=True)
-    print(f" Stagnation Timeout  : {stagnation_timeout_s:.1f}s | Penalty: {stagnation_penalty:+.1f}", flush=True)
-    print(f" Shift Duration      : {shift_duration_s:.1f}s ({int(shift_duration_s / 0.2)} steps)", flush=True)
-    print(f" PPO Batch Update    : Every {update_freq_episodes} episodes | PPO Epochs: {ppo_epochs} | Batch: {batch_size}", flush=True)
-    print(f" Learning Rate       : {lr_init:.1e} -> {lr_min:.1e} (Cosine Annealing)", flush=True)
+    log_print("=" * 86)
+    log_print(f" PPO PURE VISUAL-SEARCH TRAINING -- {episodes} EPISODES (Start Ep: {start_ep})")
+    log_print(f" Zero-Oracle Mode    : Patient coordinates MASKED to 0 during search")
+    log_print(f" Vision Sensor       : 70° VFOV Pinhole Camera Model (Simulated YOLOv8)")
+    log_print(f" Output Directory    : {run_dir}")
+    log_print(f" Compute Device      : {device} ({describe_device(device)}) | Rollout: cpu")
+    log_print(f" Escort Only Mode    : {escort_only} (100% Escort Tasks across Floors 1, 2, 3)")
+    log_print(f" Stagnation Timeout  : {stagnation_timeout_s:.1f}s | Penalty: {stagnation_penalty:+.1f}")
+    log_print(f" Shift Duration      : {shift_duration_s:.1f}s ({int(shift_duration_s / 0.2)} steps)")
+    log_print(f" PPO Batch Update    : Every {update_freq_episodes} episodes | PPO Epochs: {ppo_epochs} | Batch: {batch_size}")
+    log_print(f" Learning Rate       : {lr_init:.1e} -> {lr_min:.1e} (Cosine Annealing)")
 
     batch_obs: list[np.ndarray] = []
     batch_act: list[np.ndarray] = []
@@ -306,9 +319,9 @@ def run_train_visual_rl(
     with (run_dir / "config.json").open("w", encoding="utf-8") as f:
         json.dump(run_config, f, indent=2)
 
-    print("-" * 86, flush=True)
-    print("EPISODE LOGS (Real-time single-line flush):", flush=True)
-    print("-" * 86, flush=True)
+    log_print("-" * 86)
+    log_print("EPISODE LOGS (Real-time single-line flush):")
+    log_print("-" * 86)
 
     rollout_agent.load_state_dict(agent.state_dict())
     ep_width = len(str(episodes))
@@ -411,7 +424,7 @@ def run_train_visual_rl(
         remaining_eps = episodes - ep
         eta_s = remaining_eps / rate if rate > 0 else 0.0
 
-        print(
+        log_print(
             f"Ep {ep:{ep_width}d}/{episodes} | "
             f"R_team: {r_team:+6.1f} (avg20: {roll20_mean:+6.1f}, peak: {peak_r_team:+6.1f}) | "
             f"Helped: {tasks} (total: {total_helped}) | "
@@ -419,8 +432,7 @@ def run_train_visual_rl(
             f"Spotted: {'YES' if ever_spotted else 'NO '} | "
             f"Exit: {exit_reason:<18s} | "
             f"{steps:4d} steps ({duration_s:4.1f}s) | "
-            f"ETA: {format_eta(eta_s)}",
-            flush=True,
+            f"ETA: {format_eta(eta_s)}"
         )
 
         with metrics_file.open("a", encoding="utf-8") as f:
@@ -504,17 +516,16 @@ def run_train_visual_rl(
                 env_mode=env_mode,
                 escort_only=escort_only,
             )
-            print("-" * 86, flush=True)
-            print(
+            log_print("-" * 86)
+            log_print(
                 f"[EVAL @ Ep {ep}] Score: {eval_metrics['score']:.1f} | "
                 f"R_team: {eval_metrics['r_team']:.1f} | "
                 f"Tasks: {eval_metrics['tasks']:.2f} | "
                 f"Col: {eval_metrics['collisions']:.2f} | "
                 f"Spotting Rate: {eval_metrics['spotting_rate']*100:.1f}% | "
-                f"Stagnation: {eval_metrics['stagnation_rate']*100:.1f}%",
-                flush=True,
+                f"Stagnation: {eval_metrics['stagnation_rate']*100:.1f}%"
             )
-            print("-" * 86, flush=True)
+            log_print("-" * 86)
 
             ckpt_data = {
                 "episode": ep,
@@ -532,11 +543,15 @@ def run_train_visual_rl(
             if eval_metrics["score"] > best_eval:
                 best_eval = eval_metrics["score"]
                 torch.save(ckpt_data, ckpt_dir / f"{ckpt_prefix}_best.pt")
-                print(f" ★ New Best Eval Checkpoint! Score: {best_eval:.2f}", flush=True)
+                log_print(f" ★ New Best Eval Checkpoint! Score: {best_eval:.2f}")
 
-    print("=" * 86, flush=True)
-    print(f" Training complete! Total episodes: {episodes}", flush=True)
-    print(f" Final Best Checkpoint: {ckpt_dir / f'{ckpt_prefix}_best.pt'}", flush=True)
+    log_print("=" * 86)
+    log_print(f" Training complete! Total episodes: {episodes}")
+    log_print(f" Final Best Checkpoint: {ckpt_dir / f'{ckpt_prefix}_best.pt'}")
+    try:
+        log_file.close()
+    except Exception:
+        pass
     return run_dir
 
 

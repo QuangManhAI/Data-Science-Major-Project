@@ -17,7 +17,7 @@ from typing import Any
 
 import numpy as np
 
-from src.training.camera_vision_model import compute_pinhole_detection
+from src.training.camera_vision_model import compute_pinhole_detection, CAMERA_HFOV_RAD
 from src.training.hospital_env import (
     BONUS_TETHER_GOOD,
     COLLISION_LIDAR_M,
@@ -69,12 +69,21 @@ WEIGHT_CENTERING_PENALTY = 0.3      # -0.3 * |cx| to align robot's camera headin
 WEIGHT_APPROACH_EXPANSION = 1.5     # +1.5 * delta_h to reward driving towards patient
 TARGET_BOX_H = 0.85                 # Config.H_TARGET: corresponds to distance <= 1.35m
 
+# Public corridor patrol waypoints per floor (static hospital map coordinates, NO patient GPS)
+PUBLIC_PATROL_WAYPOINTS: dict[int, list[tuple[float, float]]] = {
+    1: [(0.0, 4.5), (7.0, 0.0), (-7.0, 0.0), (0.0, 0.0)],
+    2: [(50.0, 4.5), (57.0, 0.0), (43.0, 0.0), (50.0, 0.0)],
+    3: [(100.0, 4.5), (107.0, 0.0), (93.0, 0.0), (100.0, 0.0)],
+}
+
 
 class HospitalVisualShiftEnv(HospitalShiftEnv):
     """Pure Visual-Search & LiDAR-Assisted Hospital Environment.
 
-    Zero-oracle search: during SEARCH_PATIENT, obs[25..27] is (0, 0, 0).
-    The policy navigates exclusively using 17 LiDAR rays + camera detection features.
+    Zero-oracle search: the robot NEVER receives ground-truth coordinates of the patient.
+    - When searching (has_det == 0), it patrols public hospital corridors/lobby.
+    - When a person is detected (has_det == 1), range and bearing are computed
+      STRICTLY FROM THE 2D CAMERA BOUNDING BOX (cx, h) via optical pinhole projection.
     """
 
     def __init__(
@@ -103,6 +112,8 @@ class HospitalVisualShiftEnv(HospitalShiftEnv):
         self.visited_cells: set[tuple[int, int, int]] = set()
         self.prev_has_det: float = 0.0
         self.prev_vision_h: float = 0.0
+        self.best_vision_h: float = 0.0
+        self.patrol_wp_idx: int = 0
         self.last_det: dict[str, float] = {"seen": 0.0, "cx": 0.0, "cy": 0.0, "w": 0.0, "h": 0.0}
 
     def reset(self, seed: int | None = None) -> np.ndarray:
@@ -112,6 +123,8 @@ class HospitalVisualShiftEnv(HospitalShiftEnv):
         self.visited_cells.add(cell)
         self.prev_has_det = 0.0
         self.prev_vision_h = 0.0
+        self.best_vision_h = 0.0
+        self.patrol_wp_idx = int(self.rng.integers(0, 4))
         self.last_det = {"seen": 0.0, "cx": 0.0, "cy": 0.0, "w": 0.0, "h": 0.0}
         return self._get_obs()
 
@@ -170,13 +183,36 @@ class HospitalVisualShiftEnv(HospitalShiftEnv):
         phase_idx = int(np.clip(int(self.task_phase), 0, 3))
         obs[21 + phase_idx] = 1.0
 
-        # ZERO ORACLE: During SEARCH or APPROACH, robot does not know the patient GPS coordinate!
-        if self.task_phase in (TaskPhase.SEARCH_PATIENT, TaskPhase.APPROACH_PATIENT):
-            obs[25] = 0.0  # nav_remaining
-            obs[26] = 0.0  # sin(angle_goal)
-            obs[27] = 0.0  # cos(angle_goal)
+        # Navigation goal representation:
+        # 1. During APPROACH_PATIENT with person in view: range and bearing derived strictly from 2D camera bounding box
+        # 2. During SEARCH_PATIENT: navigate between public corridor exploration waypoints (NO patient GPS)
+        # 3. During GUIDE_ESCORT or CALL_STAFF: navigate to clinic room or elevator landmark
+        if self.task_phase == TaskPhase.APPROACH_PATIENT and has_det > 0.5:
+            d_vis = float(np.clip(1.20 / max(h, 0.05), 0.8, 15.0))
+            angle_vis = float(-math.atan(cx_off * math.tan(CAMERA_HFOV_RAD / 2.0)))
+            obs[25] = float(np.clip(d_vis / 25.0, 0.0, 1.0))
+            obs[26] = math.sin(angle_vis)
+            obs[27] = math.cos(angle_vis)
+        elif self.task_phase in (TaskPhase.SEARCH_PATIENT, TaskPhase.APPROACH_PATIENT):
+            fl = floor_of(self.robot_x)
+            waypoints = PUBLIC_PATROL_WAYPOINTS.get(fl, PUBLIC_PATROL_WAYPOINTS[1])
+            pw_x, pw_z = waypoints[self.patrol_wp_idx % len(waypoints)]
+            if math.hypot(pw_x - self.robot_x, pw_z - self.robot_z) <= 1.5:
+                self.patrol_wp_idx = (self.patrol_wp_idx + 1) % len(waypoints)
+                pw_x, pw_z = waypoints[self.patrol_wp_idx % len(waypoints)]
+            self.set_nav_target(pw_x, pw_z)
+            to_gx = self.goal_x - self.robot_x
+            to_gz = self.goal_z - self.robot_z
+            fwd_x = -math.sin(self.robot_yaw)
+            fwd_z = -math.cos(self.robot_yaw)
+            angle_goal = signed_angle_rad(fwd_x, fwd_z, to_gx, to_gz)
+
+            obs[25] = float(np.clip(self.nav_remaining / 25.0, 0.0, 1.0))
+            obs[26] = math.sin(angle_goal)
+            obs[27] = math.cos(angle_goal)
         else:
             # During GUIDE_ESCORT or CALL_STAFF, landmark goal navigation is active
+            self.set_nav_target(*self._nav_final_target())
             to_gx = self.goal_x - self.robot_x
             to_gz = self.goal_z - self.robot_z
             fwd_x = -math.sin(self.robot_yaw)
@@ -269,15 +305,20 @@ class HospitalVisualShiftEnv(HospitalShiftEnv):
             if cur_cell not in self.visited_cells:
                 self.visited_cells.add(cur_cell)
                 r_exploration += REWARD_CELL_EXPLORATION
+                self.steps_since_task = 0  # Active spatial exploration resets stagnation
 
             # 2. Visual acquisition reward
             if det["seen"] > 0.5:
                 if self.prev_has_det < 0.5:
                     r_visual += REWARD_VISUAL_SPOTTED  # First spotting bonus!
+                    self.steps_since_task = 0          # Visual target acquired!
                 # Centering reward (align camera heading to person)
                 r_visual -= WEIGHT_CENTERING_PENALTY * abs(det["cx"])
                 # Approach sizing reward (getting closer enlarges bounding box)
                 r_visual += WEIGHT_APPROACH_EXPANSION * max(0.0, det["h"] - self.prev_vision_h)
+                if det["h"] > self.best_vision_h + 0.04:
+                    self.best_vision_h = det["h"]
+                    self.steps_since_task = 0          # Closing distance to visual target!
 
             self.prev_has_det = det["seen"]
             self.prev_vision_h = det["h"]
@@ -295,6 +336,8 @@ class HospitalVisualShiftEnv(HospitalShiftEnv):
                 if self.scenario_action in ("call_staff", "emergency"):
                     self.staff_goal = self._nearest_staff_position()
                 self.steps_since_task = 0
+                self.best_goal_dist = None
+                self.best_vision_h = 0.0
 
         elif self.task_phase == TaskPhase.GUIDE_ESCORT:
             dest_x, dest_z = DESTINATION_POSITIONS.get(self.goal_key, (0.0, 4.5))
@@ -311,10 +354,14 @@ class HospitalVisualShiftEnv(HospitalShiftEnv):
                     self.patient_x += shift
                     self.goal_key = final_target
                     self.steps_since_task = 0
+                    self.best_goal_dist = None
+                    self.best_vision_h = 0.0
                 else:
                     event = "guide_completed"
                     self.patients_helped += 1
                     self.steps_since_task = 0
+                    self.best_goal_dist = None
+                    self.best_vision_h = 0.0
                     self._spawn_next_patient()
 
         elif self.task_phase == TaskPhase.CALL_STAFF:
@@ -323,6 +370,8 @@ class HospitalVisualShiftEnv(HospitalShiftEnv):
                 event = "call_staff"
                 self.patients_helped += 1
                 self.steps_since_task = 0
+                self.best_goal_dist = None
+                self.best_vision_h = 0.0
                 self._spawn_next_patient()
 
         # Compute rewards
@@ -344,6 +393,11 @@ class HospitalVisualShiftEnv(HospitalShiftEnv):
             nav, nav_fld, _, _ = self._nav_field(*self._nav_final_target())
             curr_dist_final = nav.distance(nav_fld, self.robot_x, self.robot_z)
             r_progress = SHAPING_PROGRESS_SCALE * (prev_dist_final - curr_dist_final)
+            if self.best_goal_dist is None:
+                self.best_goal_dist = curr_dist_final
+            elif curr_dist_final < self.best_goal_dist - 1.0:
+                self.best_goal_dist = curr_dist_final
+                self.steps_since_task = 0  # Escort progress along shortest path resets stagnation!
 
         # Tether shaping
         r_tether = 0.0
@@ -411,23 +465,33 @@ class HospitalVisualShiftEnv(HospitalShiftEnv):
             repel = turn_strength if left_clear >= right_clear else -turn_strength
             speed_factor = float(np.clip(center_min / 0.65, 0.35, 1.0))
 
-        if self.task_phase in (TaskPhase.SEARCH_PATIENT, TaskPhase.APPROACH_PATIENT):
+        if self.task_phase == TaskPhase.APPROACH_PATIENT:
             det = self.last_det
             if det["seen"] > 0.5:
                 # Steer towards bounding box center cx
-                turn_cmd = float(np.clip(-2.5 * det["cx"] + repel, -OMEGA_MAX, OMEGA_MAX))
-                v_target = V_MAX * speed_factor * (1.0 - abs(det["cx"]))
+                turn_cmd = float(np.clip(-2.2 * det["cx"] + repel, -OMEGA_MAX, OMEGA_MAX))
+                v_target = V_MAX * speed_factor * max(0.25, 1.0 - abs(det["cx"]))
                 if det["h"] > 0.7:
                     v_target *= 0.4
                 a_v = float(np.clip(2.0 * (v_target / V_MAX) - 1.0, -1.0, 1.0))
                 a_omega = float(np.clip(turn_cmd / OMEGA_MAX, -1.0, 1.0))
                 return np.array([a_v, a_omega], dtype=np.float32)
-            else:
-                # Active corridor exploration
-                omega = repel if abs(repel) > 0.1 else 0.0
-                v = V_MAX * speed_factor * (0.8 if center_min > 0.7 else 0.3)
-                a_v = float(np.clip(2.0 * (v / V_MAX) - 1.0, -1.0, 1.0))
-                a_omega = float(np.clip(omega / OMEGA_MAX, -1.0, 1.0))
-                return np.array([a_v, a_omega], dtype=np.float32)
+
+        if self.task_phase == TaskPhase.SEARCH_PATIENT:
+            fl = floor_of(self.robot_x)
+            waypoints = PUBLIC_PATROL_WAYPOINTS.get(fl, PUBLIC_PATROL_WAYPOINTS[1])
+            pw_x, pw_z = waypoints[self.patrol_wp_idx % len(waypoints)]
+            self.set_nav_target(pw_x, pw_z)
+            gx, gz = self.goal_x, self.goal_z
+            fwd_x = -math.sin(self.robot_yaw)
+            fwd_z = -math.cos(self.robot_yaw)
+            angle = signed_angle_rad(fwd_x, fwd_z, gx - self.robot_x, gz - self.robot_z)
+            omega = float(np.clip(1.8 * angle + repel, -OMEGA_MAX, OMEGA_MAX))
+            v = float(np.clip(0.6 * self.nav_remaining, 0.0, V_MAX * speed_factor))
+            if abs(angle) > 0.65:
+                v *= 0.25
+            a_v = float(np.clip(2.0 * (v / V_MAX) - 1.0, -1.0, 1.0))
+            a_omega = float(np.clip(omega / OMEGA_MAX, -1.0, 1.0))
+            return np.array([a_v, a_omega], dtype=np.float32)
 
         return super().teacher_action()

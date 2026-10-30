@@ -18,6 +18,7 @@ import argparse
 import asyncio
 import json
 import logging
+import math
 import sys
 from pathlib import Path
 
@@ -31,7 +32,17 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from src.models.ppo_agent import ACT_DIM, OBS_DIM, PPOHospitalAgent  # noqa: E402
-from src.training.hospital_env import ESCORT_WALK_SPEED, OMEGA_MAX, V_MAX, HospitalShiftEnv, TaskPhase  # noqa: E402
+from src.training.hospital_env import (  # noqa: E402
+    ESCORT_WALK_SPEED,
+    OMEGA_MAX,
+    V_MAX,
+    HospitalShiftEnv,
+    TaskPhase,
+    floor_of,
+    signed_angle_rad,
+)
+from src.training.hospital_env_vision import PUBLIC_PATROL_WAYPOINTS  # noqa: E402
+from src.training.camera_vision_model import CAMERA_HFOV_RAD  # noqa: E402
 
 log = logging.getLogger("rl_policy_server")
 
@@ -52,12 +63,14 @@ class PolicyRunner:
         self.env = HospitalShiftEnv(curriculum_stage=1, env_mode="solo")
         self.env.reset()
         self.task_id: int | None = None
+        self.patrol_wp_idx: int = 0
 
     def act(self, msg: dict) -> dict:
         env = self.env
         x, z, yaw, v, omega = (float(t) for t in msg["robot"])
         env.robot_x, env.robot_z, env.robot_yaw = x, z, yaw
         env.robot_v, env.robot_omega = v, omega
+        # Zero-oracle: msg["patient"] is NEVER used during SEARCH or APPROACH.
         env.patient_x, env.patient_z = (float(t) for t in msg["patient"])
 
         phase = int(msg["phase"])
@@ -70,7 +83,6 @@ class PolicyRunner:
             final_x, final_z = (float(t) for t in msg["goal"])
             env.set_nav_target(final_x, final_z)  # sub-goal + path length on the same grid planner as training
         else:
-            # Giữ chốt APPROACH (env._get_obs tự chuyển SEARCH ➔ APPROACH khi "thấy" bệnh nhân)
             if env.task_phase not in (TaskPhase.SEARCH_PATIENT, TaskPhase.APPROACH_PATIENT):
                 env.task_phase = TaskPhase.SEARCH_PATIENT
             final_x, final_z = env.patient_x, env.patient_z
@@ -81,15 +93,44 @@ class PolicyRunner:
             if lidar.shape == (17,):
                 obs[0:17] = np.clip(lidar, 0.0, 1.0)
 
-        # Zero-Oracle Pure Visual Search mode:
+        # Zero-Oracle Pure Visual Search & Approach:
         if env.task_phase in (TaskPhase.SEARCH_PATIENT, TaskPhase.APPROACH_PATIENT):
-            obs[25:28] = 0.0  # Mask out patient coordinates
+            has_det = False
             if "yolo" in msg and len(msg["yolo"]) == 4:
                 obs[17:21] = np.asarray(msg["yolo"], dtype=np.float32)
                 if obs[17] > 0.5:
+                    has_det = True
                     env.task_phase = TaskPhase.APPROACH_PATIENT
                     obs[21:25] = 0.0
                     obs[22] = 1.0  # one-hot APPROACH_PATIENT
+
+            if has_det:
+                cx_off = float(obs[18])
+                h = float(obs[19])
+                d_vis = float(np.clip(1.20 / max(h, 0.05), 0.8, 15.0))
+                angle_vis = float(-math.atan(cx_off * math.tan(CAMERA_HFOV_RAD / 2.0)))
+                obs[25] = float(np.clip(d_vis / 25.0, 0.0, 1.0))
+                obs[26] = math.sin(angle_vis)
+                obs[27] = math.cos(angle_vis)
+            else:
+                env.task_phase = TaskPhase.SEARCH_PATIENT
+                obs[21:25] = 0.0
+                obs[21] = 1.0  # one-hot SEARCH_PATIENT
+                fl = floor_of(x)
+                waypoints = PUBLIC_PATROL_WAYPOINTS.get(fl, PUBLIC_PATROL_WAYPOINTS[1])
+                pw_x, pw_z = waypoints[self.patrol_wp_idx % len(waypoints)]
+                if math.hypot(pw_x - x, pw_z - z) <= 1.5:
+                    self.patrol_wp_idx = (self.patrol_wp_idx + 1) % len(waypoints)
+                    pw_x, pw_z = waypoints[self.patrol_wp_idx % len(waypoints)]
+                env.set_nav_target(pw_x, pw_z)
+                to_gx = env.goal_x - x
+                to_gz = env.goal_z - z
+                fwd_x = -math.sin(yaw)
+                fwd_z = -math.cos(yaw)
+                angle_goal = signed_angle_rad(fwd_x, fwd_z, to_gx, to_gz)
+                obs[25] = float(np.clip(env.nav_remaining / 25.0, 0.0, 1.0))
+                obs[26] = math.sin(angle_goal)
+                obs[27] = math.cos(angle_goal)
 
         with torch.no_grad():
             action, _, _, _ = self.agent.get_action_and_value(

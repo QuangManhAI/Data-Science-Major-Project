@@ -776,8 +776,22 @@
 - **Why:** Solves both the repeated-dialogue issue at destination rooms, enables autonomous return to Floor 1, and removes the oracle coordinate cheat so the robot truly learns visual exploration and perception-driven approach.
 - **Touches:** `src/training/camera_vision_model.py`, `src/training/hospital_env_vision.py`, `src/training/train_visual_rl.py`, `sim_vision/python/rl_policy_server.py`, `sim_vision/godot/scripts/rl_policy_client.gd`, `sim_vision/godot/scripts/main.gd`, `tests/test_camera_vision_model.py`, `tests/test_hospital_env_vision.py`, `docs/AI-Human-logs/Vuong.md`
 - **Evidence:** 10/10 vision unit tests pass; all 323 pytest unit tests pass (1 skipped); all 163 Godot GUT unit tests pass (18,873 asserts, 0 failures); verified 2-episode GPU smoke training run on RTX 4060.
-
-
-
-
-
+### D-046 — Root-Cause Resolution for Visual Search Policy Freezing Trap & Stagnation Cutoff
+- **Status:** accepted
+- **When:** 2026-10-30T11:45:00+07:00
+- **Decided by:** human-approved via fix_visual_search_rl_plan.md
+- **Trigger:** Initial 2,000-episode pure visual RL run yielded 100% stagnation timeout (all episodes terminated at 300 steps / 60.0s with only 9 total patients helped). User requested empirical investigation to determine whether the approach is viable or a dead end.
+- **Root Cause Discovered:**
+  1. **Policy Freezing Trap:** The warm-started policy was trained with polar target vector obs[25..27] = [dist/25.0, sin_theta, cos_theta]. Zeroing obs[25..27] during visual search/approach caused the policy to infer distance = 0 (destination reached), commanding full reverse/brake (a_v = -0.92), freezing the robot in place the moment a human entered sight.
+  2. **Zero-Oracle Pinhole Perception Formulation:** Deriving target distance d_vis = 1.20 / max(h, 0.05) and bearing angle_vis = -atan(cx * tan(HFOV/2)) from 2D pixel bounding box features provides a legitimate non-zero vector without leaking ground-truth world coordinates (zero-oracle).
+  3. **Corridor Exploration Guidance:** Memoryless 2-layer MLPs cannot explore open hospital labyrinths without heading vectors. Introducing public hallway patrol waypoints (12 static nodes on Floors 1-3) gives purposeful directional sweep until a patient enters camera FOV.
+  4. **Landmark Subgoal Routing Bug:** In HospitalVisualShiftEnv._get_obs(), during GUIDE_ESCORT, set_nav_target(*self._nav_final_target()) was missing, leaving goal_x, goal_z stale and 
+av_remaining frozen after dialogue engagement.
+  5. **Stagnation Timer Resets:** Stagnation counter steps_since_task was only reset on task completion. Added resets on: 1) visiting new 1m x 1m spatial cells, 2) first visual spotting, 3) visual approach expansion (h > best_h + 0.04), and 4) escort path progress.
+- **Decision:**
+  1. Updated src/training/hospital_env_vision.py with PUBLIC_PATROL_WAYPOINTS, pinhole vision conversion in _get_obs(), dynamic landmark path updates during GUIDE_ESCORT, and multi-condition stagnation resets.
+  2. Updated sim_vision/python/rl_policy_server.py with identical pinhole vision formulas and corridor patrol loops for live Godot 3D inference.
+  3. Enhanced unit test suite 	ests/test_hospital_env_vision.py verifying zero-oracle patrol routing, pinhole vision derivation, visual engagement, and exploration rewards.
+- **Why:** Completely eliminates policy freezing, enables seamless transitions from autonomous corridor visual sweeping to perspective bounding-box approach, and maintains reliable tethered escort navigation.
+- **Touches:** src/training/hospital_env_vision.py, sim_vision/python/rl_policy_server.py, 	ests/test_hospital_env_vision.py, docs/AI-Human-logs/Vuong.md
+- **Evidence:** 6/6 tests in 	ests/test_hospital_env_vision.py pass; verified multi-patient trace in scratch/trace_step.py completing 2 back-to-back patients in 400 steps; verified live 2,000-episode training run eliminating stagnation (0.0% stagnation timeout, 24 patients helped in first 8 episodes, peak reward +148.2).

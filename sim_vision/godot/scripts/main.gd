@@ -327,9 +327,6 @@ func _physics_process(delta: float) -> void:
 				robot.global_position, robot.rotation.y, _leg_target(_rl_bridge.goal_position), robot.get_lidar_readings(), 0.0, false
 			)
 			robot.set_command(cmd_vec.x, cmd_vec.y)
-				robot.global_position, robot.rotation.y, _rl_bridge.goal_position, robot.get_lidar_readings(), 0.0, false
-			)
-			robot.set_command(cmd_vec.x, cmd_vec.y)
 	if _policy_active():
 		_step_policy(delta)
 

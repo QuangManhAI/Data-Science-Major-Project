@@ -106,12 +106,11 @@ static func pick_clip(clips: Dictionary, spk: String, used_intents: Array[String
 		if str(clips[id].get("speaker", "")) == spk:
 			if escort_filter:
 				var it: String = str(clips[id].get("intent", ""))
-				if not ESCORT_INTENTS.has(it):
+				var sid: String = str(clips[id].get("sentence_id", ""))
+				if not ESCORT_INTENTS.has(it) or sid == "05":
 					continue
 			mine.append(id)
 	if mine.is_empty():
-		if spk != "A":
-			return pick_clip(clips, "A", used_intents, rng, escort_filter)
 		return ""
 	mine.sort()
 	var fresh: Array[String] = mine.filter(func(id: String) -> bool:
@@ -279,6 +278,8 @@ func _resume_walking() -> void:
 
 
 func _distinct_intents() -> int:
+	if escort_only:
+		return ESCORT_INTENTS.size()
 	var seen: Dictionary = {}
 	for id: String in _clips:
 		if str(_clips[id].get("speaker", "")) == speaker:

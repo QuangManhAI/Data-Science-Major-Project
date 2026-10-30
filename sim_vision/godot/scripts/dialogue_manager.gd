@@ -268,11 +268,13 @@ func _on_subtitle_finished() -> void:
 
 ## Robot nói xong. clarify ➔ người bệnh nói lại bằng clip khác take (tối đa MAX_CLARIFY lần), không thì kết thúc.
 func _after_response() -> void:
-	if action == "clarify" and clarify_count < Config.MAX_CLARIFY:
-		var alt: String = Npc.alternate_clip(npc.get_clips(), pending_clip, used_clips)
+	var target_npc: Npc = active_npc if active_npc != null else npc
+	var is_escort_only: bool = bool(main.get("escort_only_mode")) if main != null and "escort_only_mode" in main else false
+	if action == "clarify" and clarify_count < Config.MAX_CLARIFY and not is_escort_only:
+		var alt: String = Npc.alternate_clip(target_npc.get_clips(), pending_clip, used_clips)
 		if alt != "":
 			main.set_dialogue_state(Config.RobotState.LISTEN)
-			if npc.say_again(alt):
+			if target_npc.say_again(alt):
 				clarify_count += 1
 				used_clips.append(alt)
 				return

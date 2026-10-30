@@ -71,13 +71,18 @@ var _human_home_yaw: float = 0.0
 
 
 func _ready() -> void:
+	var all_intents_flag: bool = false
 	for arg: String in OS.get_cmdline_user_args() + OS.get_cmdline_args():
 		if arg == "--controller=rl" or arg == "--rl":
 			use_rl_controller = true
-		elif arg == "--solo-patient":
+		elif arg in ["--solo-patient", "--solo_patient", "--solo"]:
 			solo_patient_mode = true
-		elif arg == "--escort-only":
+		elif arg in ["--escort-only", "--escort_only", "--escort"]:
 			escort_only_mode = true
+		elif arg in ["--all-intents", "--all_intents"]:
+			all_intents_flag = true
+	if use_rl_controller and not all_intents_flag:
+		escort_only_mode = true
 	if use_rl_controller:
 		var rl_ctrl: Node = RLControllerScript.new()
 		rl_ctrl.name = "RLController"
@@ -269,7 +274,6 @@ func is_task_busy() -> bool:
 	if active_escorted_patient != null:
 		return true
 	if _rl_bridge != null and _rl_bridge.task_phase in [
-		RLEnvBridgeScript.TaskPhase.APPROACH_PATIENT,
 		RLEnvBridgeScript.TaskPhase.GUIDE_ESCORT,
 		RLEnvBridgeScript.TaskPhase.CALL_STAFF
 	]:
@@ -288,21 +292,41 @@ func get_active_speaking_patient() -> CharacterBody3D:
 
 func get_available_patients() -> Array[CharacterBody3D]:
 	var list: Array[CharacterBody3D] = []
+	if solo_patient_mode:
+		if human != null:
+			list.append(human)
+		return list
 	var furn: Node = room.get_node_or_null(^"Furniture") if room != null else null
 	if furn != null:
 		for child: Node in furn.get_children():
-			if child is HospitalNpc and (child as HospitalNpc).staff_role == "patient":
+			if child is HospitalNpc and (child as HospitalNpc).staff_role == "patient" and child.visible:
 				list.append(child as CharacterBody3D)
-	if human != null and not solo_patient_mode:
+	if human != null and human.visible:
 		list.append(human)
 	return list
 
 
-func pick_next_target_patient() -> CharacterBody3D:
+func pick_next_target_patient(exclude: CharacterBody3D = null) -> CharacterBody3D:
 	var list := get_available_patients()
 	if list.is_empty():
 		return human
-	return list[_rng.randi_range(0, list.size() - 1)]
+	if list.size() > 1 and exclude != null:
+		var filtered: Array[CharacterBody3D] = list.filter(func(p: CharacterBody3D) -> bool: return p != exclude)
+		if not filtered.is_empty():
+			list = filtered
+	if robot != null and list.size() > 1:
+		var cur_fl: int = Room.get_floor(robot.global_position)
+		var same_fl: Array[CharacterBody3D] = list.filter(func(p: CharacterBody3D) -> bool: return Room.get_floor(p.global_position) == cur_fl)
+		if not same_fl.is_empty():
+			list = same_fl
+	var chosen: CharacterBody3D = list[_rng.randi_range(0, list.size() - 1)]
+	if chosen is HospitalNpc and (chosen as HospitalNpc).has_npc():
+		(chosen as HospitalNpc).get_npc().reset()
+	elif chosen != null:
+		var n: Node = chosen.get_node_or_null(^"Npc")
+		if n != null and n.has_method("reset"):
+			n.reset()
+	return chosen
 
 func _is_search_phase() -> bool:
 	return _rl_bridge.task_phase in [RLEnvBridgeScript.TaskPhase.SEARCH_PATIENT, RLEnvBridgeScript.TaskPhase.APPROACH_PATIENT]
@@ -388,7 +412,8 @@ func _on_dialogue_turn_completed(row: Dictionary) -> void:
 		_rl_bridge.begin_post_dialogue_task(act, target_key, fl, active_escorted_patient)
 		_task_elapsed_s = 0.0  # đích đổi từ bệnh nhân sang phòng / nhân viên
 		_task_best_dist = -1.0
-		state = Config.RobotState.APPROACH
+		if not Main.is_dialogue_state(state):
+			state = Config.RobotState.APPROACH
 		overlay.set_status("Bắt đầu dẫn đường bệnh nhân tới: %s (Tầng %d)" % [_rl_bridge.goal_key, fl])
 		overlay.show_detections([], _display_state_name(), _connected)
 	else:
@@ -696,15 +721,23 @@ func reset_positions(is_task_transition: bool = false) -> void:
 	_task_elapsed_s = 0.0
 	_task_best_dist = -1.0
 	_arrived_wait_s = 0.0
+	var prev_pat: CharacterBody3D = active_escorted_patient
 	if active_escorted_patient != null and active_escorted_patient.has_method("end_escort"):
 		active_escorted_patient.end_escort()
 	active_escorted_patient = null
 	_pending_turn_reset = false
 	human.end_escort()
-	current_target_patient = pick_next_target_patient()
+	current_target_patient = pick_next_target_patient(prev_pat)
 	if is_task_transition:
-		# Không teleport bệnh nhân nữa: bệnh nhân giữ vị trí tự nhiên hoặc tiếp tục tuần tra.
-		pass
+		if solo_patient_mode and room != null:
+			var cur_fl: int = Room.get_floor(robot.global_position)
+			var next_pos: Vector3 = room.get_patient_spawn_position(cur_fl, _rng)
+			for _i: int in 30:
+				if Human.flat_distance(next_pos, robot.global_position) >= 3.0:
+					break
+				next_pos = room.get_patient_spawn_position(cur_fl, _rng)
+			human.global_position = next_pos
+			human.rotation.y = _rng.randf_range(-PI, PI)
 	elif solo_patient_mode:
 		var p: Dictionary = Main.pick_solo_start_positions(room, _rng)
 		robot.global_position = p["robot"]
@@ -745,6 +778,9 @@ func _setup_hospital_npcs() -> void:
 	current_target_patient = pick_next_target_patient()
 	if human != null:
 		human.setup_robot(robot)
+		var h_npc_node: Node = human.get_node_or_null(^"Npc")
+		if h_npc_node != null and h_npc_node.has_method("setup"):
+			h_npc_node.setup(robot, func() -> int: return Config.RobotState.SEARCH if is_task_busy() else state)
 	var furn: Node = room.get_node_or_null(^"Furniture") if room != null else null
 	if furn != null:
 		for child: Node in furn.get_children():
@@ -779,10 +815,12 @@ func _apply_escort_only_mode() -> void:
 
 func _nearest_person_distance() -> float:
 	var d: float = human_distance()
+	if solo_patient_mode:
+		return d
 	var furn: Node = room.get_node_or_null(^"Furniture") if room != null else null
 	if furn != null:
 		for child: Node in furn.get_children():
-			if child is HospitalNpc:
+			if child is HospitalNpc and child.visible:
 				d = minf(d, Human.flat_distance(robot.global_position, (child as Node3D).global_position))
 	return d
 
@@ -863,10 +901,15 @@ func set_dialogue_state(s: int) -> void:
 	_arrived_wait_s = 0.0
 	if Main.is_dialogue_state(s):
 		robot.set_command(0.0, 0.0)
-	elif s == Config.RobotState.ARRIVED and _pending_turn_reset:
-		_pending_turn_reset = false
-		if _policy_active():
-			reset_positions(true)
+	elif s == Config.RobotState.ARRIVED:
+		if is_task_busy():
+			state = Config.RobotState.APPROACH
+			_task_elapsed_s = 0.0
+			_task_best_dist = -1.0
+		elif _pending_turn_reset:
+			_pending_turn_reset = false
+			if _policy_active():
+				reset_positions(true)
 	_last_result_ms = Time.get_ticks_msec()
 	overlay.show_detections([], _display_state_name(), _connected)
 

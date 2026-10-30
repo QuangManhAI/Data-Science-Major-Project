@@ -3,10 +3,10 @@
 - **Motivation/Background**: Captures architectural, toolchain, and model selection choices made during AI-assisted development to ensure long-term auditability and prevent unrecorded drift.
 - **Purpose**: Maintain an immutable, attributable provenance log of decisions for the hospital navigation robot project.
 - **Overview Pipeline**: Follows the decision log convention defined in `agents/templates/DECISION_LOG_TEMPLATE.md` and metadata header rules in `agents/rules/MD_CONVENTION.md`.
-- **Detailed Plan**: §1 Decision Index Table; §2 Decision Log Entries (D-001 to D-038).
+- **Detailed Plan**: §1 Decision Index Table; §2 Decision Log Entries (D-001 to D-039).
 - **References**: [agents/templates/DECISION_LOG_TEMPLATE.md](../../agents/templates/DECISION_LOG_TEMPLATE.md), [agents/rules/MD_CONVENTION.md](../../agents/rules/MD_CONVENTION.md).
 - **Created**: 2026-10-21T21:25:00+07:00
-- **Last Updated**: 2026-10-27T19:00:00+07:00
+- **Last Updated**: 2026-10-30T07:00:00+07:00
 
 ---
 
@@ -52,6 +52,7 @@
 | [D-036](#d-036--robot-inspection-telemetry-hud-panel-with-4-tabbed-progress-bar-visualizations) | Robot inspection telemetry HUD panel with 4-tabbed progress bar visualizations | human-approved via /grill-me | accepted |
 | [D-037](#d-037--dedicated-3-floor-patient-escort-ppo-training--distraction-guard) | Dedicated 3-Floor Patient Escort PPO Training & Distraction Guard | human-approved via /grill-me | accepted |
 | [D-038](#d-038--escort-only-inference-mode-overlay-hud-escort-label-and-manual-test-hotkey) | Escort-Only inference mode, overlay HUD escort label, and manual test hotkey | human | accepted |
+| [D-039](#d-039--fix-solo-patient-targeting-busy-guard-and-dialogue-to-escort-transition) | Fix solo patient targeting, busy guard, and dialogue-to-escort transition | human-approved via /grill-me | accepted |
 
 ---
 
@@ -609,4 +610,28 @@
 - **Why:** Guarantees 100% escort task testing without waiting through non-escort Q&A dialogues, corrects policy tether tracking in Godot 3D, and provides clear visual feedback of the active escort destination.
 - **Touches:** `run_simulation.py`, `sim_vision/godot/scripts/main.gd`, `sim_vision/godot/scripts/npc.gd`, `src/training/test_3floor_escort.py`, `docs/AI-Human-logs/Vuong.md`
 - **Evidence:** `pytest` test suite passes (26/26 passed); `python -m src.training.test_3floor_escort --episodes 2` completes with 6/6 patients escorted and 5 elevator transits; verified in Godot runtime with `--escort-only` and `G` key.
+
+### D-039 — Fix Solo Patient Targeting, Busy Guard, and Dialogue-to-Escort Transition
+- **Status:** accepted
+- **When:** 2026-10-30T07:00:00+07:00
+- **Decided by:** human-approved via `/grill-me` alignment
+- **Trigger:** "in the godot 3d simulation: the robot drive up to the patient? it movment is weird, the patient do speak, but no escort start, it sit there, after like 3-5s, it tries to find other patient"
+- **Decision:**
+  1. **Fix Solo-Patient Target Selection:**
+     - In `sim_vision/godot/scripts/main.gd:get_available_patients()`, fixed logic so in `solo_patient_mode` it strictly returns `[human]` (`$Human`), preventing the robot from pursuing invisible or disabled furniture NPCs on other floors.
+     - Updated `_nearest_person_distance()` in `main.gd` to ignore furniture NPCs during solo mode.
+     - In `reset_positions(is_task_transition)`, kept the robot in place and re-positioned the solo `$Human` at a reachable corridor/lobby spot on the current floor ($\ge 3\,\text{m}$ away) instead of teleporting the robot back to spawn.
+  2. **Refine Busy Guard (`APPROACH_PATIENT` Removal):**
+     - In `main.gd:is_task_busy()`, removed `APPROACH_PATIENT` from busy states. This ensures that while the robot is driving toward a target patient, NPCs can evaluate the robot as receptive and trigger `_start_talk()` once the robot arrives.
+  3. **Seamless Dialogue-to-Escort Transition:**
+     - In `main.gd:_on_dialogue_turn_completed()`, prevented state overwriting during dialogue so `state == RESPOND` stays intact until audio and subtitles complete.
+     - In `main.gd:set_dialogue_state()`, when returning to `ARRIVED` upon completion of dialogue speech, if `is_task_busy()` is true (an escort was scheduled), immediately transitions to `Config.RobotState.APPROACH` so the robot and patient begin walking without a 3-5s stall or abort reset.
+     - In `sim_vision/godot/scripts/dialogue_manager.gd:_after_response()`, fixed the speaker reference to use `target_npc = active_npc if active_npc != null else npc`.
+  4. **Escort Clip Filtering & Unit Test Conformance:**
+     - In `sim_vision/godot/scripts/npc.gd`, excluded clip sentence `05` (symptom advice query lacking destination slot) in `escort_only` mode.
+     - Fixed `pick_clip()` fallback to strictly adhere to GUT test specification by returning `""` on empty speaker clips.
+- **Why:** Solves the root causes of the simulation stall where the robot reached the patient but failed to begin escorting, eliminated erratic navigation toward furniture NPCs, and ensures instantaneous start of patient walking upon speech completion.
+- **Touches:** `sim_vision/godot/scripts/main.gd`, `sim_vision/godot/scripts/dialogue_manager.gd`, `sim_vision/godot/scripts/npc.gd`, `docs/AI-Human-logs/Vuong.md`
+- **Evidence:** All GUT unit tests pass cleanly (163/163 passed, 18,873 asserts); all Python pytest tests pass (26/26 passed); verified smooth immediate transition from voice completion to walking in solo-patient escort mode.
+
 

@@ -436,8 +436,8 @@ func _on_dialogue_turn_completed(row: Dictionary) -> void:
 
 	if inspection_panel != null:
 		inspection_panel.update_dialogue(
-			dialogue != null and dialogue.stt != null and dialogue.stt.connected,
-			dialogue != null and dialogue.tts != null and dialogue.tts.connected,
+			dialogue != null and dialogue.stt != null and dialogue.stt.is_server_connected(),
+			dialogue != null and dialogue.tts != null and dialogue.tts.is_server_connected(),
 			str(row.get("hyp_text", "")),
 			str(row.get("intent_pred", "")),
 			target_key,

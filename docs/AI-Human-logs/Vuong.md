@@ -634,4 +634,29 @@
 - **Touches:** `sim_vision/godot/scripts/main.gd`, `sim_vision/godot/scripts/dialogue_manager.gd`, `sim_vision/godot/scripts/npc.gd`, `docs/AI-Human-logs/Vuong.md`
 - **Evidence:** All GUT unit tests pass cleanly (163/163 passed, 18,873 asserts); all Python pytest tests pass (26/26 passed); verified smooth immediate transition from voice completion to walking in solo-patient escort mode.
 
+### D-040 — Fix GDScript STT/TTS Connection Property Crash in Dialogue Turn Completed
+- **Status:** accepted
+- **When:** 2026-10-30T07:40:00+07:00
+- **Decided by:** human-directed log analysis
+- **Trigger:** "SCRIPT ERROR: Invalid access to property or key 'connected' on a base object of type 'Node (SttClient)'. at: Main._on_dialogue_turn_completed (res://scripts/main.gd:438)"
+- **Decision:**
+  1. **Root Cause Analysis:**
+     - During normal dialogue execution, when `dialogue.turn_completed` signal fired, `_on_dialogue_turn_completed` in `sim_vision/godot/scripts/main.gd` attempted to access `dialogue.stt.connected` and `dialogue.tts.connected` to update the HUD telemetry inspection panel.
+     - `SttClient` and `TtsClient` encapsulate their connection status behind the public method `is_server_connected() -> bool` (`_connected` is private).
+     - Accessing `.connected` raised an uncaught GDScript runtime exception that aborted `_on_dialogue_turn_completed` before reaching line 446. Consequently:
+       - `active_escorted_patient` was never assigned.
+       - `_rl_bridge.begin_post_dialogue_task(...)` was never called.
+       - The task phase remained stuck at `SEARCH_PATIENT`, leaving the robot stationary until the 10s non-response timer timed out and reset the interaction.
+     - In contrast, pressing `KEY_G` bypassed `_on_dialogue_turn_completed` and directly invoked `_rl_bridge.begin_post_dialogue_task()`, which explained why `G` escorted reliably while normal dialogue failed.
+  2. **Code Resolution:**
+     - In `sim_vision/godot/scripts/main.gd:439-440`, updated property access to method call:
+       ```gdscript
+       dialogue != null and dialogue.stt != null and dialogue.stt.is_server_connected(),
+       dialogue != null and dialogue.tts != null and dialogue.tts.is_server_connected(),
+       ```
+- **Why:** Restores normal speech-driven dialogue turn completion and eliminates the script exception, allowing the escort state transition and RL policy dispatch to execute seamlessly when patients finish speaking.
+- **Touches:** `sim_vision/godot/scripts/main.gd`, `docs/AI-Human-logs/Vuong.md`
+- **Evidence:** All 163 GUT unit tests pass without error (18,873 asserts, 140.9s); confirmed no other invalid `.connected` accesses remain across the codebase.
+
+
 

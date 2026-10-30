@@ -302,7 +302,7 @@ def main() -> None:
     # 4. RL policy server (Port 8768) — PPO checkpoint lái robot trong Godot (--controller rl)
     rl_proc = None
     if args.controller == "rl":
-        rl_cmd = [str(py_exe), "rl_policy_server.py"]
+        rl_cmd = [str(py_exe), "rl_policy_server.py", "--trace"]
         if args.rl_checkpoint:
             rl_cmd += ["--checkpoint", str(Path(args.rl_checkpoint).resolve())]
         log(f"[Launcher] Starting RL policy server on port 8768 ({args.rl_checkpoint or 'default checkpoint'})...")

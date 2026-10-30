@@ -86,19 +86,23 @@ class PolicyRunner:
                 torch.as_tensor(obs, dtype=torch.float32).unsqueeze(0), deterministic=True
             )
         a_v, a_omega = (float(t) for t in action[0])
+        v_out = float(np.clip((a_v + 1.0) * 0.5 * (ESCORT_WALK_SPEED if env.task_phase == TaskPhase.GUIDE_ESCORT else V_MAX), 0.0, ESCORT_WALK_SPEED if env.task_phase == TaskPhase.GUIDE_ESCORT else V_MAX))
+        omega_out = float(np.clip(a_omega * OMEGA_MAX, -OMEGA_MAX, OMEGA_MAX))
         self.n_steps += 1
-        if self.trace and self.n_steps % 5 == 0:
-            log.info(
-                "step=%d task=%d phase=%s robot=(%.2f,%.2f) d_patient=%.2f d_goal=%.2f min_lidar=%.2fm a=(%+.2f,%+.2f)",
-                self.n_steps, task_id, env.task_phase.name, x, z,
-                np.hypot(env.patient_x - x, env.patient_z - z), np.hypot(final_x - x, final_z - z),
-                float(obs[0:17].min()) * 6.0, a_v, a_omega,
+        if self.trace and (env.task_phase == TaskPhase.GUIDE_ESCORT or self.n_steps % 5 == 0):
+            d_p = np.hypot(env.patient_x - x, env.patient_z - z)
+            d_g = np.hypot(final_x - x, final_z - z)
+            print(
+                f"[RL_SERVER] step={self.n_steps:<4d} phase={env.task_phase.name:<13s} "
+                f"Robot=({x:6.2f}, {z:6.2f}) Patient=({env.patient_x:6.2f}, {env.patient_z:6.2f}) "
+                f"d_pat={d_p:4.2f}m d_goal={d_g:4.2f}m | Action: v={v_out:.2f} w={omega_out:+.2f} (a=[{a_v:+.2f}, {a_omega:+.2f}])",
+                flush=True,
             )
         return {
             "type": "rl_action",
             "id": msg.get("id", -1),
-            "v": float(np.clip((a_v + 1.0) * 0.5 * (ESCORT_WALK_SPEED if env.task_phase == TaskPhase.GUIDE_ESCORT else V_MAX), 0.0, ESCORT_WALK_SPEED if env.task_phase == TaskPhase.GUIDE_ESCORT else V_MAX)),
-            "omega": float(np.clip(a_omega * OMEGA_MAX, -OMEGA_MAX, OMEGA_MAX)),
+            "v": v_out,
+            "omega": omega_out,
             "a": [a_v, a_omega],
             "phase": int(env.task_phase),
         }

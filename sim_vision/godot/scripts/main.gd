@@ -43,6 +43,7 @@ var _policy_accum: float = 0.0
 var _task_elapsed_s: float = 0.0
 var _task_best_dist: float = -1.0
 var _arrived_wait_s: float = 0.0
+var _escort_debug_timer: float = 0.0
 var _connected: bool = false
 var _last_seen_ms: int = -1             # −1 = chưa thấy người lần nào
 var _last_result_ms: int = -1
@@ -189,6 +190,38 @@ func _physics_process(delta: float) -> void:
 		return
 	if _is_in_elevator_transit:
 		return
+
+	# Log vị trí & hành vi robot + bệnh nhân mỗi 1.0 giây
+	_escort_debug_timer += delta
+	if _escort_debug_timer >= 1.0:
+		_escort_debug_timer = 0.0
+		var r_pos: Vector3 = robot.global_position if robot != null else Vector3.ZERO
+		var r_cmd: Vector2 = robot.get_command() if robot != null else Vector2.ZERO
+		var r_vel: Vector3 = robot.get_real_velocity() if robot != null else Vector3.ZERO
+		var esc_p: CharacterBody3D = active_escorted_patient if active_escorted_patient != null else (current_target_patient if current_target_patient != null else human)
+		var p_pos: Vector3 = esc_p.global_position if esc_p != null else Vector3.ZERO
+		var d_tether: float = Human.flat_distance(r_pos, p_pos)
+		var ph_name: String = "SEARCH"
+		if _rl_bridge != null:
+			match _rl_bridge.task_phase:
+				RLEnvBridgeScript.TaskPhase.SEARCH_PATIENT: ph_name = "SEARCH"
+				RLEnvBridgeScript.TaskPhase.APPROACH_PATIENT: ph_name = "APPROACH"
+				RLEnvBridgeScript.TaskPhase.GUIDE_ESCORT: ph_name = "GUIDE_ESCORT"
+				RLEnvBridgeScript.TaskPhase.CALL_STAFF: ph_name = "CALL_STAFF"
+		var g_key: String = _rl_bridge.goal_key if _rl_bridge != null else "none"
+		var g_pos: Vector3 = _rl_bridge.goal_position if _rl_bridge != null else Vector3.ZERO
+		var d_goal: float = Human.flat_distance(r_pos, g_pos)
+		var d_p_goal: float = Human.flat_distance(p_pos, g_pos)
+		var trail_count: int = _rl_bridge.escort_trail.size() if _rl_bridge != null else 0
+		print("[ESCORT_DEBUG] t=%5.1fs | State=%-8s | Phase=%-12s | Robot=(%5.2f, %5.2f) cmd=(v=%.2f, w=%+5.2f) vel=%4.2f | Patient=(%5.2f, %5.2f) tether=%4.2fm | Goal=%s (dist_r=%4.2fm, dist_p=%4.2fm) | Trail=%d" % [
+			(Time.get_ticks_msec() - _start_ms) / 1000.0,
+			Config.state_name(state), ph_name,
+			r_pos.x, r_pos.z, r_cmd.x, r_cmd.y, r_vel.length(),
+			p_pos.x, p_pos.z, d_tether,
+			g_key, d_goal, d_p_goal,
+			trail_count
+		])
+
 	# Đồng hồ kẹt áp dụng cả pha tìm bệnh nhân (đích = bệnh nhân), trừ lúc hội thoại / đã tới nơi chờ NPC nói
 	if not Main.is_dialogue_state(state) and state != Config.RobotState.ARRIVED:
 		_task_elapsed_s += delta
@@ -199,6 +232,7 @@ func _physics_process(delta: float) -> void:
 			_task_best_dist = d_task
 			_task_elapsed_s = 0.0
 		if _task_elapsed_s > TASK_TIMEOUT_S:
+			print("[ESCORT_DEBUG] >>> Task TIMED OUT! elapsed=%.1fs > %.1fs, Goal=%s" % [_task_elapsed_s, TASK_TIMEOUT_S, _rl_bridge.goal_key])
 			overlay.set_status("Hủy nhiệm vụ %s: kẹt quá %.0fs" % [_rl_bridge.goal_key, TASK_TIMEOUT_S])
 			# Như kết thúc episode lúc train: đặt lại cả robot; chỉ dời bệnh nhân thì robot kẹt góc quay vòng mãi
 			reset_positions(false)
@@ -214,8 +248,10 @@ func _physics_process(delta: float) -> void:
 			if _rl_bridge.goal_key in ["thang_may", "thang_may_t2", "thang_may_t3"] and _rl_bridge.final_target_key != "" and _rl_bridge.final_target_key != _rl_bridge.goal_key:
 				var cur_fl: int = Room.get_floor(robot.global_position)
 				var dest_fl: int = Room.get_room_floor(_rl_bridge.final_target_key)
+				print("[ESCORT_DEBUG] >>> Elevator transit triggered: Floor %d -> Floor %d (FinalTarget: %s)" % [cur_fl, dest_fl, _rl_bridge.final_target_key])
 				_execute_elevator_transit(cur_fl, dest_fl)
 				return
+			print("[ESCORT_DEBUG] >>> Arrived at escort goal '%s'! d_goal=%.2fm, d_patient_goal=%.2fm" % [_rl_bridge.goal_key, d_goal, d_patient_goal])
 			robot.set_command(0.0, 0.0)
 			_rl_bridge.cumulative_team_reward += RLEnvBridgeScript.REWARD_GUIDE_ARRIVED
 			_rl_bridge.patients_helped += 1
@@ -350,6 +386,7 @@ func _step_policy(delta: float) -> void:
 				return
 			state = Config.RobotState.SEARCH  # bệnh nhân đi xa trước khi nói ➔ tìm lại
 		elif d_human <= PATIENT_ENGAGE_DIST_M:
+			print("[ESCORT_DEBUG] >>> Reached patient engage dist (d=%.2fm <= %.2fm), waiting for speech..." % [d_human, PATIENT_ENGAGE_DIST_M])
 			_arrived_wait_s = 0.0
 			robot.set_command(0.0, 0.0)
 			state = Config.RobotState.ARRIVED
@@ -414,6 +451,9 @@ func _on_dialogue_turn_completed(row: Dictionary) -> void:
 		_task_best_dist = -1.0
 		if not Main.is_dialogue_state(state):
 			state = Config.RobotState.APPROACH
+		print("[ESCORT_DEBUG] >>> Post-dialogue task initiated: act='%s', target='%s', floor=%d -> Goal: key='%s', pos=(%.2f, %.2f), final='%s'" % [
+			act, target_key, fl, _rl_bridge.goal_key, _rl_bridge.goal_position.x, _rl_bridge.goal_position.z, _rl_bridge.final_target_key
+		])
 		overlay.set_status("Bắt đầu dẫn đường bệnh nhân tới: %s (Tầng %d)" % [_rl_bridge.goal_key, fl])
 		overlay.show_detections([], _display_state_name(), _connected)
 	else:

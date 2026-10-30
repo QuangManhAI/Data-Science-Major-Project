@@ -64,6 +64,8 @@ class PolicyRunner:
         self.env.reset()
         self.task_id: int | None = None
         self.patrol_wp_idx: int = 0
+        self.lost_det_frames: int = 0
+        self.last_vis_goal: tuple[float, float, float] = (0.05, 0.0, 1.0)
 
     def act(self, msg: dict) -> dict:
         env = self.env
@@ -77,6 +79,7 @@ class PolicyRunner:
         task_id = int(msg.get("task_id", 0))
         if task_id != self.task_id:
             self.task_id = task_id
+            self.lost_det_frames = 0
             env.task_phase = TaskPhase.SEARCH_PATIENT
         if phase in (TaskPhase.GUIDE_ESCORT, TaskPhase.CALL_STAFF):
             env.task_phase = TaskPhase(phase)
@@ -105,6 +108,7 @@ class PolicyRunner:
                     obs[22] = 1.0  # one-hot APPROACH_PATIENT
 
             if has_det:
+                self.lost_det_frames = 0
                 cx_off = float(obs[18])
                 h = float(obs[19])
                 d_vis = float(np.clip(1.20 / max(h, 0.05), 0.8, 15.0))
@@ -112,7 +116,15 @@ class PolicyRunner:
                 obs[25] = float(np.clip(d_vis / 25.0, 0.0, 1.0))
                 obs[26] = math.sin(angle_vis)
                 obs[27] = math.cos(angle_vis)
+                self.last_vis_goal = (obs[25], obs[26], obs[27])
+            elif env.task_phase == TaskPhase.APPROACH_PATIENT and self.lost_det_frames < 10:
+                # Giữ hướng tiếp cận thị giác trong 10 frame (~1s) để không bị giật quay lại tuần tra khi YOLO nhấp nháy hoặc góc nhìn hẹp
+                self.lost_det_frames += 1
+                obs[21:25] = 0.0
+                obs[22] = 1.0  # one-hot APPROACH_PATIENT
+                obs[25], obs[26], obs[27] = self.last_vis_goal
             else:
+                self.lost_det_frames = 0
                 env.task_phase = TaskPhase.SEARCH_PATIENT
                 obs[21:25] = 0.0
                 obs[21] = 1.0  # one-hot SEARCH_PATIENT

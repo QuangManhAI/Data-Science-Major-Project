@@ -155,7 +155,10 @@ func _on_talk_started(clip_id: String) -> void:
 	if main != null and main.has_method("is_task_busy") and main.is_task_busy():
 		return
 	print("[ESCORT_DEBUG] >>> NPC talk started: clip_id='%s', robot_state=%s" % [clip_id, Config.state_name(main.state)])
-	if main.state == Config.RobotState.ARRIVED:
+	if main.state == Config.RobotState.ARRIVED or main.state in [Config.RobotState.APPROACH, Config.RobotState.SEARCH]:
+		var r_node: Node3D = main.get_node_or_null(^"Robot")
+		if r_node != null and r_node.has_method("set_command"):
+			r_node.set_command(0.0, 0.0)
 		clarify_count = 0
 		used_clips = [clip_id]
 		main.overlay.set_alert("")

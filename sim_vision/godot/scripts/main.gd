@@ -17,7 +17,7 @@ const RLEnvBridgeScript = preload("res://scripts/rl_env_bridge.gd")
 const RLControllerScript = preload("res://scripts/rl_controller.gd")
 const RLPolicyClientScript = preload("res://scripts/rl_policy_client.gd")
 const InspectionPanelScript = preload("res://scripts/inspection_panel.gd")
-const PATIENT_ENGAGE_DIST_M: float = 1.35  # = PATIENT_TALK_DIST_M của env lúc train
+const PATIENT_ENGAGE_DIST_M: float = 1.85  # Khoảng cách tiếp cận để bắt đầu hội thoại tự nhiên, khớp TALK_TRIGGER_DIST
 const TASK_TIMEOUT_S: float = 45.0         # = stagnation_timeout_s lúc train: không tiến triển quá lâu ➔ hủy
 const TASK_PROGRESS_M: float = 1.0         # = STAGNATION_PROGRESS_M: lại gần đích thêm 1 m ➔ đặt lại đồng hồ
 const ARRIVED_WAIT_S: float = 10.0         # đứng ARRIVED mà NPC không bắt đầu nói ➔ đi tiếp
@@ -253,18 +253,21 @@ func _physics_process(delta: float) -> void:
 			reset_positions(false)
 			return
 	if _rl_bridge.task_phase == RLEnvBridgeScript.TaskPhase.GUIDE_ESCORT:
-		var esc_pat: CharacterBody3D = active_escorted_patient if active_escorted_patient != null else human
-		RLEnvBridgeScript.step_escorted_patient(esc_pat, robot.global_position, delta, _rl_bridge.escort_trail)
+		var has_escort: bool = active_escorted_patient != null
+		if has_escort:
+			RLEnvBridgeScript.step_escorted_patient(active_escorted_patient, robot.global_position, delta, _rl_bridge.escort_trail)
 		var d_goal: float = Human.flat_distance(robot.global_position, _rl_bridge.goal_position)
-		var d_tether: float = Human.flat_distance(robot.global_position, esc_pat.global_position)
-		var d_patient_goal: float = Human.flat_distance(esc_pat.global_position, _rl_bridge.goal_position)
-		if d_goal <= RLEnvBridgeScript.GOAL_ARRIVE_ROBOT_M and d_patient_goal <= RLEnvBridgeScript.GOAL_ARRIVE_PATIENT_M:
+		var esc_p: CharacterBody3D = active_escorted_patient if has_escort else human
+		var d_tether: float = Human.flat_distance(robot.global_position, esc_p.global_position)
+		var d_patient_goal: float = Human.flat_distance(esc_p.global_position, _rl_bridge.goal_position) if has_escort else 0.0
+
+		if d_goal <= RLEnvBridgeScript.GOAL_ARRIVE_ROBOT_M and (not has_escort or d_patient_goal <= RLEnvBridgeScript.GOAL_ARRIVE_PATIENT_M):
 			# Kiểm tra chuyển tầng qua thang máy
 			if _rl_bridge.goal_key in ["thang_may", "thang_may_t2", "thang_may_t3"] and _rl_bridge.final_target_key != "" and _rl_bridge.final_target_key != _rl_bridge.goal_key:
 				var cur_fl: int = Room.get_floor(robot.global_position)
 				var dest_fl: int = Room.get_room_floor(_rl_bridge.final_target_key)
-				print("[ESCORT_DEBUG] >>> Elevator transit triggered: Floor %d -> Floor %d (FinalTarget: %s)" % [cur_fl, dest_fl, _rl_bridge.final_target_key])
-				_execute_elevator_transit(cur_fl, dest_fl)
+				print("[ESCORT_DEBUG] >>> Elevator transit triggered: Floor %d -> Floor %d (FinalTarget: %s, with_patient: %s)" % [cur_fl, dest_fl, _rl_bridge.final_target_key, has_escort])
+				_execute_elevator_transit(cur_fl, dest_fl, has_escort)
 				return
 			print("[ESCORT_DEBUG] >>> Arrived at escort goal '%s'! d_goal=%.2fm, d_patient_goal=%.2fm" % [_rl_bridge.goal_key, d_goal, d_patient_goal])
 			robot.set_command(0.0, 0.0)
@@ -272,9 +275,10 @@ func _physics_process(delta: float) -> void:
 			_rl_bridge.patients_helped += 1
 			_rl_bridge.task_phase = RLEnvBridgeScript.TaskPhase.SEARCH_PATIENT
 			overlay.set_status("Đã dẫn tới: %s (R_team=%.0f)" % [_rl_bridge.goal_key, _rl_bridge.cumulative_team_reward])
-			if esc_pat.has_method("end_escort"):
-				esc_pat.end_escort()
-			esc_pat.set_meta("helped", true)
+			if has_escort and esc_p.has_method("end_escort"):
+				esc_p.end_escort()
+			if has_escort:
+				esc_p.set_meta("helped", true)
 			if dialogue != null:
 				if dialogue.has_method("show_subtitle"):
 					dialogue.show_subtitle("Bệnh nhân", "Cảm ơn robot, tôi đã tới nơi khám!", 4.0)
@@ -284,9 +288,15 @@ func _physics_process(delta: float) -> void:
 
 			var cur_floor: int = Room.get_floor(robot.global_position)
 			if cur_floor > 1:
-				print("[ESCORT_DEBUG] >>> Escort completed on Floor %d. Returning robot to Floor 1 lobby via elevator..." % cur_floor)
-				overlay.set_status("Hoàn thành dẫn đường Tầng %d. Đang quay về Sảnh Tầng 1..." % cur_floor)
-				_execute_elevator_transit(cur_floor, 1, false)
+				print("[ESCORT_DEBUG] >>> Escort completed on Floor %d. Routing robot to Floor %d elevator to return to Floor 1..." % [cur_floor, cur_floor])
+				var elev_key: String = "thang_may_t%d" % cur_floor
+				_rl_bridge.goal_key = elev_key
+				_rl_bridge.goal_position = room.get_room_waypoint(elev_key) if room != null else Vector3.ZERO
+				_rl_bridge.final_target_key = "tiep_don"
+				_rl_bridge.task_phase = RLEnvBridgeScript.TaskPhase.GUIDE_ESCORT
+				_task_elapsed_s = 0.0
+				_task_best_dist = -1.0
+				overlay.set_status("Đã dẫn bệnh nhân tới %s. Đang tự di chuyển về Thang máy Tầng %d..." % [_rl_bridge.goal_key, cur_floor])
 				return
 			reset_positions(true)
 			return
@@ -405,6 +415,11 @@ func pick_next_target_patient(exclude: CharacterBody3D = null) -> CharacterBody3
 		if not same_fl.is_empty():
 			list = same_fl
 	var chosen: CharacterBody3D = list[_rng.randi_range(0, list.size() - 1)]
+	if chosen != null:
+		# Bệnh nhân đang chờ giúp đỡ đứng yên, không né chạy ("pardon") khi robot tiếp cận
+		chosen.set("pardon_enabled", false)
+		if chosen.get("walks") == true:
+			chosen.set("walks", false)
 	if chosen is HospitalNpc and (chosen as HospitalNpc).has_npc():
 		(chosen as HospitalNpc).get_npc().reset()
 	elif chosen != null:

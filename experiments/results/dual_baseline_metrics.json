@@ -1,0 +1,108 @@
+{
+  "timestamp": "2026-10-30T17:05:52Z",
+  "hardware": {
+    "device": "0",
+    "device_name": "NVIDIA GeForce RTX 3050 Laptop GPU",
+    "vram_gb": 4.01
+  },
+  "training_config": {
+    "epochs": 30,
+    "batch_size": 16,
+    "imgsz": 640,
+    "initial_weights": "/home/bush/Projects/Data-Science-Major-Project/models/yolo26n/yolo26n.pt"
+  },
+  "model_a_clinical_3class": {
+    "mAP50": 0.9788,
+    "mAP50_95": 0.7103,
+    "precision": 0.9896,
+    "recall": 0.9719,
+    "f1": 0.9806,
+    "per_class": {
+      "patient": {
+        "class_id": 0,
+        "mAP50_95": 0.6196
+      },
+      "doctor": {
+        "class_id": 1,
+        "mAP50_95": 0.708
+      },
+      "wheelchair": {
+        "class_id": 2,
+        "mAP50_95": 0.8031
+      }
+    },
+    "training_time_sec": 337.5,
+    "best_weights": "/home/bush/Projects/Data-Science-Major-Project/experiments/runs/train_hospital/yolo26n_clinical_baseline_v1/weights/best.pt"
+  },
+  "model_b_props_15class": {
+    "mAP50": 0.9336,
+    "mAP50_95": 0.6568,
+    "precision": 0.9157,
+    "recall": 0.9115,
+    "f1": 0.9136,
+    "per_class": {
+      "queue_kiosk": {
+        "class_id": 0,
+        "mAP50_95": 0.5786
+      },
+      "reception_counter": {
+        "class_id": 1,
+        "mAP50_95": 0.8105
+      },
+      "sanitizer_stand": {
+        "class_id": 2,
+        "mAP50_95": 0.7008
+      },
+      "pccc_station": {
+        "class_id": 3,
+        "mAP50_95": 0.895
+      },
+      "medical_waste_bin": {
+        "class_id": 4,
+        "mAP50_95": 0.6892
+      },
+      "water_dispenser": {
+        "class_id": 5,
+        "mAP50_95": 0.5387
+      },
+      "wc_station": {
+        "class_id": 6,
+        "mAP50_95": 0.7994
+      },
+      "elevator_doors": {
+        "class_id": 7,
+        "mAP50_95": 0.9086
+      },
+      "hospital_bed": {
+        "class_id": 8,
+        "mAP50_95": 0.5283
+      },
+      "stretcher_cart": {
+        "class_id": 9,
+        "mAP50_95": 0.6655
+      },
+      "iv_stand": {
+        "class_id": 10,
+        "mAP50_95": 0.3766
+      },
+      "medical_trolley": {
+        "class_id": 11,
+        "mAP50_95": 0.6203
+      },
+      "vital_monitor": {
+        "class_id": 12,
+        "mAP50_95": 0.648
+      },
+      "wheelchair": {
+        "class_id": 13,
+        "mAP50_95": 0.4617
+      },
+      "hospital_chair": {
+        "class_id": 14,
+        "mAP50_95": 0.6306
+      }
+    },
+    "training_time_sec": 398.6,
+    "best_weights": "/home/bush/Projects/Data-Science-Major-Project/experiments/runs/train_hospital/yolo26n_props_baseline_v1/weights/best.pt"
+  }
+}

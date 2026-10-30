@@ -44,9 +44,10 @@ def check_dataset(dataset_dir: Path):
         except Exception:
             pass
 
-    # Kiểm tra xem đang ở chế độ dataset đơn lẻ (chưa chia) hay đã chia train/val/test
-    is_unified = (dataset_dir / "images").exists() and (dataset_dir / "labels").exists()
-    splits = ["unified"] if is_unified else ["train", "val", "test"]
+    # Kiểm tra xem đang ở chế độ đã chia train/val/test hay chỉ là dataset đơn lẻ
+    has_splits = (dataset_dir / "train" / "images").exists() and (dataset_dir / "val" / "images").exists() and (dataset_dir / "test" / "images").exists()
+    is_unified = not has_splits and (dataset_dir / "images").exists() and (dataset_dir / "labels").exists()
+    splits = ["train", "val", "test"] if has_splits else ["unified"]
     errors = []
     warnings = []
     split_stems = {}
@@ -148,6 +149,16 @@ def check_dataset(dataset_dir: Path):
             print("  ✅ 100% CLEAN: Hoàn toàn không có rò rỉ dữ liệu giữa Train, Val và Test.")
         else:
             print("  ❌ PHÁT HIỆN RÒ RỈ DỮ LIỆU!")
+
+        # Class Representation Check across splits
+        for split in ["train", "val", "test"]:
+            split_classes = set(stats.get(split, {}).get("classes", {}).keys())
+            missing_in_split = valid_classes - split_classes
+            if missing_in_split:
+                missing_names = [class_names.get(c, str(c)) for c in missing_in_split]
+                errors.append(f"[{split}] THIẾU LỚP (Zero Representation): Các lớp sau có 0 mẫu trong {split}: {missing_names}")
+            else:
+                print(f"  ✅ [{split.upper()}] Đầy đủ 100% các lớp đối tượng ({len(valid_classes)} classes > 0 instances).")
 
     # Summary Output
     print("\n📊 2. THỐNG KÊ PHÂN BỐ BỘ DỮ LIỆU:")

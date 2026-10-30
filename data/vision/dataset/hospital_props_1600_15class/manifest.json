@@ -44,5 +44,83 @@
     "wheelchair": 275,
     "hospital_chair": 411
   },
-  "notes": "100% human-verified and augmented on CVAT. Includes 2 new classes added during manual review: wheelchair (275) and hospital_chair (411)."
+  "notes": "100% human-verified and augmented on CVAT. Includes 2 new classes added during manual review: wheelchair (275) and hospital_chair (411).",
+  "split_70_15_15": {
+    "status": "COMPLETED_ZERO_LEAKAGE",
+    "split_ratio": [
+      0.7,
+      0.15,
+      0.15
+    ],
+    "statistics": {
+      "train": {
+        "frames": 1120,
+        "boxes": 2427,
+        "classes": {
+          "queue_kiosk": 134,
+          "reception_counter": 223,
+          "sanitizer_stand": 180,
+          "pccc_station": 62,
+          "medical_waste_bin": 274,
+          "water_dispenser": 96,
+          "wc_station": 54,
+          "elevator_doors": 48,
+          "hospital_bed": 318,
+          "stretcher_cart": 27,
+          "iv_stand": 141,
+          "medical_trolley": 248,
+          "vital_monitor": 186,
+          "wheelchair": 181,
+          "hospital_chair": 255
+        }
+      },
+      "val": {
+        "frames": 240,
+        "boxes": 552,
+        "classes": {
+          "queue_kiosk": 37,
+          "reception_counter": 43,
+          "sanitizer_stand": 47,
+          "pccc_station": 17,
+          "medical_waste_bin": 53,
+          "water_dispenser": 18,
+          "wc_station": 12,
+          "elevator_doors": 11,
+          "hospital_bed": 65,
+          "stretcher_cart": 2,
+          "iv_stand": 29,
+          "medical_trolley": 59,
+          "vital_monitor": 38,
+          "wheelchair": 44,
+          "hospital_chair": 77
+        }
+      },
+      "test": {
+        "frames": 240,
+        "boxes": 517,
+        "classes": {
+          "queue_kiosk": 33,
+          "reception_counter": 47,
+          "sanitizer_stand": 50,
+          "pccc_station": 12,
+          "medical_waste_bin": 70,
+          "water_dispenser": 25,
+          "wc_station": 10,
+          "elevator_doors": 13,
+          "hospital_bed": 47,
+          "stretcher_cart": 5,
+          "iv_stand": 11,
+          "medical_trolley": 38,
+          "vital_monitor": 27,
+          "wheelchair": 50,
+          "hospital_chair": 79
+        }
+      }
+    },
+    "metadata": {
+      "phase1_solo_distribution": "70% Train (28/40), 15% Val (6/40), 15% Test (6/40)",
+      "phase2_cluster_distribution": "224 Train, 48 Val, 48 Test",
+      "phase3_hard_negatives": "84 Train, 18 Val, 18 Test"
+    }
+  }
 }

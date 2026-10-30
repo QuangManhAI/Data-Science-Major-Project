@@ -15,8 +15,95 @@
     "doctor": 435,
     "wheelchair": 76
   },
-  "resolution": [640, 480],
+  "resolution": [
+    640,
+    480
+  ],
   "format": "YOLO_normalized_5col",
   "quality_assurance_status": "PASS_ZERO_DEFECT_100PCT_POSITIVE",
-  "notes": "133 empty hard-negative frames moved to data/vision/raw/hard_negatives/ and 74 bed patient frames (U2.8, U2.11) moved to data/vision/raw/hospital_bed_cases/ so dataset focuses 100% on upright/seated people and wheelchairs."
+  "notes": "133 empty hard-negative frames moved to data/vision/raw/hard_negatives/ and 74 bed patient frames (U2.8, U2.11) moved to data/vision/raw/hospital_bed_cases/ so dataset focuses 100% on upright/seated people and wheelchairs.",
+  "split_70_15_15": {
+    "status": "COMPLETED_ZERO_LEAKAGE",
+    "split_ratio": [
+      0.7,
+      0.15,
+      0.15
+    ],
+    "statistics": {
+      "train": {
+        "frames": 913,
+        "boxes": 1196,
+        "classes": {
+          "patient": 895,
+          "doctor": 249,
+          "wheelchair": 52
+        }
+      },
+      "val": {
+        "frames": 202,
+        "boxes": 241,
+        "classes": {
+          "patient": 119,
+          "doctor": 110,
+          "wheelchair": 12
+        }
+      },
+      "test": {
+        "frames": 198,
+        "boxes": 242,
+        "classes": {
+          "patient": 154,
+          "doctor": 76,
+          "wheelchair": 12
+        }
+      }
+    },
+    "metadata": {
+      "train_cases": [
+        "U1_1",
+        "U1_4",
+        "U1_6",
+        "U2_1",
+        "U2_10",
+        "U2_2",
+        "U2_3",
+        "U3_1",
+        "U3_10",
+        "U3_12",
+        "U3_13",
+        "U3_2",
+        "U3_3",
+        "U5_1",
+        "U6_1",
+        "U6_2",
+        "U6_3",
+        "U6_6",
+        "U6_7",
+        "U6_8",
+        "U7_2",
+        "U7_3",
+        "U7_6",
+        "U2_9 (front/mid distance)",
+        "U8_2 (front/mid distance)"
+      ],
+      "val_cases": [
+        "U1_3",
+        "U2_4",
+        "U3_8",
+        "U6_4",
+        "U7_4",
+        "U2_9 (mid distance)",
+        "U8_2 (mid distance)"
+      ],
+      "test_cases": [
+        "U1_2",
+        "U2_7",
+        "U3_9",
+        "U6_5",
+        "U7_5",
+        "U2_9 (far distance)",
+        "U8_2 (far distance)"
+      ]
+    }
+  }
 }

@@ -79,21 +79,18 @@ logs/
 .env.*
 *.tar.gz
 *.pt
-# Vision benchmark evaluation data & model weights
+# Vision benchmark evaluation data, datasets & packages
 /data/vision/*
 !/data/vision/README.md
-!/data/vision/dataset/
-!/data/vision/dataset/**
-!/data/vision/raw/
-!/data/vision/raw/**
-!/data/vision/cvat_task_package/
-!/data/vision/cvat_task_package/**
-!/data/vision/cvat_props_task_package/
-!/data/vision/cvat_props_task_package/**
-/data/vision/**/images/
-/data/vision/**/labels/
+/data/vision/dataset/*
+!/data/vision/dataset/README.md
+/data/vision/raw/*
+!/data/vision/raw/README.md
+/data/vision/cvat_*_package/
 /data/vision/**/*.zip
 /data/vision/**/*.jsonl
+/data/vision/**/*.cache
+/data/vision/**/labels_backup*/
 /data/vision_eval_unified/
 /data/vision_eval_groundtruth_visualized/
 /data/vision_eval_600/

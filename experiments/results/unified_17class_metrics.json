@@ -1,0 +1,103 @@
+{
+  "timestamp": "2026-10-30T17:36:41Z",
+  "model_name": "YOLO26n-Unified-17Class",
+  "dataset": "hospital_unified_3120_17class",
+  "total_classes": 17,
+  "test_frames": 469,
+  "hardware": {
+    "device": "0",
+    "device_name": "NVIDIA GeForce RTX 3050 Laptop GPU",
+    "vram_gb": 4.01
+  },
+  "training_config": {
+    "epochs": 30,
+    "batch_size": 16,
+    "imgsz": 640,
+    "initial_weights": "/home/bush/Projects/Data-Science-Major-Project/models/yolo26n/yolo26n.pt"
+  },
+  "metrics": {
+    "mAP50": 0.932,
+    "mAP50_95": 0.6907,
+    "precision": 0.927,
+    "recall": 0.9047,
+    "f1": 0.9157,
+    "speed": {
+      "preprocess": 0.84,
+      "inference": 3.53,
+      "loss": 0.0,
+      "postprocess": 0.77
+    },
+    "per_class": {
+      "patient": {
+        "class_id": 0,
+        "mAP50_95": 0.5839
+      },
+      "doctor": {
+        "class_id": 1,
+        "mAP50_95": 0.6832
+      },
+      "wheelchair": {
+        "class_id": 2,
+        "mAP50_95": 0.5175
+      },
+      "queue_kiosk": {
+        "class_id": 3,
+        "mAP50_95": 0.5957
+      },
+      "reception_counter": {
+        "class_id": 4,
+        "mAP50_95": 0.8101
+      },
+      "sanitizer_stand": {
+        "class_id": 5,
+        "mAP50_95": 0.8541
+      },
+      "pccc_station": {
+        "class_id": 6,
+        "mAP50_95": 0.9703
+      },
+      "medical_waste_bin": {
+        "class_id": 7,
+        "mAP50_95": 0.8159
+      },
+      "water_dispenser": {
+        "class_id": 8,
+        "mAP50_95": 0.499
+      },
+      "wc_station": {
+        "class_id": 9,
+        "mAP50_95": 0.8337
+      },
+      "elevator_doors": {
+        "class_id": 10,
+        "mAP50_95": 0.8777
+      },
+      "hospital_bed": {
+        "class_id": 11,
+        "mAP50_95": 0.6225
+      },
+      "stretcher_cart": {
+        "class_id": 12,
+        "mAP50_95": 0.69
+      },
+      "iv_stand": {
+        "class_id": 13,
+        "mAP50_95": 0.4797
+      },
+      "medical_trolley": {
+        "class_id": 14,
+        "mAP50_95": 0.5876
+      },
+      "vital_monitor": {
+        "class_id": 15,
+        "mAP50_95": 0.6891
+      },
+      "hospital_chair": {
+        "class_id": 16,
+        "mAP50_95": 0.6312
+      }
+    },
+    "training_time_sec": 765.3,
+    "best_weights": "/home/bush/Projects/Data-Science-Major-Project/experiments/runs/train_hospital/yolo26n_unified_17class_v1/weights/best.pt"
+  }
+}

@@ -87,6 +87,9 @@ func begin_post_dialogue_task(act: String, target_str: String, floor_num: int, _
 	goal_key = resolve_destination_key(act, target_str, floor_num, current_floor)
 	if act == "guide":
 		task_phase = TaskPhase.GUIDE_ESCORT
+		escort_trail.clear()
+		if robot_ref != null:
+			escort_trail.append(robot_ref.global_position)
 		if room_ref != null:
 			goal_position = room_ref.get_room_waypoint(goal_key)
 	elif act in ["call_staff", "emergency"]:
@@ -315,7 +318,12 @@ static func step_escorted_patient(patient: CharacterBody3D, robot_pos: Vector3, 
 	if d_robot <= ESCORT_STOP_DIST_M:
 		patient.escort_stop()
 		return
-	while trail.size() > 1 and Human.flat_distance(patient.global_position, trail[0]) <= ESCORT_CRUMB_REACH_M:
-		trail.pop_front()
+	while trail.size() > 1:
+		var d0: float = Human.flat_distance(patient.global_position, trail[0])
+		var d1: float = Human.flat_distance(patient.global_position, trail[1])
+		if d0 <= ESCORT_CRUMB_REACH_M or d1 <= d0:
+			trail.pop_front()
+		else:
+			break
 	var step: float = minf(ESCORT_WALK_SPEED * delta, d_robot - ESCORT_STOP_DIST_M)
 	patient.escort_step_towards(trail[0], step, delta)

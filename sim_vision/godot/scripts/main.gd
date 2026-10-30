@@ -1000,22 +1000,35 @@ static func pick_start_positions(r: Room, rng: RandomNumberGenerator) -> Diction
 			"robot_yaw": float(dock["yaw"]), "human_yaw": rng.randf_range(-PI, PI)}
 
 
-## Vị trí bắt đầu solo: Bệnh nhân ở hành lang/sảnh, robot ở gần (2.0–3.5m) hướng mặt vào bệnh nhân.
+## Vị trí bắt đầu solo: Bệnh nhân ở hành lang/sảnh (rõ ràng, không bị kẹt sau bàn ghế), robot ở gần (2.0–3.5m) hướng mặt vào bệnh nhân với tầm nhìn trực tiếp.
 static func pick_solo_start_positions(r: Room, rng: RandomNumberGenerator) -> Dictionary:
-	var human_pos := r.get_free_position(START_CLEARANCE, rng)
+	var human_pos: Vector3 = Vector3.ZERO
+	if r != null and r.has_method("get_patient_spawn_position"):
+		human_pos = r.get_patient_spawn_position(1, rng)
+	elif r != null:
+		human_pos = r.get_free_position(START_CLEARANCE, rng)
 	var robot_pos := human_pos
 	var ok: bool = false
-	var footprints: Array[Rect2] = r.get_obstacle_footprints()
+	var footprints: Array[Rect2] = r.get_obstacle_footprints() if r != null else []
 	for i: int in MAX_PLACEMENT_TRIES:
 		var dist: float = rng.randf_range(2.0, 3.5)
 		var angle: float = rng.randf_range(-PI, PI)
 		var cand := Vector3(human_pos.x + dist * cos(angle), 0.0, human_pos.z + dist * sin(angle))
 		if absf(cand.x) <= 10.8 and absf(cand.z) <= 7.2 and Room.is_clear(cand, footprints, START_CLEARANCE):
-			robot_pos = cand
-			ok = true
-			break
+			# Kiểm tra đường nhìn thẳng không bị cản bởi đồ đạc / tường
+			var clear_line: bool = true
+			for fp: Rect2 in footprints:
+				var exp_fp := fp.grow(0.15)
+				var aabb := AABB(Vector3(exp_fp.position.x, -1.0, exp_fp.position.y), Vector3(exp_fp.size.x, 2.0, exp_fp.size.y))
+				if aabb.intersects_segment(human_pos, cand) != null:
+					clear_line = false
+					break
+			if clear_line:
+				robot_pos = cand
+				ok = true
+				break
 	if not ok:
-		robot_pos = r.get_free_position(START_CLEARANCE, rng)
+		robot_pos = r.get_free_position(START_CLEARANCE, rng) if r != null else Vector3.ZERO
 	var to_h: Vector3 = human_pos - robot_pos
 	var face_yaw: float = atan2(-to_h.x, -to_h.z) + rng.randf_range(-0.25, 0.25)
 	return {

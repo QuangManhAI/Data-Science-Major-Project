@@ -658,5 +658,26 @@
 - **Touches:** `sim_vision/godot/scripts/main.gd`, `docs/AI-Human-logs/Vuong.md`
 - **Evidence:** All 163 GUT unit tests pass without error (18,873 asserts, 140.9s); confirmed no other invalid `.connected` accesses remain across the codebase.
 
+### D-041 — Fix Escort Patient Trapping Behind Furniture and Dynamic Trail Pruning
+- **Status:** accepted
+- **When:** 2026-10-30T07:55:00+07:00
+- **Decided by:** human log observation
+- **Trigger:** "the patient not follow the bot, why? ... Robot=(-0.65, 3.94) Patient=(-2.72, 6.36) tether=3.19m"
+- **Decision:**
+  1. **Root Cause Analysis from Telemetry:**
+     - The telemetry logs showed the patient moved from `(-3.24, 6.36)` to `(-2.72, 6.36)` and then completely froze while the robot moved towards the elevator.
+     - Hospital layout inspection revealed `Furniture/WaitingBenchWestBack/Collision` sits at $X \in [-4.875, -2.725], Z \in [5.49, 6.11]$. The patient at $X = -2.72, Z = 6.36$ was physically pressing against the back of the waiting bench.
+     - Why were they separated? `pick_solo_start_positions()` in `main.gd` had sampled `human_pos` using `get_free_position()` into the bench nook, then randomly spawned the robot across the bench in the front lobby ($Z \le 5.32$) without checking for line-of-sight obstruction. The robot approached to engage distance ($1.35\,\text{m}$) across the bench, spoke with the patient, and began escorting. The straight path from patient to robot's first crumb collided with the bench.
+     - Furthermore, `step_escorted_patient()` in `rl_env_bridge.gd` strictly popped `trail[0]` only when distance was $\le 0.3\,\text{m}$ (`ESCORT_CRUMB_REACH_M`). Because the trapped patient stayed at $1.22\,\text{m}$ from the initial crumb, `trail.pop_front()` was never called; the patient remained permanently fixated on the blocked initial crumb rather than following the robot forward.
+  2. **Code Resolution:**
+     - **Lobby Patient Spawn Bounds (`room.gd`):** Trimmed `PATIENT_LOBBY_RECT` to `Rect2(Vector2(-3.2, 2.2), Vector2(6.4, 2.8))` ($Z \in [2.2, 5.0]$), matching Python training `HospitalShiftEnv._sample_patient_spawn_solo()` exactly and preventing patient spawns behind lobby benches.
+     - **Solo Start Placement with Obstacle-Free LOS (`main.gd`):** Updated `pick_solo_start_positions()` to sample `human_pos` from `r.get_patient_spawn_position(1, rng)` and verify an unobstructed line of sight to candidate `robot_pos` using `AABB.intersects_segment()`.
+     - **Fresh Trail Initialization (`rl_env_bridge.gd`):** In `begin_post_dialogue_task()`, cleared `escort_trail` and initialized with current robot position so past crumbs never linger.
+     - **Adaptive Trail Progression (`rl_env_bridge.gd`):** Updated `step_escorted_patient()` while-loop to advance if `d0 <= ESCORT_CRUMB_REACH_M or d1 <= d0`. If the patient is already closer to the next waypoint `trail[1]`, obsolete crumbs are pruned automatically, preventing backtracking and deadlock.
+- **Why:** Ensures the patient spawns in open walkable areas with clear access to the robot, and allows breadcrumb following to smoothly progress along the robot's trail without getting stuck on past crumbs.
+- **Touches:** `sim_vision/godot/scripts/room.gd`, `sim_vision/godot/scripts/main.gd`, `sim_vision/godot/scripts/rl_env_bridge.gd`, `docs/AI-Human-logs/Vuong.md`
+- **Evidence:** 163/163 GUT unit tests pass (18,873 asserts, 140.3s). Patient now has direct, open access to follow robot along the breadcrumbs.
+
+
 
 

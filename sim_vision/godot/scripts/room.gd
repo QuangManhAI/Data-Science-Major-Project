@@ -223,7 +223,7 @@ const FLOOR3_SPAWN_RECT := Rect2(Vector2(94.4, -1.8), Vector2(11.2, 10.2))
 ## Vùng đặt bệnh nhân, khớp HospitalShiftEnv._sample_patient_spawn_solo (src/training/hospital_env.py):
 ## 60% hành lang, 40% sảnh chính; cách đồ vật/tường ≥ 0.65 m và NPC ≥ 0.8 m (hộp nở vuông như Python is_blocked).
 const PATIENT_CORRIDOR_RECT := Rect2(Vector2(-10.0, -1.3), Vector2(20.0, 2.6))
-const PATIENT_LOBBY_RECT := Rect2(Vector2(-3.2, 2.2), Vector2(6.4, 4.3))
+const PATIENT_LOBBY_RECT := Rect2(Vector2(-3.2, 2.2), Vector2(6.4, 2.8))
 const PATIENT_CORRIDOR_PROB: float = 0.6
 const PATIENT_CLEARANCE_M: float = 0.65
 const PATIENT_NPC_CLEARANCE_M: float = 0.8

@@ -1,23 +1,21 @@
 #!/usr/bin/env python3
 """
 pre_annotate_targeted_dataset.py
-Tự động đánh Ground Truth / Pre-Annotate bộ dữ liệu mô phỏng mục tiêu (400 frames):
-- Hợp nhất tọa độ hình học 3D từ Godot (Raycast/Mesh Projection) và mô hình YOLO26n v3 (best.pt).
-- Tinh chỉnh và hợp nhất nhãn nhằm mang lại chất lượng nhãn cao nhất cho 17 classes trước khi đưa lên CVAT cho người dùng duyệt.
+================================
+Tự động đánh Ground Truth / Pre-Annotate bộ dữ liệu mô phỏng mục tiêu:
+- Hợp nhất tọa độ hình học 3D từ Godot (Raycast/Mesh Projection) và mô hình YOLO26n mới nhất.
+- Hỗ trợ cả đợt 1 (400 frames) và đợt 2 (250 frames) trước khi xuất package lên CVAT cho người dùng duyệt.
 """
 
 import os
 import sys
+import argparse
 from pathlib import Path
 import numpy as np
 import torch
 from ultralytics import YOLO
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-STAGING_DIR = REPO_ROOT / "data/vision/dataset/hospital_targeted_staging"
-IMAGES_DIR = STAGING_DIR / "images"
-LABELS_DIR = STAGING_DIR / "labels"
-MODEL_WEIGHTS = REPO_ROOT / "experiments/runs/train_hospital/yolo26n_expanded_verified_17class_v3/weights/best.pt"
 
 UNIFIED_CLASSES = {
     0: "patient",
@@ -70,25 +68,47 @@ def compute_iou(box1, box2):
 
 
 def main():
-    if not IMAGES_DIR.exists():
-        print(f"❌ Không tìm thấy thư mục ảnh: {IMAGES_DIR}")
+    parser = argparse.ArgumentParser(description="Pre-annotate staging dataset with YOLO & 3D raycast ensemble")
+    parser.add_argument(
+        "--staging-dir",
+        type=str,
+        default=str(REPO_ROOT / "data/vision/dataset/hospital_targeted_staging_r2"),
+        help="Path to staging directory containing images/ and labels/"
+    )
+    parser.add_argument(
+        "--weights",
+        type=str,
+        default=str(REPO_ROOT / "experiments/runs/train_hospital/yolo26n_targeted_17class_v4/weights/best.pt"),
+        help="Path to YOLO best.pt weights"
+    )
+    parser.add_argument("--conf", type=float, default=0.20, help="Confidence threshold")
+    parser.add_argument("--imgsz", type=int, default=640, help="Inference resolution")
+    args = parser.parse_args()
+
+    staging_dir = Path(args.staging_dir)
+    images_dir = staging_dir / "images"
+    labels_dir = staging_dir / "labels"
+    weights_path = Path(args.weights)
+
+    if not images_dir.exists():
+        print(f"❌ Không tìm thấy thư mục ảnh: {images_dir}")
         sys.exit(1)
 
-    if not MODEL_WEIGHTS.exists():
-        print(f"❌ Không tìm thấy file weights: {MODEL_WEIGHTS}")
+    if not weights_path.exists():
+        print(f"❌ Không tìm thấy file weights: {weights_path}")
         sys.exit(1)
 
     print("==================================================================")
-    print("🤖 BẮT ĐẦU MODEL PRE-ANNOTATION CHO BỘ 400 FRAMES TARGETED")
-    print(f"• Thư mục ảnh:   {IMAGES_DIR}")
-    print(f"• Thư mục nhãn:  {LABELS_DIR}")
-    print(f"• Model weights: {MODEL_WEIGHTS.name}")
+    print("🤖 BẮT ĐẦU MODEL PRE-ANNOTATION (ENSEMBLE 3D RAYCAST + YOLO)")
+    print(f"• Thư mục ảnh:   {images_dir}")
+    print(f"• Thư mục nhãn:  {labels_dir}")
+    print(f"• Model weights: {weights_path.name}")
     print("==================================================================")
 
-    model = YOLO(str(MODEL_WEIGHTS))
+    model = YOLO(str(weights_path))
     device = "0" if torch.cuda.is_available() else "cpu"
 
-    image_files = sorted(list(IMAGES_DIR.glob("*.jpg")))
+    image_files = sorted(list(images_dir.glob("*.jpg")) + list(images_dir.glob("*.png")))
     print(f"📸 Tìm thấy {len(image_files)} ảnh cần đánh nhãn...")
 
     total_godot_boxes = 0
@@ -98,7 +118,7 @@ def main():
 
     for img_path in image_files:
         stem = img_path.stem
-        lbl_path = LABELS_DIR / f"{stem}.txt"
+        lbl_path = labels_dir / f"{stem}.txt"
 
         # 1. Đọc nhãn 3D sẵn có từ Godot
         godot_boxes = []
@@ -112,11 +132,11 @@ def main():
                         godot_boxes.append((cid, coords))
                         total_godot_boxes += 1
 
-        # 2. Suy luận bằng YOLO26n v3 model
+        # 2. Suy luận bằng YOLO model
         results = model.predict(
             source=str(img_path),
-            imgsz=640,
-            conf=0.20,
+            imgsz=args.imgsz,
+            conf=args.conf,
             iou=0.45,
             device=device,
             verbose=False
@@ -184,7 +204,7 @@ def main():
     for cid in sorted(UNIFIED_CLASSES.keys()):
         cname = UNIFIED_CLASSES[cid]
         cnt = class_counter[cid]
-        star = "⭐" if cname in ["iv_stand", "water_dispenser", "patient"] else "  "
+        star = "⭐" if cname in ["wheelchair", "iv_stand"] else "  "
         print(f"  {star} Class {cid:02d} ({cname:<18}): {cnt:>4} boxes")
     print("==================================================================")
 

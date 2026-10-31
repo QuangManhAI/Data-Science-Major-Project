@@ -1,0 +1,21 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="PackedScene" path="res://scenes/room.tscn" id="1"]
+[ext_resource type="Script" path="res://scripts/targeted_round2_generator.gd" id="2"]
+
+[node name="TargetedRound2Bench" type="Node3D"]
+
+[node name="Room" parent="." instance=ExtResource("1")]
+
+[node name="RobotCamera" type="Camera3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.15, 2)
+fov = 75.0
+near = 0.05
+
+[node name="TargetedGenerator" type="Node3D" parent="." node_paths=PackedStringArray("robot_camera", "room_node")]
+script = ExtResource("2")
+robot_camera = NodePath("../RobotCamera")
+room_node = NodePath("../Room")
+capture_resolution = Vector2i(640, 480)
+output_root_dir = "res://../../data/vision/dataset/hospital_targeted_staging_r2"
+target_total_frames = 250

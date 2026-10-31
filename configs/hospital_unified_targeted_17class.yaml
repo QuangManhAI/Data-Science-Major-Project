@@ -1,5 +1,5 @@
-# Cấu hình Huấn luyện YOLO Siêu Mô Hình 17 Lớp (Targeted Boost Dataset)
-path: /home/bush/Projects/Data-Science-Major-Project/data/vision/dataset/hospital_unified_targeted_4120_17class
+# Cấu hình Huấn luyện YOLO Siêu Mô Hình 17 Lớp (Targeted Boost v5 Dataset)
+path: /home/bush/Projects/Data-Science-Major-Project/data/vision/dataset/hospital_unified_targeted_4370_17class
 train: train/images
 val: val/images
 test: test/images

@@ -34,7 +34,7 @@ def evaluate_model(weights_path: Path, model_tag: str):
     model = YOLO(str(weights_path))
     results = model.val(
         data=str(CONFIG_YAML),
-        split="val",
+        split="test",
         imgsz=640,
         batch=16,
         workers=0,
@@ -99,10 +99,18 @@ def main():
     res_v4 = evaluate_model(V4_WEIGHTS, "YOLO26n-v4 (Targeted R1)")
     res_v5 = evaluate_model(V5_WEIGHTS, "YOLO26n-v5 (Targeted R2 - Latest)")
 
+    actual_boxes = 0
+    lbl_dir = REPO_ROOT / "data/vision/dataset/hospital_robot_patrol_testset/labels"
+    for lf in lbl_dir.glob("*.txt"):
+        with open(lf, "r", encoding="utf-8") as f:
+            for l in f:
+                if l.strip():
+                    actual_boxes += 1
+
     output_payload = {
         "benchmark_name": "Hospital_Robot_Patrol_Continuous_Testset",
         "total_frames": 531,
-        "total_boxes": 1221,
+        "total_boxes": actual_boxes,
         "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "v4_results": res_v4,
         "v5_results": res_v5

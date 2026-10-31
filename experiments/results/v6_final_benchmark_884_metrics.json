@@ -1,0 +1,124 @@
+{
+  "model_name": "YOLO26n_Nano_Golden_v6",
+  "benchmark_name": "Hospital_Robot_Final_Benchmark_884",
+  "total_test_frames": 884,
+  "total_test_boxes": 3082,
+  "train_frames": 3715,
+  "val_frames": 655,
+  "total_params": 2393623,
+  "gflops": 5.4,
+  "imgsz": 640,
+  "overall": {
+    "precision": 95.0,
+    "recall": 85.89,
+    "map50": 91.03,
+    "map50_95": 66.39,
+    "inference_ms": 3.5,
+    "fps": 285.7
+  },
+  "per_class": {
+    "patient": {
+      "precision": 88.9,
+      "recall": 85.4,
+      "map50": 92.4,
+      "map50_95": 67.2
+    },
+    "doctor": {
+      "precision": 97.5,
+      "recall": 94.7,
+      "map50": 96.8,
+      "map50_95": 78.4
+    },
+    "wheelchair": {
+      "precision": 92.3,
+      "recall": 93.6,
+      "map50": 96.5,
+      "map50_95": 81.3
+    },
+    "queue_kiosk": {
+      "precision": 96.9,
+      "recall": 94.5,
+      "map50": 97.6,
+      "map50_95": 82.1
+    },
+    "reception_counter": {
+      "precision": 96.1,
+      "recall": 89.5,
+      "map50": 91.0,
+      "map50_95": 74.8
+    },
+    "sanitizer_stand": {
+      "precision": 92.2,
+      "recall": 90.1,
+      "map50": 95.9,
+      "map50_95": 68.5
+    },
+    "pccc_station": {
+      "precision": 97.7,
+      "recall": 96.5,
+      "map50": 98.0,
+      "map50_95": 79.1
+    },
+    "medical_waste_bin": {
+      "precision": 96.3,
+      "recall": 93.1,
+      "map50": 98.0,
+      "map50_95": 77.2
+    },
+    "water_dispenser": {
+      "precision": 94.4,
+      "recall": 59.9,
+      "map50": 70.9,
+      "map50_95": 51.2
+    },
+    "wc_station": {
+      "precision": 100.0,
+      "recall": 92.6,
+      "map50": 98.4,
+      "map50_95": 82.5
+    },
+    "elevator_doors": {
+      "precision": 100.0,
+      "recall": 76.1,
+      "map50": 84.1,
+      "map50_95": 65.3
+    },
+    "hospital_bed": {
+      "precision": 95.6,
+      "recall": 93.8,
+      "map50": 97.7,
+      "map50_95": 79.4
+    },
+    "stretcher_cart": {
+      "precision": 100.0,
+      "recall": 64.4,
+      "map50": 69.2,
+      "map50_95": 48.9
+    },
+    "iv_stand": {
+      "precision": 96.6,
+      "recall": 88.7,
+      "map50": 93.3,
+      "map50_95": 58.7
+    },
+    "medical_trolley": {
+      "precision": 90.4,
+      "recall": 77.6,
+      "map50": 85.5,
+      "map50_95": 61.6
+    },
+    "vital_monitor": {
+      "precision": 87.8,
+      "recall": 73.5,
+      "map50": 84.6,
+      "map50_95": 48.3
+    },
+    "hospital_chair": {
+      "precision": 92.4,
+      "recall": 96.3,
+      "map50": 97.9,
+      "map50_95": 76.0
+    }
+  },
+  "timestamp": "2026-10-31 20:18:37"
+}

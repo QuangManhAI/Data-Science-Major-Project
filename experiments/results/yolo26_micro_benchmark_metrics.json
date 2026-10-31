@@ -1,0 +1,121 @@
+{
+  "model_name": "YOLO26-Micro (Hospital Simulator)",
+  "model_path": "/home/bush/Projects/Data-Science-Major-Project/experiments/runs/train_hospital/yolo26_micro_golden_17class/weights/best.pt",
+  "total_params": 622959,
+  "gflops": 3.17,
+  "imgsz": 640,
+  "train_time_minutes": 45.91,
+  "overall": {
+    "precision": 77.65,
+    "recall": 70.9,
+    "map50": 77.39,
+    "map50_95": 47.03,
+    "inference_ms": 2.47,
+    "fps": 405.6
+  },
+  "per_class": {
+    "patient": {
+      "precision": 57.53,
+      "recall": 70.66,
+      "map50": 72.72,
+      "map50_95": 41.0
+    },
+    "doctor": {
+      "precision": 73.88,
+      "recall": 85.43,
+      "map50": 86.84,
+      "map50_95": 44.02
+    },
+    "wheelchair": {
+      "precision": 64.85,
+      "recall": 83.73,
+      "map50": 85.47,
+      "map50_95": 54.5
+    },
+    "queue_kiosk": {
+      "precision": 83.8,
+      "recall": 85.05,
+      "map50": 87.72,
+      "map50_95": 54.42
+    },
+    "reception_counter": {
+      "precision": 81.69,
+      "recall": 84.21,
+      "map50": 87.03,
+      "map50_95": 51.18
+    },
+    "sanitizer_stand": {
+      "precision": 81.77,
+      "recall": 71.72,
+      "map50": 77.3,
+      "map50_95": 44.56
+    },
+    "pccc_station": {
+      "precision": 83.78,
+      "recall": 92.94,
+      "map50": 96.08,
+      "map50_95": 65.74
+    },
+    "medical_waste_bin": {
+      "precision": 86.98,
+      "recall": 90.04,
+      "map50": 93.48,
+      "map50_95": 61.66
+    },
+    "water_dispenser": {
+      "precision": 67.58,
+      "recall": 54.76,
+      "map50": 50.59,
+      "map50_95": 28.62
+    },
+    "wc_station": {
+      "precision": 77.55,
+      "recall": 44.71,
+      "map50": 74.82,
+      "map50_95": 49.23
+    },
+    "elevator_doors": {
+      "precision": 97.19,
+      "recall": 57.55,
+      "map50": 82.85,
+      "map50_95": 56.28
+    },
+    "hospital_bed": {
+      "precision": 78.12,
+      "recall": 84.11,
+      "map50": 87.46,
+      "map50_95": 52.69
+    },
+    "stretcher_cart": {
+      "precision": 100.0,
+      "recall": 53.26,
+      "map50": 59.91,
+      "map50_95": 34.68
+    },
+    "iv_stand": {
+      "precision": 61.93,
+      "recall": 52.63,
+      "map50": 54.83,
+      "map50_95": 29.44
+    },
+    "medical_trolley": {
+      "precision": 85.85,
+      "recall": 56.65,
+      "map50": 72.74,
+      "map50_95": 45.19
+    },
+    "vital_monitor": {
+      "precision": 63.41,
+      "recall": 47.74,
+      "map50": 54.59,
+      "map50_95": 28.54
+    },
+    "hospital_chair": {
+      "precision": 74.15,
+      "recall": 90.04,
+      "map50": 91.26,
+      "map50_95": 57.83
+    }
+  },
+  "timestamp": "2026-11-01 04:23:29"
+}

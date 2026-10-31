@@ -1,0 +1,155 @@
+{
+  "model_name": "YOLO26n_Nano_Golden_v6",
+  "benchmark_name": "Hospital_Robot_Patrol_Golden_Testset",
+  "total_test_frames": 531,
+  "total_test_boxes": 2223,
+  "train_frames": 3715,
+  "val_frames": 655,
+  "training_time_min": 64.5,
+  "overall": {
+    "mAP50": 0.8501,
+    "mAP50_95": 0.6574,
+    "precision": 0.9348,
+    "recall": 0.7926,
+    "f1": 0.8579,
+    "classes_above_90": 11
+  },
+  "per_class": {
+    "patient": {
+      "class_id": 0,
+      "mAP50": 0.9588,
+      "mAP50_95": 0.7365,
+      "precision": 0.8799,
+      "recall": 0.9083,
+      "pass_90": true
+    },
+    "doctor": {
+      "class_id": 1,
+      "mAP50": 0.9809,
+      "mAP50_95": 0.7664,
+      "precision": 0.961,
+      "recall": 0.9619,
+      "pass_90": true
+    },
+    "wheelchair": {
+      "class_id": 2,
+      "mAP50": 0.9583,
+      "mAP50_95": 0.8124,
+      "precision": 0.9061,
+      "recall": 0.9327,
+      "pass_90": true
+    },
+    "queue_kiosk": {
+      "class_id": 3,
+      "mAP50": 0.9399,
+      "mAP50_95": 0.7957,
+      "precision": 0.9756,
+      "recall": 0.871,
+      "pass_90": true
+    },
+    "reception_counter": {
+      "class_id": 4,
+      "mAP50": 0.8544,
+      "mAP50_95": 0.6435,
+      "precision": 0.9417,
+      "recall": 0.8214,
+      "pass_90": false
+    },
+    "sanitizer_stand": {
+      "class_id": 5,
+      "mAP50": 0.9554,
+      "mAP50_95": 0.6638,
+      "precision": 0.8687,
+      "recall": 0.8908,
+      "pass_90": true
+    },
+    "pccc_station": {
+      "class_id": 6,
+      "mAP50": 0.9928,
+      "mAP50_95": 0.8939,
+      "precision": 0.9503,
+      "recall": 1.0,
+      "pass_90": true
+    },
+    "medical_waste_bin": {
+      "class_id": 7,
+      "mAP50": 0.9831,
+      "mAP50_95": 0.7971,
+      "precision": 0.9593,
+      "recall": 0.9234,
+      "pass_90": true
+    },
+    "water_dispenser": {
+      "class_id": 8,
+      "mAP50": 0.4856,
+      "mAP50_95": 0.2199,
+      "precision": 0.8907,
+      "recall": 0.3103,
+      "pass_90": false
+    },
+    "wc_station": {
+      "class_id": 9,
+      "mAP50": 0.9847,
+      "mAP50_95": 0.8411,
+      "precision": 1.0,
+      "recall": 0.9407,
+      "pass_90": true
+    },
+    "elevator_doors": {
+      "class_id": 10,
+      "mAP50": 0.7726,
+      "mAP50_95": 0.5474,
+      "precision": 1.0,
+      "recall": 0.6624,
+      "pass_90": false
+    },
+    "hospital_bed": {
+      "class_id": 11,
+      "mAP50": 0.9747,
+      "mAP50_95": 0.7676,
+      "precision": 0.98,
+      "recall": 0.9517,
+      "pass_90": true
+    },
+    "stretcher_cart": {
+      "class_id": 12,
+      "mAP50": 0.0283,
+      "mAP50_95": 0.0123,
+      "precision": 1.0,
+      "recall": 0.0,
+      "pass_90": false
+    },
+    "iv_stand": {
+      "class_id": 13,
+      "mAP50": 0.9878,
+      "mAP50_95": 0.8101,
+      "precision": 0.9695,
+      "recall": 0.9632,
+      "pass_90": true
+    },
+    "medical_trolley": {
+      "class_id": 14,
+      "mAP50": 0.7878,
+      "mAP50_95": 0.5769,
+      "precision": 0.8579,
+      "recall": 0.7132,
+      "pass_90": false
+    },
+    "vital_monitor": {
+      "class_id": 15,
+      "mAP50": 0.8211,
+      "mAP50_95": 0.4713,
+      "precision": 0.8395,
+      "recall": 0.6541,
+      "pass_90": false
+    },
+    "hospital_chair": {
+      "class_id": 16,
+      "mAP50": 0.9859,
+      "mAP50_95": 0.8199,
+      "precision": 0.912,
+      "recall": 0.9691,
+      "pass_90": true
+    }
+  }
+}

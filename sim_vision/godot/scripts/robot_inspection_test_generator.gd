@@ -1,17 +1,14 @@
 # robot_inspection_test_generator.gd
-## BỘ SINH DỮ LIỆU KIỂM THỬ QUÉT CHỦ ĐỘNG ROBOT TOÀN BỆNH VIỆN (ACTIVE ROBOT INSPECTION BENCHMARK)
-## Camera robot (h=1.18m, fov=70 deg, pitch=-5 deg)
-## Kết hợp:
-## 1. Hành trình tuần tra liên tục với động học lia camera chủ động (Pan Oscillation ±25°)
-## 2. 17 Trạm quan sát mục tiêu chuyên biệt (Targeted Inspection Stations) được căn chỉnh tọa độ chính xác 100%
-## Cân bằng đồng đều số lượng bounding box giữa các lớp (~60 - 120 boxes/lớp)
+## BỘ SINH DỮ LIỆU KIỂM THỬ TRẠM QUAN SÁT MỤC TIÊU ROBOT (TARGETED ROBOT INSPECTION BENCHMARK)
+## Mục tiêu: Sinh riêng bộ ảnh kiểm thử bổ sung tập trung 100% vào các trạm quan sát mục tiêu thiết bị y tế.
+## KHÔNG lặp lại các đoạn tuần tra hành lang của bộ test cũ.
+## 17 Trạm quan sát chuyên biệt, tiếp cận đa cự ly và đa góc độ từ tầm mắt robot (h=1.18m, fov=70 deg).
 extends Node3D
 
 @export var robot_camera: Camera3D
 @export var room_node: Node3D
 @export var capture_resolution: Vector2i = Vector2i(640, 480)
 @export var output_root_dir: String = "res://../../data/vision/dataset/hospital_robot_inspection_testset"
-@export var patrol_step_distance: float = 0.22
 
 const UNIFIED_CLASS_MAP = {
 	"patient": 0,
@@ -40,40 +37,6 @@ const CLASS_NAMES = [
 	"iv_stand", "medical_trolley", "vital_monitor", "hospital_chair"
 ]
 
-# 30 Waypoints tuần tra khép kín 7 phân khu bệnh viện
-const PATROL_WAYPOINTS: Array[Vector3] = [
-	Vector3(0.0, 0.0, 4.0),    # WP0: Sảnh tiếp đón
-	Vector3(2.5, 0.0, 5.5),    # WP1: Quầy tiếp đón & Kiosk
-	Vector3(1.0, 0.0, 6.5),    # WP2: Kiosk & Sanitizer
-	Vector3(-2.5, 0.0, 6.2),   # WP3: Khu ghế chờ hàng sau
-	Vector3(-4.5, 0.0, 5.0),   # WP4: Khu ghế chờ hàng trước & xe lăn sảnh
-	Vector3(-6.0, 0.0, 3.5),   # WP5: Lối rẽ sang hành lang Tây
-	Vector3(-8.8, 0.0, 2.5),   # WP6: Trước cửa Nhà Thuốc
-	Vector3(-8.8, 0.0, 0.5),   # WP7: Hành lang Tây
-	Vector3(-8.0, 0.0, -1.0),  # WP8: Cửa Khoa Cấp Cứu
-	Vector3(-8.0, 0.0, -3.5),  # WP9: Vào Khoa Cấp Cứu
-	Vector3(-10.0, 0.0, -4.5), # WP10: Cáng đẩy & Giường 1
-	Vector3(-8.5, 0.0, -6.8),  # WP11: Cọc truyền & Vital Monitor
-	Vector3(-6.2, 0.0, -5.5),  # WP12: Giữa phòng Cấp Cứu
-	Vector3(-6.0, 0.0, -2.5),  # WP13: Hướng ra cửa Cấp Cứu
-	Vector3(-6.0, 0.0, -0.2),  # WP14: Hành lang chính, rẽ Đông
-	Vector3(-2.5, 0.0, 0.0),   # WP15: Hành lang trung tâm, trạm PCCC
-	Vector3(0.0, 0.0, -1.0),   # WP16: Cửa Phòng Xét Nghiệm
-	Vector3(0.0, 0.0, -4.0),   # WP17: Trong Phòng Xét Nghiệm
-	Vector3(0.0, 0.0, -1.0),   # WP18: Ra Hành lang chính
-	Vector3(4.0, 0.0, 0.0),    # WP19: Hành lang Đông
-	Vector3(8.0, 0.0, -1.0),   # WP20: Cửa Phòng Khám Nội
-	Vector3(8.0, 0.0, -4.5),   # WP21: Trong Phòng Khám Nội
-	Vector3(10.5, 0.0, -6.0),  # WP22: Giường khám & Bác sĩ
-	Vector3(8.0, 0.0, -2.5),   # WP23: Ra Hành lang
-	Vector3(8.5, 0.0, 1.0),    # WP24: Rẽ Nam về khu Thang Máy
-	Vector3(9.0, 0.0, 4.0),    # WP25: Trước Cửa Thang Máy
-	Vector3(9.5, 0.0, 6.2),    # WP26: Trạm WC
-	Vector3(6.0, 0.0, 5.5),    # WP27: Cây nước uống
-	Vector3(2.5, 0.0, 4.5),    # WP28: Về Sảnh Chính
-	Vector3(0.0, 0.0, 4.0)     # WP29: Khép vòng
-]
-
 var prop_catalog: Array[Dictionary] = []
 var _total_saved: int = 0
 var _class_box_counts: Dictionary = {}
@@ -94,7 +57,7 @@ func _open_all_sliding_doors() -> void:
 	for d in doors:
 		if d is SlidingDoor:
 			d.force_open()
-	print("[RobotInspection] Đã mở toàn bộ ", doors.size(), " cửa trượt âm tường để robot tuần tra tự do.")
+	print("[TargetedInspection] Đã mở toàn bộ ", doors.size(), " cửa trượt âm tường để robot quan sát tự do.")
 
 func _build_catalog() -> void:
 	prop_catalog.clear()
@@ -177,7 +140,7 @@ func _build_catalog() -> void:
 				"look_height": 1.10
 			})
 
-	print("[RobotInspection] Đã lập chỉ mục ", prop_catalog.size(), " đối tượng y tế và nhân vật lâm sàng.")
+	print("[TargetedInspection] Đã lập chỉ mục ", prop_catalog.size(), " đối tượng y tế và nhân vật lâm sàng.")
 
 func _compute_node_aabb(root_node: Node3D) -> AABB:
 	var total_aabb := AABB()
@@ -254,7 +217,7 @@ func _run_inspection_pipeline() -> void:
 	var abs_img_dir: String = abs_out_dir.path_join("images")
 	var abs_lbl_dir: String = abs_out_dir.path_join("labels")
 	
-	# Xóa sạch dữ liệu cũ để tránh chồng lấn
+	# Xóa sạch dữ liệu cũ
 	if DirAccess.dir_exists_absolute(abs_img_dir):
 		var old_files = DirAccess.get_files_at(abs_img_dir)
 		for f in old_files:
@@ -268,40 +231,33 @@ func _run_inspection_pipeline() -> void:
 	DirAccess.make_dir_recursive_absolute(abs_lbl_dir)
 
 	print("==================================================================")
-	print("🤖 BẮT ĐẦU CHUYẾN QUÉT CHỦ ĐỘNG ROBOT TOÀN BỘ BỆNH VIỆN (ACTIVE INSPECTION)")
+	print("🎯 BẮT ĐẦU CHUYẾN QUÉT TRẠM MỤC TIÊU ĐỘC LẬP (TARGETED INSPECTION BENCHMARK)")
 	print("📂 Thư mục xuất: ", abs_out_dir)
 	print("==================================================================")
 
 	var vp: Viewport = get_viewport()
 	vp.size = capture_resolution
 
-	# 1. Sinh các tư thế tuần tra hành lang quét rộng
-	var patrol_poses: Array[Dictionary] = _generate_corridor_patrol_poses()
-	print("📸 [1/2] Số tư thế tuần tra hành lang quét rộng: ", patrol_poses.size(), " frames.")
-
-	# 2. Sinh các tư thế trạm quan sát mục tiêu chuyên biệt
+	# Chỉ sinh các tư thế trạm quan sát mục tiêu chuyên biệt (100% không lặp cảnh tuần tra cũ)
 	var station_poses: Array[Dictionary] = _generate_target_inspection_poses()
-	print("🎯 [2/2] Số tư thế trạm quan sát mục tiêu chuyên biệt: ", station_poses.size(), " frames.")
+	print("🚀 TỔNG CỘNG KHUNG HÌNH TRẠM MỤC TIÊU BỔ SUNG: ", station_poses.size(), " frames.")
 
-	var all_poses = patrol_poses + station_poses
-	print("🚀 TỔNG CỘNG KHUNG HÌNH THU THẬP: ", all_poses.size(), " frames.")
-
-	for i in range(all_poses.size()):
-		var pose = all_poses[i]
+	for i in range(station_poses.size()):
+		var pose = station_poses[i]
 		var fid = "INSPECT_%04d" % (_total_saved + 1)
 		
 		robot_camera.global_position = pose["pos"]
 		robot_camera.look_at(pose["pos"] + pose["forward"], Vector3.UP)
 
-		await _capture_and_label(abs_img_dir, abs_lbl_dir, fid, pose["zone"], pose.get("is_station", false))
+		await _capture_and_label(abs_img_dir, abs_lbl_dir, fid, pose["station_name"])
 
 	var elapsed_sec = (Time.get_ticks_msec() - start_ms) / 1000.0
 	_write_dataset_manifest(abs_out_dir, elapsed_sec)
 
 	print("==================================================================")
-	print("✅ HOÀN TẤT CHUYẾN QUÉT CHỦ ĐỘNG BỆNH VIỆN CỦA ROBOT THÀNH CÔNG!")
-	print("📊 Tổng frames thu thập: ", _total_saved)
-	print("📊 Thống kê hộp nhãn 17 classes thu thập: ")
+	print("✅ HOÀN TẤT BỘ TEST TRẠM MỤC TIÊU BỔ SUNG THÀNH CÔNG!")
+	print("📊 Tổng frames độc lập thu thập: ", _total_saved)
+	print("📊 Thống kê hộp nhãn 17 classes: ")
 	for cname in CLASS_NAMES:
 		var cnt = _class_box_counts.get(cname, 0)
 		print("   • %-20s: %4d boxes" % [cname, cnt])
@@ -309,58 +265,15 @@ func _run_inspection_pipeline() -> void:
 	print("==================================================================")
 	get_tree().quit(0)
 
-func _generate_corridor_patrol_poses() -> Array[Dictionary]:
-	var poses: Array[Dictionary] = []
-	var cam_h = 1.18
-	var global_step_count = 0
-
-	for w_idx in range(PATROL_WAYPOINTS.size() - 1):
-		var p1 = PATROL_WAYPOINTS[w_idx]
-		var p2 = PATROL_WAYPOINTS[w_idx + 1]
-
-		var seg_len = p1.distance_to(p2)
-		
-		# Điều tiết mạnh bước di chuyển trong khu vực ghế chờ lobby để giảm áp đảo ghế & bệnh nhân
-		var eff_step = patrol_step_distance
-		if (p1.z > 3.5 and p1.z < 7.0 and abs(p1.x) < 5.2):
-			eff_step = 0.90 # Giảm mạnh số frames trùng lặp của ghế và người bệnh
-		
-		var num_steps = maxi(1, int(round(seg_len / eff_step)))
-		var dir_norm = (p2 - p1).normalized()
-
-		for s in range(num_steps):
-			var t = float(s) / float(num_steps)
-			var cur_pos = p1.lerp(p2, t)
-			cur_pos.y = cam_h
-
-			# Dao động lia đầu camera ±25 độ
-			var pan_angle_deg = sin(float(global_step_count) * 0.45) * 25.0
-			var pan_rad = deg_to_rad(pan_angle_deg)
-
-			var dir_panned = dir_norm.rotated(Vector3.UP, pan_rad)
-			var forward = Vector3(dir_panned.x, -tan(deg_to_rad(5.0)), dir_panned.z).normalized()
-
-			var zone = _identify_zone(cur_pos)
-
-			poses.append({
-				"pos": cur_pos,
-				"forward": forward,
-				"zone": zone,
-				"is_station": false
-			})
-			global_step_count += 1
-
-	return poses
-
 func _generate_target_inspection_poses() -> Array[Dictionary]:
 	var poses: Array[Dictionary] = []
 	var cam_h = 1.18
 
 	var stations: Array[Dictionary] = [
-		# 1. Cáng cấp cứu (EmergencyStretcherCart tại -10.30, 0.0, -2.55, nằm trong phòng Cấp Cứu z < -2.0)
+		# 1. Cáng cấp cứu (EmergencyStretcherCart tại -10.30, 0.0, -2.55)
 		{
+			"name": "StretcherCart_Station",
 			"target": Vector3(-10.30, 0.70, -2.55),
-			"zone": "Emergency_Ward",
 			"standpoints": [
 				Vector3(-8.20, cam_h, -2.55), # Cự ly 2.1m trực diện
 				Vector3(-8.80, cam_h, -2.55), # Cự ly 1.5m cận cảnh trực diện
@@ -368,17 +281,14 @@ func _generate_target_inspection_poses() -> Array[Dictionary]:
 				Vector3(-8.50, cam_h, -2.20), # Cự ly 1.8m
 				Vector3(-8.00, cam_h, -3.20), # Cự ly 2.4m
 				Vector3(-9.00, cam_h, -3.00), # Cự ly 1.4m
-				Vector3(-8.20, cam_h, -2.20), # Cự ly 2.1m
-				Vector3(-8.40, cam_h, -2.70), # Cự ly 1.9m
-				Vector3(-7.60, cam_h, -2.55), # Cự ly 2.7m từ cửa
-				Vector3(-8.60, cam_h, -2.90)  # Cự ly 1.7m
+				Vector3(-8.20, cam_h, -2.20)  # Cự ly 2.1m
 			],
 			"yaws": [-15.0, -8.0, 0.0, 8.0, 15.0]
 		},
 		# 2. Cửa thang máy bệnh viện (HospitalElevator tại 11.88, 0.0, 4.60)
 		{
+			"name": "Elevator_Station",
 			"target": Vector3(11.88, 1.25, 4.60),
-			"zone": "Elevator_Restroom",
 			"standpoints": [
 				Vector3(9.00, cam_h, 4.60),  # Cự ly 2.88m trực diện
 				Vector3(9.80, cam_h, 4.60),  # Cự ly 2.08m trực diện
@@ -386,177 +296,282 @@ func _generate_target_inspection_poses() -> Array[Dictionary]:
 				Vector3(9.20, cam_h, 3.80),  # Cự ly 2.8m xiên Bắc
 				Vector3(9.20, cam_h, 5.40),  # Cự ly 2.8m xiên Nam
 				Vector3(10.00, cam_h, 3.90), # Cự ly 2.0m
-				Vector3(10.00, cam_h, 5.30), # Cự ly 2.0m
-				Vector3(9.50, cam_h, 4.20)   # Cự ly 2.4m
+				Vector3(10.00, cam_h, 5.30)  # Cự ly 2.0m
 			],
 			"yaws": [-15.0, -8.0, 0.0, 8.0, 15.0]
 		},
-		# 3. Cây nước uống (LobbyWaterDispenser tại 5.45, 0.0, 6.60 - mặt hướng Tây về Sảnh)
+		# 3. Cây nước uống (LobbyWaterDispenser tại 5.45, 0.0, 6.60 - mặt hướng Tây)
 		{
+			"name": "WaterDispenser_Station",
 			"target": Vector3(5.45, 0.85, 6.60),
-			"zone": "Lobby_Reception",
 			"standpoints": [
-				Vector3(4.20, cam_h, 6.60), # Cự ly 1.25m trực diện không vật cản
+				Vector3(4.20, cam_h, 6.60), # Cự ly 1.25m trực diện
 				Vector3(3.60, cam_h, 6.60), # Cự ly 1.85m trực diện
 				Vector3(4.00, cam_h, 5.80), # Cự ly 1.65m xiên
 				Vector3(4.50, cam_h, 5.50), # Cự ly 1.45m xiên
 				Vector3(3.20, cam_h, 6.00), # Cự ly 2.3m
 				Vector3(4.20, cam_h, 7.30), # Cự ly 1.4m
-				Vector3(3.80, cam_h, 7.00), # Cự ly 1.7m
-				Vector3(4.60, cam_h, 6.20), # Cự ly 1.0m cận cảnh
-				Vector3(3.50, cam_h, 6.40), # Cự ly 2.0m
-				Vector3(4.40, cam_h, 6.90), # Cự ly 1.1m
-				Vector3(3.90, cam_h, 6.20), # Cự ly 1.6m
-				Vector3(4.10, cam_h, 6.80)  # Cự ly 1.4m
+				Vector3(3.80, cam_h, 7.00)  # Cự ly 1.7m
 			],
 			"yaws": [-15.0, -8.0, 0.0, 8.0, 15.0]
 		},
-		# 4. Trạm PCCC hành lang (CorridorPccc tại -5.00, 0.0, -1.72 - mặt hướng Nam vào hành lang)
+		# 4. Trạm PCCC hành lang (CorridorPccc tại -5.00, 0.0, -1.72)
 		{
+			"name": "PCCC_Station",
 			"target": Vector3(-5.00, 1.10, -1.72),
-			"zone": "Main_Corridor",
 			"standpoints": [
 				Vector3(-5.00, cam_h, -0.20), # Cự ly 1.5m trực diện
 				Vector3(-4.00, cam_h, 0.20),  # Cự ly 2.1m xiên Đông
 				Vector3(-6.00, cam_h, 0.20),  # Cự ly 2.1m xiên Tây
 				Vector3(-5.00, cam_h, 0.80),  # Cự ly 2.5m
 				Vector3(-3.80, cam_h, -0.60), # Cự ly 1.6m
-				Vector3(-6.20, cam_h, -0.60), # Cự ly 1.6m
-				Vector3(-4.80, cam_h, -0.50), # Cự ly 1.2m
-				Vector3(-5.20, cam_h, -0.50), # Cự ly 1.2m
-				Vector3(-4.50, cam_h, 0.50)   # Cự ly 2.3m
+				Vector3(-6.20, cam_h, -0.60)  # Cự ly 1.6m
 			],
 			"yaws": [-14.0, -7.0, 0.0, 7.0, 14.0]
 		},
 		# 5. Kiosk lấy số (LobbyQueueKiosk tại 2.20, 0.0, 7.55)
 		{
+			"name": "QueueKiosk_Station",
 			"target": Vector3(2.20, 0.90, 7.55),
-			"zone": "Lobby_Reception",
 			"standpoints": [
 				Vector3(2.20, cam_h, 5.80),
 				Vector3(1.20, cam_h, 6.50),
 				Vector3(3.20, cam_h, 6.50),
 				Vector3(2.20, cam_h, 6.40),
-				Vector3(1.80, cam_h, 6.00),
-				Vector3(2.60, cam_h, 6.00)
+				Vector3(1.80, cam_h, 6.00)
 			],
 			"yaws": [-12.0, -6.0, 0.0, 6.0, 12.0]
 		},
 		# 6. Trạm nhà vệ sinh (RestroomStation tại 9.20, 0.0, 8.60)
 		{
+			"name": "Restroom_Station",
 			"target": Vector3(9.20, 1.10, 8.60),
-			"zone": "Elevator_Restroom",
 			"standpoints": [
 				Vector3(9.20, cam_h, 6.80),
 				Vector3(8.00, cam_h, 7.40),
-				Vector3(10.20, cam_h, 7.20)
+				Vector3(10.20, cam_h, 7.20),
+				Vector3(9.20, cam_h, 7.50)
 			],
-			"yaws": [-12.0, 0.0, 12.0]
+			"yaws": [-14.0, -7.0, 0.0, 7.0, 14.0]
 		},
-		# 7. Quầy thuốc bệnh viện (PharmacyCounter)
+		# 7. Quầy thuốc bệnh viện (PharmacyCounter tại -9.00, 0.0, 7.60)
 		{
+			"name": "Pharmacy_Station",
 			"target": Vector3(-9.00, 0.70, 7.60),
-			"zone": "Pharmacy",
 			"standpoints": [
 				Vector3(-9.00, cam_h, 5.60),
-				Vector3(-7.80, cam_h, 6.20)
+				Vector3(-7.80, cam_h, 6.20),
+				Vector3(-10.20, cam_h, 6.20)
 			],
-			"yaws": [-12.0, 0.0, 12.0]
+			"yaws": [-14.0, -7.0, 0.0, 7.0, 14.0]
 		},
-		# 8. Quầy tiếp đón sảnh (ReceptionCounter)
+		# 8. Quầy tiếp đón sảnh (ReceptionCounter tại 0.00, 0.0, 7.80)
 		{
+			"name": "Reception_Station",
 			"target": Vector3(0.00, 0.70, 7.80),
-			"zone": "Lobby_Reception",
 			"standpoints": [
 				Vector3(0.00, cam_h, 5.80),
-				Vector3(-1.40, cam_h, 6.20)
+				Vector3(-1.40, cam_h, 6.20),
+				Vector3(1.40, cam_h, 6.20)
 			],
-			"yaws": [-12.0, 0.0, 12.0]
+			"yaws": [-14.0, -7.0, 0.0, 7.0, 14.0]
 		},
 		# 9. Máy theo dõi sinh hiệu Cấp cứu & Phòng khám
 		{
+			"name": "VitalMonitor_Emergency_Station",
 			"target": Vector3(-9.55, 1.10, -6.80),
-			"zone": "Emergency_Ward",
 			"standpoints": [
 				Vector3(-8.20, cam_h, -6.80),
 				Vector3(-9.00, cam_h, -5.30)
 			],
-			"yaws": [-12.0, 0.0, 12.0]
+			"yaws": [-12.0, -6.0, 0.0, 6.0, 12.0]
 		},
 		{
+			"name": "VitalMonitor_Clinic_Station",
 			"target": Vector3(10.45, 1.10, -5.45),
-			"zone": "Clinic_Room",
 			"standpoints": [
 				Vector3(9.00, cam_h, -5.45),
 				Vector3(9.80, cam_h, -4.10)
 			],
-			"yaws": [-12.0, 0.0, 12.0]
+			"yaws": [-12.0, -6.0, 0.0, 6.0, 12.0]
 		},
 		# 10. Cọc truyền dịch (IV Stand) Cấp cứu & Phòng khám
 		{
+			"name": "IVStand_Emergency_Station",
 			"target": Vector3(-6.65, 1.30, -7.20),
-			"zone": "Emergency_Ward",
 			"standpoints": [
 				Vector3(-6.65, cam_h, -5.60),
-				Vector3(-5.40, cam_h, -6.80),
-				Vector3(-7.20, cam_h, -6.00)
+				Vector3(-5.40, cam_h, -6.80)
 			],
-			"yaws": [-12.0, 0.0, 12.0]
+			"yaws": [-12.0, -6.0, 0.0, 6.0, 12.0]
 		},
 		{
+			"name": "IVStand_Clinic_Station",
 			"target": Vector3(11.30, 1.30, -5.55),
-			"zone": "Clinic_Room",
 			"standpoints": [
 				Vector3(9.80, cam_h, -5.55),
-				Vector3(10.60, cam_h, -4.20),
-				Vector3(10.20, cam_h, -6.20)
+				Vector3(10.60, cam_h, -4.20)
+			],
+			"yaws": [-12.0, -6.0, 0.0, 6.0, 12.0]
+		},
+		# 11. Xe lăn (Wheelchair) Sảnh, Cấp cứu, Hành lang
+		{
+			"name": "Wheelchair_Lobby_Station",
+			"target": Vector3(-4.80, 0.60, 7.60),
+			"standpoints": [Vector3(-3.80, cam_h, 6.80)],
+			"yaws": [-12.0, -6.0, 0.0, 6.0, 12.0]
+		},
+		{
+			"name": "Wheelchair_Emergency_Station",
+			"target": Vector3(-11.20, 0.60, -5.50),
+			"standpoints": [Vector3(-9.80, cam_h, -5.50)],
+			"yaws": [-12.0, -6.0, 0.0, 6.0, 12.0]
+		},
+		{
+			"name": "Wheelchair_Corridor_Station",
+			"target": Vector3(0.50, 0.60, 3.20),
+			"standpoints": [Vector3(0.50, cam_h, 1.80)],
+			"yaws": [-12.0, -6.0, 0.0, 6.0, 12.0]
+		},
+		# 12. Xe đẩy y tế (Medical Trolley) Cấp cứu 1 & 2, Lab, Clinic
+		{
+			"name": "Trolley_Emergency1_Station",
+			"target": Vector3(-9.45, 0.70, -7.80),
+			"standpoints": [Vector3(-8.20, cam_h, -7.20)],
+			"yaws": [-12.0, -6.0, 0.0, 6.0, 12.0]
+		},
+		{
+			"name": "Trolley_Emergency2_Station",
+			"target": Vector3(-4.75, 0.70, -7.80),
+			"standpoints": [Vector3(-5.80, cam_h, -7.20)],
+			"yaws": [-12.0, -6.0, 0.0, 6.0, 12.0]
+		},
+		{
+			"name": "Trolley_Lab_Station",
+			"target": Vector3(0.10, 0.70, -8.35),
+			"standpoints": [Vector3(0.10, cam_h, -6.90)],
+			"yaws": [-12.0, -6.0, 0.0, 6.0, 12.0]
+		},
+		{
+			"name": "Trolley_Clinic_Station",
+			"target": Vector3(11.30, 0.70, -2.75),
+			"standpoints": [Vector3(9.80, cam_h, -2.75)],
+			"yaws": [-12.0, -6.0, 0.0, 6.0, 12.0]
+		},
+		# 13. Giường bệnh (Hospital Bed) Cấp cứu 1 & 2, Phòng khám
+		{
+			"name": "Bed_Emergency1_Station",
+			"target": Vector3(-10.50, 0.60, -7.40),
+			"standpoints": [Vector3(-8.80, cam_h, -6.50)],
+			"yaws": [-12.0, -6.0, 0.0, 6.0, 12.0]
+		},
+		{
+			"name": "Bed_Emergency2_Station",
+			"target": Vector3(-5.80, 0.60, -7.40),
+			"standpoints": [Vector3(-6.80, cam_h, -6.50)],
+			"yaws": [-12.0, -6.0, 0.0, 6.0, 12.0]
+		},
+		{
+			"name": "Bed_Clinic_Station",
+			"target": Vector3(11.31, 0.60, -4.17),
+			"standpoints": [Vector3(9.80, cam_h, -4.17)],
+			"yaws": [-12.0, -6.0, 0.0, 6.0, 12.0]
+		},
+		# 14. Trạm khử khuẩn (Sanitizer Stand) Sảnh & Hành lang
+		{
+			"name": "Sanitizer_Lobby_Station",
+			"target": Vector3(-2.55, 0.90, 7.55),
+			"standpoints": [
+				Vector3(-2.55, cam_h, 6.00),
+				Vector3(-1.80, cam_h, 6.50),
+				Vector3(-3.20, cam_h, 6.50)
 			],
 			"yaws": [-12.0, 0.0, 12.0]
 		},
-		# 11. Xe lăn (Wheelchair)
 		{
-			"target": Vector3(-4.80, 0.60, 7.60),
-			"zone": "Lobby_Reception",
-			"standpoints": [Vector3(-3.80, cam_h, 6.80)],
+			"name": "Sanitizer_Corridor_Station",
+			"target": Vector3(3.20, 0.90, -1.55),
+			"standpoints": [
+				Vector3(3.20, cam_h, 0.00),
+				Vector3(2.40, cam_h, -0.60),
+				Vector3(4.00, cam_h, -0.60)
+			],
+			"yaws": [-12.0, 0.0, 12.0]
+		},
+		# 15. Thùng rác y tế (Medical Waste Bin)
+		{
+			"name": "WasteBin_CorridorEast_Station",
+			"target": Vector3(5.20, 0.40, -1.62),
+			"standpoints": [Vector3(5.20, cam_h, 0.00)],
 			"yaws": [-12.0, 0.0, 12.0]
 		},
 		{
-			"target": Vector3(-11.20, 0.60, -5.50),
-			"zone": "Emergency_Ward",
-			"standpoints": [Vector3(-9.80, cam_h, -5.50)],
-			"yaws": [-12.0, 0.0, 12.0]
-		},
-		# 12. Xe đẩy y tế (Medical Trolley)
-		{
-			"target": Vector3(-9.45, 0.70, -7.80),
-			"zone": "Emergency_Ward",
-			"standpoints": [Vector3(-8.20, cam_h, -7.20)],
+			"name": "WasteBin_CorridorWest_Station",
+			"target": Vector3(-5.20, 0.40, -1.62),
+			"standpoints": [Vector3(-5.20, cam_h, 0.00)],
 			"yaws": [-12.0, 0.0, 12.0]
 		},
 		{
-			"target": Vector3(0.10, 0.70, -8.35),
-			"zone": "Blood_Lab",
-			"standpoints": [Vector3(0.10, cam_h, -6.90)],
+			"name": "WasteBin_Emergency_Station",
+			"target": Vector3(-6.10, 0.40, -2.42),
+			"standpoints": [Vector3(-6.10, cam_h, -3.60)],
 			"yaws": [-12.0, 0.0, 12.0]
 		},
 		{
-			"target": Vector3(11.30, 0.70, -2.75),
-			"zone": "Clinic_Room",
-			"standpoints": [Vector3(9.80, cam_h, -2.75)],
+			"name": "WasteBin_Lab_Station",
+			"target": Vector3(1.80, 0.40, -2.42),
+			"standpoints": [Vector3(1.80, cam_h, -3.60)],
 			"yaws": [-12.0, 0.0, 12.0]
 		},
-		# 13. Nhân viên y tế (Doctor)
 		{
+			"name": "WasteBin_Clinic_Station",
+			"target": Vector3(6.20, 0.40, -2.42),
+			"standpoints": [Vector3(6.20, cam_h, -3.60)],
+			"yaws": [-12.0, 0.0, 12.0]
+		},
+		# 16. Nhân viên y tế (Doctor / Nurse)
+		{
+			"name": "Doctor_Station",
 			"target": Vector3(-3.20, 1.10, -1.35),
-			"zone": "Main_Corridor",
-			"standpoints": [Vector3(-2.00, cam_h, -0.60)],
+			"standpoints": [
+				Vector3(-2.00, cam_h, -0.60),
+				Vector3(-3.20, cam_h, 0.00)
+			],
+			"yaws": [-12.0, 0.0, 12.0]
+		},
+		{
+			"name": "Nurse_Station",
+			"target": Vector3(-1.90, 1.10, 7.45),
+			"standpoints": [
+				Vector3(-1.90, cam_h, 6.00),
+				Vector3(-0.80, cam_h, 6.60)
+			],
+			"yaws": [-12.0, 0.0, 12.0]
+		},
+		# 17. Ghế chờ và Người bệnh (Waiting Patient & Bench quan sát trực diện từ sảnh)
+		{
+			"name": "WaitingPatient_West_Station",
+			"target": Vector3(-3.80, 0.65, 4.20),
+			"standpoints": [
+				Vector3(-2.20, cam_h, 4.20),
+				Vector3(-3.80, cam_h, 2.80)
+			],
+			"yaws": [-12.0, 0.0, 12.0]
+		},
+		{
+			"name": "WaitingPatient_East_Station",
+			"target": Vector3(3.80, 0.65, 4.20),
+			"standpoints": [
+				Vector3(2.20, cam_h, 4.20),
+				Vector3(3.80, cam_h, 2.80)
+			],
 			"yaws": [-12.0, 0.0, 12.0]
 		}
 	]
 
 	for st in stations:
+		var st_name: String = st["name"]
 		var tgt: Vector3 = st["target"]
-		var zname: String = st["zone"]
 		var standpoints: Array = st["standpoints"]
 		var yaws: Array = st["yaws"]
 
@@ -572,25 +587,12 @@ func _generate_target_inspection_poses() -> Array[Dictionary]:
 				poses.append({
 					"pos": cam_pos,
 					"forward": forward,
-					"zone": zname,
-					"is_station": true
+					"station_name": st_name
 				})
 
 	return poses
 
-func _identify_zone(pos: Vector3) -> String:
-	if pos.z > 2.0:
-		if pos.x < -6.0: return "Pharmacy"
-		elif pos.x > 6.0: return "Elevator_Restroom"
-		else: return "Lobby_Reception"
-	elif pos.z < -2.0:
-		if pos.x < -4.0: return "Emergency_Ward"
-		elif pos.x > 4.0: return "Clinic_Room"
-		else: return "Blood_Lab"
-	else:
-		return "Main_Corridor"
-
-func _capture_and_label(abs_img_dir: String, abs_lbl_dir: String, frame_id: String, zone: String, is_station: bool) -> void:
+func _capture_and_label(abs_img_dir: String, abs_lbl_dir: String, frame_id: String, station_name: String) -> void:
 	await get_tree().physics_frame
 	await get_tree().process_frame
 	if DisplayServer.get_name() != "headless":
@@ -714,13 +716,12 @@ func _capture_and_label(abs_img_dir: String, abs_lbl_dir: String, frame_id: Stri
 		fa.close()
 
 	_total_saved += 1
-	if _total_saved % 50 == 0 or _total_saved == 1:
-		var mode_str = "Trạm mục tiêu" if is_station else "Tuần tra"
-		print("  🚶 [%s] Frame %d | Phân khu: %s -> %d boxes" % [mode_str, _total_saved, zone, yolo_lines.size()])
+	if _total_saved % 40 == 0 or _total_saved == 1:
+		print("  🎯 [Trạm mục tiêu] Frame %d | Trạm: %s -> %d boxes" % [_total_saved, station_name, yolo_lines.size()])
 
 func _write_dataset_manifest(out_dir: String, elapsed_sec: float) -> void:
 	var manifest = {
-		"dataset_type": "hospital_robot_inspection_testset",
+		"dataset_type": "hospital_robot_targeted_inspection_testset",
 		"total_frames": _total_saved,
 		"camera_setup": {
 			"fov_deg": robot_camera.fov,

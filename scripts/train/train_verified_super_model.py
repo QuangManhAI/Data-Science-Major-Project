@@ -52,6 +52,9 @@ def run_training():
     parser.add_argument("--data", type=str, default=str(REPO_ROOT / "configs/hospital_unified_17class.yaml"), help="File YAML cấu hình dataset")
     parser.add_argument("--run-name", type=str, default="yolo26n_verified_17class_v1", help="Tên phiên chạy huấn luyện")
     parser.add_argument("--save-json", type=str, default=str(REPO_ROOT / "experiments/results/verified_17class_metrics.json"), help="Đường dẫn file JSON lưu kết quả")
+    parser.add_argument("--box", type=float, default=9.5, help="Hệ số Box Loss gain (tăng độ thắt chặt bounding box)")
+    parser.add_argument("--dfl", type=float, default=1.8, help="Hệ số DFL gain")
+    parser.add_argument("--close-mosaic", type=int, default=10, help="Số epochs cuối tắt mosaic để hội tụ ổn định")
     parser.add_argument("--resume", action="store_true", help="Tiếp tục huấn luyện từ checkpoint last.pt")
     args = parser.parse_args()
 
@@ -98,12 +101,12 @@ def run_training():
             lr0=0.002,
             lrf=0.01,
             warmup_epochs=3.0,
-            box=8.0,
+            box=args.box,
             cls=1.0,
-            dfl=1.5,
+            dfl=args.dfl,
             copy_paste=0.3,
             mosaic=1.0,
-            close_mosaic=10,
+            close_mosaic=args.close_mosaic,
             mixup=0.15,
             scale=0.5,
             perspective=0.0005,
@@ -192,10 +195,11 @@ def run_training():
             "batch_size": args.batch,
             "imgsz": args.imgsz,
             "optimizer": "AdamW",
-            "box_gain": 8.0,
+            "box_gain": args.box,
+            "dfl_gain": args.dfl,
             "copy_paste": 0.3,
             "mosaic": 1.0,
-            "close_mosaic": 10,
+            "close_mosaic": args.close_mosaic,
             "mixup": 0.15,
             "scale": 0.5,
             "initial_weights": str(args.model)

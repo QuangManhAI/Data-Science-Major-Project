@@ -1,0 +1,25 @@
+# Cấu hình Kiểm Thử Hành Trình Tuần Tra Của Robot (Robot Patrol Test Benchmark)
+path: /home/bush/Projects/Data-Science-Major-Project/data/vision/dataset/hospital_robot_patrol_testset
+train: images
+val: images
+test: images
+
+nc: 17
+names:
+  0: patient
+  1: doctor
+  2: wheelchair
+  3: queue_kiosk
+  4: reception_counter
+  5: sanitizer_stand
+  6: pccc_station
+  7: medical_waste_bin
+  8: water_dispenser
+  9: wc_station
+  10: elevator_doors
+  11: hospital_bed
+  12: stretcher_cart
+  13: iv_stand
+  14: medical_trolley
+  15: vital_monitor
+  16: hospital_chair

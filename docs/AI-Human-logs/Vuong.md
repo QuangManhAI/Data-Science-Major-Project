@@ -917,7 +917,9 @@ av_remaining frozen after dialogue engagement.
   5. **Top-Right POV Sector Overlay HUD:** Tab-key toggled HUD in Godot robot camera view displaying real-time 5-sector visual clearance bars (green/yellow/red) and target tracking bounding boxes.
   6. **2,000-Episode Training:** Fresh 29-dim PPO agent trained on NVIDIA RTX 4060 GPU with decaying teacher behavioral cloning warmup (first 200 episodes).
 - **Why:** Realizes an authentic low-cost autonomous hospital robot that navigates and escorts solely with monocular RGB camera perception without expensive physical LiDAR scanners.
-- **Touches:** `models/yolo26n_hospital_robot_v6_best/`, `sim_vision/python/detector.py`, `sim_vision/python/yolo_server.py`, `sim_vision/python/rl_policy_server.py`, `src/models/ppo_agent.py`, `src/training/hospital_env_vision.py`, `src/training/train_pure_vision_rl.py`, `sim_vision/godot/scripts/main.gd`, `sim_vision/godot/scenes/room.tscn`, `docs/AI-Human-logs/Vuong.md`
+- **Touches:** `models/yolo26n_hospital_robot_v6_best/`, `sim_vision/python/detector.py`, `sim_vision/python/yolo_server.py`, `sim_vision/python/rl_policy_server.py`, `src/models/ppo_agent.py`, `src/training/hospital_env_vision.py`, `src/training/hospital_env_pure_vision.py`, `src/training/train_pure_vision_rl.py`, `sim_vision/godot/scripts/main.gd`, `sim_vision/godot/scripts/view_overlay.gd`, `sim_vision/godot/scenes/room.tscn`, `docs/AI-Human-logs/Vuong.md`
+- **Evidence:** 4/4 tests in `tests/test_pure_vision_obs.py` pass; completed 2,000-episode GPU training run (Ep 1 -> Ep 2000) under `experiments/runs/20261101_090639_PPOHospital-PureVision` on NVIDIA GeForce RTX 4060 Laptop GPU; total 91 patients helped under pure visual guidance with zero physical LiDAR; visual spotting rate reached **97.3%**; peak episode reward reached **+61.4**; 4-panel training curves saved at `experiments/runs/20261101_090639_PPOHospital-PureVision/training_curves.png`; best checkpoint saved at `experiments/runs/20261101_090639_PPOHospital-PureVision/checkpoints/PPOHospital-PureVision_best.pt`; 10-shift held-out diagnostic benchmark completed (`spotting_rate: 60.0%`).
+
 
 
 

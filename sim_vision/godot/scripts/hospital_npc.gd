@@ -252,9 +252,24 @@ func escort_step_towards(target: Vector3, max_step: float, delta: float) -> void
 	var disp: Vector3 = to / d * minf(max_step, d)
 	rotation.y = atan2(disp.x, disp.z)
 	if is_inside_tree() and get_world_3d() != null and get_world_3d().space != RID():
+		var pre_pos: Vector3 = global_position
 		velocity = disp / maxf(delta, 1e-4)
 		move_and_slide()
 		velocity = Vector3.ZERO
+		var moved_dist: float = Human.flat_distance(pre_pos, global_position)
+		if moved_dist < 0.005 and disp.length() > 0.01:
+			_blocked_s += delta
+			if _blocked_s >= 0.4:
+				# Trượt vòng qua chướng ngại vật/NPC chắn đường
+				var side: Vector3 = Vector3(-disp.z, 0.0, disp.x).normalized() * minf(max_step, 0.25)
+				velocity = side / maxf(delta, 1e-4)
+				move_and_slide()
+				velocity = Vector3.ZERO
+				if _blocked_s >= 1.2:
+					global_position += disp.normalized() * minf(max_step, 0.15)
+					_blocked_s = 0.0
+		else:
+			_blocked_s = 0.0
 	else:
 		global_position += disp
 	_play_anim(&"npc/walk")

@@ -261,6 +261,14 @@ func _physics_process(delta: float) -> void:
 		var d_tether: float = Human.flat_distance(robot.global_position, esc_p.global_position)
 		var d_patient_goal: float = Human.flat_distance(esc_p.global_position, _rl_bridge.goal_position) if has_escort else 0.0
 
+		# Tự động mở cửa thang máy khi robot tiến lại gần (d <= 3.2m)
+		if _rl_bridge.goal_key in ["thang_may", "thang_may_t2", "thang_may_t3"]:
+			var cur_fl_app: int = Room.get_floor(robot.global_position)
+			var cur_st_app: ElevatorStation = room.get_elevator_station(cur_fl_app) if room != null else null
+			if cur_st_app != null and not cur_st_app.is_open and Human.flat_distance(robot.global_position, cur_st_app.global_position) <= 3.2:
+				print("[ESCORT_DEBUG] >>> Approaching elevator (d <= 3.2m), opening station doors...")
+				cur_st_app.open_doors()
+
 		if d_goal <= RLEnvBridgeScript.GOAL_ARRIVE_ROBOT_M and (not has_escort or d_patient_goal <= RLEnvBridgeScript.GOAL_ARRIVE_PATIENT_M):
 			# Kiểm tra chuyển tầng qua thang máy
 			if _rl_bridge.goal_key in ["thang_may", "thang_may_t2", "thang_may_t3"] and _rl_bridge.final_target_key != "" and _rl_bridge.final_target_key != _rl_bridge.goal_key:
@@ -308,6 +316,11 @@ func _physics_process(delta: float) -> void:
 		# Nhân viên ở tầng khác (tầng 2 không có nhân viên) ➔ robot đi thang máy một mình, bệnh nhân chờ tại chỗ
 		var robot_floor: int = Room.get_floor(robot.global_position)
 		var staff_floor: int = Room.get_floor(_rl_bridge.goal_position)
+		if staff_floor != robot_floor:
+			var cur_st_app: ElevatorStation = room.get_elevator_station(robot_floor) if room != null else null
+			if cur_st_app != null and not cur_st_app.is_open and Human.flat_distance(robot.global_position, cur_st_app.global_position) <= 3.2:
+				print("[ESCORT_DEBUG] >>> Approaching elevator for solo transit (d <= 3.2m), opening station doors...")
+				cur_st_app.open_doors()
 		if staff_floor != robot_floor \
 				and Human.flat_distance(robot.global_position, _leg_target(_rl_bridge.goal_position)) <= RLEnvBridgeScript.GOAL_ARRIVE_ROBOT_M:
 			print("[ESCORT_DEBUG] >>> Elevator transit triggered: Floor %d -> Floor %d (Solo Return)" % [robot_floor, staff_floor])
@@ -572,25 +585,29 @@ func _execute_elevator_transit(from_floor: int, to_floor: int, with_patient: boo
 	station_to.set_floor_indicator(from_floor, arrow)
 	overlay.set_status("Đang gọi thang máy: Tầng %d -> Tầng %d" % [from_floor, to_floor])
 
-	# 1. Mở cửa tầng xuất phát
-	station_from.open_doors()
+	# 1. Đảm bảo cửa tầng xuất phát đã mở
+	if not station_from.is_open:
+		station_from.open_doors()
 
 	var seq := create_tween()
-	seq.tween_interval(0.4)
+	seq.tween_interval(0.2)
 
-	# 2. Robot và bệnh nhân bước vào buồng thang máy
+	# 2. Robot và bệnh nhân căn chỉnh vị trí đứng trong buồng và quay mặt hướng ra cửa
 	var cabin_pos_from: Vector3 = station_from.get_cabin_position()
 	var robot_cabin_target: Vector3 = cabin_pos_from + station_from.global_transform.basis * Vector3(0.25, 0.0, 0.0)
 	var human_cabin_target: Vector3 = cabin_pos_from + station_from.global_transform.basis * Vector3(-0.25, 0.0, 0.0)
+	var face_door_from: float = station_from.global_rotation.y + PI
 
 	seq.tween_callback(func():
 		var move_in := create_tween().set_parallel(true)
-		move_in.tween_property(robot, "global_position", robot_cabin_target, 0.8)
+		move_in.tween_property(robot, "global_position", robot_cabin_target, 0.35)
+		move_in.tween_property(robot, "rotation:y", face_door_from, 0.35)
 		if with_patient:
 			var esc_p: CharacterBody3D = active_escorted_patient if active_escorted_patient != null else human
-			move_in.tween_property(esc_p, "global_position", human_cabin_target, 0.8)
+			move_in.tween_property(esc_p, "global_position", human_cabin_target, 0.35)
+			move_in.tween_property(esc_p, "rotation:y", face_door_from, 0.35)
 	)
-	seq.tween_interval(0.9)
+	seq.tween_interval(0.4)
 
 	# 3. Đóng cửa tầng xuất phát
 	seq.tween_callback(func():
@@ -619,10 +636,13 @@ func _execute_elevator_transit(from_floor: int, to_floor: int, with_patient: boo
 		station_to.play_chime()
 
 		var cabin_pos_to: Vector3 = station_to.get_cabin_position()
+		var face_door_to: float = station_to.global_rotation.y + PI
 		robot.global_position = cabin_pos_to + station_to.global_transform.basis * Vector3(0.25, 0.0, 0.0)
+		robot.rotation.y = face_door_to
 		if with_patient:
 			var esc_p: CharacterBody3D = active_escorted_patient if active_escorted_patient != null else human
 			esc_p.global_position = cabin_pos_to + station_to.global_transform.basis * Vector3(-0.25, 0.0, 0.0)
+			esc_p.rotation.y = face_door_to
 
 		station_from.set_floor_indicator(to_floor, "")
 		station_to.set_floor_indicator(to_floor, "")
@@ -870,13 +890,20 @@ func reset_positions(is_task_transition: bool = false) -> void:
 		var dock: Dictionary = room.get_robot_dock()
 		robot.global_position = dock["position"]
 		robot.rotation.y = float(dock["yaw"])
-		if _human_home_pos != Vector3.ZERO:
-			human.global_position = _human_home_pos
-			human.rotation.y = _human_home_yaw
-		else:
-			var p: Dictionary = Main.pick_start_positions(room, _rng)
-			human.global_position = p["human"]
-			human.rotation.y = p["human_yaw"]
+		var p: Dictionary = Main.pick_start_positions(room, _rng)
+		human.global_position = p["human"]
+		human.rotation.y = p["human_yaw"]
+		# Ngẫu nhiên hóa vị trí ban đầu của các bệnh nhân trong sảnh
+		var furn: Node = room.get_node_or_null(^"Furniture") if room != null else null
+		if furn != null:
+			for child: Node in furn.get_children():
+				if child is HospitalNpc:
+					var h_npc := child as HospitalNpc
+					if h_npc.staff_role == "patient" and not h_npc.is_seated and not h_npc.get_meta("helped", false):
+						var np_pos: Vector3 = room.get_patient_spawn_position(1, _rng) if room != null else Vector3.ZERO
+						if np_pos != Vector3.ZERO:
+							h_npc.global_position = np_pos
+							h_npc.rotation.y = _rng.randf_range(-PI, PI)
 	robot.set_command(0.0, 0.0)
 	state = Config.RobotState.SEARCH
 	if dialogue != null:

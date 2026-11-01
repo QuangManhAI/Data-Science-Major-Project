@@ -56,7 +56,7 @@ const FLOOR3_DIRECT_KEYS: Array[String] = [
 ## Khoa của NLU (dept_<slug>, sim_vision/python/voice/hospital_map.json) ➔ số phòng
 const NLU_DEPARTMENT_ROOMS: Dictionary = {
 	"dept_tim_mach": "301", "dept_tieu_hoa": "205", "dept_tai_mui_hong": "210", "dept_co_xuong_khop": "315",
-	"dept_nhi": "401", "dept_san": "410", "dept_cap_cuu": "101", "dept_noi_tong_quat": "120",
+	"dept_nhi": "302", "dept_san": "315", "dept_cap_cuu": "101", "dept_noi_tong_quat": "120",
 	"dept_ho_hap": "320", "dept_than_kinh": "330", "dept_da_lieu": "220", "dept_mat": "230", "dept_rang_ham_mat": "240",
 }
 
@@ -321,7 +321,7 @@ static func step_escorted_patient(patient: CharacterBody3D, robot_pos: Vector3, 
 	while trail.size() > 1:
 		var d0: float = Human.flat_distance(patient.global_position, trail[0])
 		var d1: float = Human.flat_distance(patient.global_position, trail[1])
-		if d0 <= ESCORT_CRUMB_REACH_M or d1 <= d0:
+		if d0 <= ESCORT_CRUMB_REACH_M or d1 <= d0 or (trail.size() > 3 and d_robot > 2.5 and d1 < d0 + 0.3):
 			trail.pop_front()
 		else:
 			break

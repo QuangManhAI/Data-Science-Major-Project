@@ -6,7 +6,7 @@
 - **Detailed Plan**: §1 Decision Index Table; §2 Decision Log Entries (D-001 to D-039).
 - **References**: [agents/templates/DECISION_LOG_TEMPLATE.md](../../agents/templates/DECISION_LOG_TEMPLATE.md), [agents/rules/MD_CONVENTION.md](../../agents/rules/MD_CONVENTION.md).
 - **Created**: 2026-10-21T21:25:00+07:00
-- **Last Updated**: 2026-10-30T07:00:00+07:00
+- **Last Updated**: 2026-10-31T12:15:00+07:00
 
 ---
 
@@ -58,6 +58,11 @@
 | [D-042](#d-042--seated-patient-interaction-position-stand-up-transition-and-physics-collision-fix) | Seated patient interaction position, stand-up transition, and physics collision fix | AI-pair (Manh + Antigravity) | accepted |
 | [D-043](#d-043--analysis-of-duty-cycle-flaws-oracle-dispatch-vs-visual-rl-and-pure-rl-vision-roadmap) | Analysis of duty cycle flaws, oracle dispatch vs visual RL, and pure visual-search RL roadmap | human-directed inquiry | accepted |
 | [D-044](#d-044--grill-me-interview-record-pure-visual-search-rl-architecture-and-new-training-branch) | /grill-me interview record: Pure Visual-Search RL architecture and new training branch | human-approved via /grill-me | accepted |
+| [D-045](#d-045--implementation-of-pure-visual-search-rl-environment-training-pipeline-and-hospital-duty-cycle) | Implementation of Pure Visual Search RL Environment, Training Pipeline, and Hospital Duty Cycle | human-approved plan | accepted |
+| [D-046](#d-046--root-cause-resolution-for-visual-search-policy-freezing-trap--stagnation-cutoff) | Root-Cause Resolution for Visual Search Policy Freezing Trap & Stagnation Cutoff | human-approved plan | accepted |
+| [D-047](#d-047--in-the-wild-multi-npc-training-floor-3-room-dialog-alignment-and-npc-unstuck-evasion) | In-The-Wild Multi-NPC Training, Floor 3 Room Dialog Alignment, and NPC Unstuck Evasion | human-approved plan | accepted |
+| [D-048](#d-048--discovery-and-resolution-of-visual-reward-hacking-and-1200-episode-continuation) | Discovery and Resolution of Visual Reward Hacking and 1,200-Episode Continuation | human-directed inquiry | accepted |
+| [D-049](#d-049--resolution-of-patient-avoidance-geometry-reward-rebalancing-and-1200-ep-warmstart-training) | Resolution of Patient Avoidance Geometry, Reward Rebalancing, and 1,200-Ep Warmstart Training | human-approved via /grill-me | accepted |
 
 ---
 
@@ -793,5 +798,106 @@ av_remaining frozen after dialogue engagement.
   2. Updated sim_vision/python/rl_policy_server.py with identical pinhole vision formulas and corridor patrol loops for live Godot 3D inference.
   3. Enhanced unit test suite 	ests/test_hospital_env_vision.py verifying zero-oracle patrol routing, pinhole vision derivation, visual engagement, and exploration rewards.
 - **Why:** Completely eliminates policy freezing, enables seamless transitions from autonomous corridor visual sweeping to perspective bounding-box approach, and maintains reliable tethered escort navigation.
-- **Touches:** src/training/hospital_env_vision.py, sim_vision/python/rl_policy_server.py, 	ests/test_hospital_env_vision.py, docs/AI-Human-logs/Vuong.md
-- **Evidence:** 6/6 tests in 	ests/test_hospital_env_vision.py pass; verified multi-patient trace in scratch/trace_step.py completing 2 back-to-back patients in 400 steps; completed 2,000-episode visual training run: 5,748 patients helped (vs 9 in broken run), 100% visual spotting rate, Eval score +75.1 (vs 0.4), peak reward +213.9, best checkpoint saved at experiments/runs/20261030_114837_PPOHospital-VisualSearch-3floor/checkpoints/PPOHospital-VisualSearch-3floor_best.pt.
+- **Touches:** `src/training/hospital_env_vision.py`, `sim_vision/python/rl_policy_server.py`, `tests/test_hospital_env_vision.py`, `docs/AI-Human-logs/Vuong.md`
+- **Evidence:** 6/6 tests in `tests/test_hospital_env_vision.py` pass; verified multi-patient trace in scratch/trace_step.py completing 2 back-to-back patients in 400 steps; completed 2,000-episode visual training run: 5,748 patients helped (vs 9 in broken run), 100% visual spotting rate, Eval score +75.1 (vs 0.4), peak reward +213.9, best checkpoint saved at `experiments/runs/20261030_114837_PPOHospital-VisualSearch-3floor/checkpoints/PPOHospital-VisualSearch-3floor_best.pt`.
+
+### D-047 — In-The-Wild Multi-NPC Training, Floor 3 Room Dialog Alignment, and NPC Unstuck Evasion
+- **Status:** accepted
+- **When:** 2026-10-30T17:30:00+07:00
+- **Decided by:** human-approved via train_in_the_wild_2000ep_plan.md
+- **Trigger:** During live 3D inference: 1) Robot dialogue stated "Khoa sản ở tầng 4" whereas the hospital has only 3 floors; 2) Patient_02 got wedged and completely stuck behind MedicalStaffNurse in the lobby corridor; 3) Training needed to transition from solo mode to crowded in-the-wild multi-NPC conditions with extended 300s shifts and automatic saving of 5 regular checkpoints.
+- **Decision:**
+  1. **Hospital Map & Dialog Alignment:** Updated `hospital_map.json`, `rl_env_bridge.gd`, and `room.gd` to align Khoa Sản to Floor 3, Room 315 and Khoa Nhi to Floor 3, Room 302.
+  2. **NPC Geometric Collision & Evasion:** Relocated `MedicalStaffNurse` from walkway coordinate `(-1.9, 0, 7.45)` to behind reception desk `(-0.9, 0, 8.4)`. In `hospital_npc.gd`, added dynamic unstuck evasion in `escort_step_towards` (lateral evasion if movement blocked $<0.005\text{m}$ for $\ge 0.4\text{s}$; nudge past blocker if $\ge 1.2\text{s}$). Enhanced breadcrumb pruning in `rl_env_bridge.gd`.
+  3. **In-The-Wild Training Architecture (`src/training/train_visual_rl_in_the_wild.py`):** Configured full multi-NPC mode (`env_mode="full"`), extended shift length to 300.0s (1,500 steps), and implemented dynamic saving of 5 evenly-spaced periodic checkpoints (`save_interval = total_episodes // 5`).
+- **Why:** Ensures voice and navigation match actual 3D layout, guarantees patient followers cannot be permanently blocked by static medical personnel, and exposes the policy to realistic crowded hospital traffic.
+- **Touches:** `sim_vision/python/voice/hospital_map.json`, `sim_vision/godot/scripts/rl_env_bridge.gd`, `sim_vision/godot/scripts/room.gd`, `sim_vision/godot/scenes/room.tscn`, `sim_vision/godot/scripts/hospital_npc.gd`, `src/training/train_visual_rl_in_the_wild.py`, `docs/AI-Human-logs/Vuong.md`
+- **Evidence:** 163 voice pytest unit tests pass (100% accuracy); 163 Godot GUT tests pass (18,873 asserts, 0 errors); launched 2,000-episode in-the-wild training run.
+
+### D-048 — Discovery and Resolution of Visual Reward Hacking and 1,200-Episode Continuation
+- **Status:** accepted
+- **When:** 2026-10-31T08:00:00+07:00
+- **Decided by:** human-directed inquiry
+- **Trigger:** User observed that during the 2,000-episode in-the-wild training, episodic rewards reached unusually high values (+300 to +590) even when zero patients were helped (`Helped: 0`), suspecting reward hacking.
+- **Root Cause Discovered:**
+  1. **FOV Boundary Wiggling Exploit:** In `hospital_env_vision.py`, the visual spotting bonus (`REWARD_VISUAL_SPOTTED = +2.0`) was granted whenever `det["seen"] > 0.5` and `prev_has_det < 0.5`. Standing near an NPC and wiggling camera yaw across the FOV or occlusion boundary caused `seen` to toggle between 0 and 1 up to 595 times per episode, harvesting over +1,190 free visual reward points without completing any task.
+  2. **Stagnation Timeout Suppression:** Each flicker toggle executed `self.steps_since_task = 0`, indefinitely resetting the stagnation timer and allowing the agent to hover and wiggle for the entire 300s shift without penalty.
+  3. **Artificial Expansion Reward:** Toggling `seen` from 0 to 1 repeatedly reset `prev_vision_h = 0.0`, granting artificial `+1.5 * det["h"]` expansion bonuses on every re-detection (+247 points).
+- **Decision:**
+  1. **Single Spotting Bonus:** Introduced `self.patient_spotted_once`. The `+2.0` spotting bonus is granted strictly once per patient lifetime, resetting only when a new patient is spawned (`_spawn_next_patient()`). Subsequent flickers grant zero spotting bonus.
+  2. **Monotonic Approach Expansion:** Changed approach reward to trigger strictly when `det["h"] > self.best_vision_h`, rewarding only true physical distance reduction (capped to $\approx +1.28$ across entire approach).
+  3. **Strict Stagnation Enforcement:** Replaced flicker-based timer resets with physical approach threshold (`det["h"] > best_vision_h + 0.04`). Hovering or wiggling without closing distance triggers `STAGNATION_TIMEOUT` (-10.0 penalty) and early termination.
+  4. **Continuation Training (Ep 801 -> Ep 2000):** Checkpoint analysis proved `PPOHospital-Wild-3floor_ep800.pt` was the peak uncorrupted checkpoint (2.90 patients/shift, 0.40 collisions). Successfully ran a 1,200-episode continuation run with the fix applied, saving regular checkpoints at `ep1040`, `ep1280`, `ep1520`, `ep1760`, and `ep2000`.
+- **Why:** Eliminates all forms of visual reward exploitation, forces the policy to physically close in on patients for dialogue engagement, and produces authentic, grounded reward trajectories.
+- **Touches:** `src/training/hospital_env_vision.py`, `src/training/train_visual_rl_in_the_wild.py`, `docs/AI-Human-logs/Vuong.md`
+- **Evidence:** Verified on Episode 1169 seed: hacked reward collapsed from +1,247.5 to -28.5 with stagnation timeout at step 347 (69.4s); 1,200-episode continuation run completed cleanly; verified 5 periodic checkpoints saved on disk.
+
+### D-049 — Resolution of Patient Avoidance Geometry, Reward Rebalancing, and 1,200-Ep Warmstart Training
+- **Status:** accepted
+- **When:** 2026-10-31T12:15:00+07:00
+- **Decided by:** human-approved via /grill-me
+- **Trigger:** During live 3D Godot inference, robot was observed actively avoiding patients and turning away even when very close. User requested /grill-me interview to diagnose root cause, rebalance rewards, and retrain.
+- **Root Cause Discovered:**
+  1. **Engagement Geometry Mismatch:** Python training used `TARGET_BOX_H = 0.85` ($d \le 1.35\text{m}$) while Godot expected `PATIENT_ENGAGE_DIST_M = 1.85m` ($h \ge 0.45$). For seated patients ($H \approx 1.25\text{m}$), $h$ never reached 0.85 without driving into $< 1.05\text{m}$.
+  2. **LiDAR Collision Fear:** At $< 1.2\text{m}$, the patient collider in Godot registered on center LiDAR rays as a $0.3\text{m} - 0.5\text{m}$ obstacle. Trained with heavy collision penalty ($-5.0$), the policy panicked and executed evasive turns ($\omega = \pm 1.0$) and reverse braking, dropping the patient out of the $75^\circ$ FOV and falling back to search.
+- **Decision:**
+  1. **Synchronize Engagement Thresholds:** Set `TARGET_BOX_H = 0.50` and `PATIENT_TALK_DIST_M = 1.85m` in `hospital_env_vision.py` matching Godot's `PATIENT_ENGAGE_DIST_M = 1.85m`. At $1.85\text{m}$, robot engages naturally before entering the LiDAR obstacle avoidance buffer.
+  2. **LiDAR Target Immunity:** In `teacher_action()`, suppress frontal obstacle repel when looking directly at patient during `APPROACH_PATIENT`.
+  3. **Reward Rebalancing:** Emphasized core service completion: `REWARD_PATIENT_ENGAGED` increased from $+10.0 \to \mathbf{+25.0}$; `REWARD_GUIDE_ARRIVED` increased from $+30.0 \to \mathbf{+60.0}$. Zero artificial steering forces added to preserve pure RL learning.
+  4. **Retraining Regimen:** Warm-start from uncorrupted peak checkpoint `ep800.pt` for a 1,200-episode run with 5 periodic checkpoints saved every 240 episodes.
+- **Why:** Reconciles the geometric mismatch between Python simulation and Godot physics, removes false obstacle fear, and strongly incentivizes closing the distance to serve patients.
+- **Touches:** `src/training/hospital_env_vision.py`, `src/training/train_visual_rl_in_the_wild.py`, `docs/AI-Human-logs/Vuong.md`
+- **Evidence:** Verified environment stepping with $h \ge 0.50$ engagement; verified teacher action frontal approach without evasion; completed 1,200-episode training run on CUDA (Ep 1200 Eval score: +396.6, 3.87 tasks/eval); benchmark on 10 held-out seeds achieved: **3.50 ± 0.81 patients helped/shift (35 total)**, **100% visual spotting rate**, **0.0% stagnation rate**, **0.30 collisions/shift**, with balanced escorting across Floors 1–3 (F1: 14, F2: 12, F3: 9); best checkpoint saved at `experiments/runs/20261031_122003_PPOHospital-Wild-3floor/checkpoints/PPOHospital-Wild-3floor_best.pt`.
+
+### D-050 — Realistic Elevator Cabin Interior, Doorway Cutout, and Randomized Inference Patient Spawning
+- **Status:** accepted
+- **When:** 2026-10-31T14:05:00+07:00
+- **Decided by:** human-approved via /grill-me (`realistic_elevator_and_train_plan.md`)
+- **Trigger:** User feedback: 1) Elevator functioned like a 2–3m teleport/swoop spot rather than a realistic elevator because waypoints were outside in the corridor and east walls were solid; 2) User confirmed training patient spawns are random while inference was prefixed, and requested fully randomized patient spawning in Godot inference; 3) Continue training for 1,200 episodes warm-started from the latest best checkpoint with inside-cabin elevator waypoints.
+- **Root Cause & Architectural Enhancements:**
+  1. **Elevator Waypoint & Solid East Wall:** `thang_may` waypoint was previously placed at `(9.0, 5.2)` in the hallway, almost 3 meters in front of the elevator door ($X = 11.88, Z = 4.6$). Furthermore, `WallEast` and `WallEastCollision` formed a continuous solid wall at $X = 12.1$ from $Z = -9$ to $+9$, physically blocking any agent from entering the elevator cabin ($X \in [11.88, 14.08]$). As a result, reaching $d \le 2.0\text{m}$ outside triggered a tween sliding the robot across 3 meters into the cabin.
+  2. **Wall Doorway Cutouts:** In `room.tscn`, `room_floor2.tscn`, and `room_floor3.tscn`, split `WallEast` into `WallEastNorth` ($Z \in [-9.0, 3.55]$), `WallEastSouth` ($Z \in [5.65, 9.0]$), and `WallEastLintel` ($Y \in [2.4, 3.2]$ across $Z \in [3.55, 5.65]$). This creates a 2.1m clear doorway opening at $X = 12.1, Z \in [3.55, 5.65]$ for all three floors.
+  3. **Physical Elevator Cabin:** In `elevator_station.tscn`, added static boundary collision shapes (`CollisionWallBack`, `CollisionWallLeft`, `CollisionWallRight`, `CollisionFloor`) around the elevator interior, turning the cabin into a real, enclosed physical standing room ($2.1\text{m} \times 2.2\text{m}$).
+  4. **Inside-Cabin Waypoints & Re-Export:** Updated `ROOMS["thang_may"]["waypoint"]` and `DESTINATION_POSITIONS` to `(12.8, 4.6)` on Floor 1, `(62.8, 4.6)` on Floor 2, and `(112.8, 4.6)` on Floor 3. Re-exported `src/training/hospital_layout.json` via Godot headless tool (`export_nav_layout.gd`).
+  5. **Natural Door-Opening & Transit Sequence:** In `main.gd`, approaching the elevator station within $\le 3.2\text{m}$ automatically triggers `station.open_doors()`. The robot and escorted patient navigate naturally into the cabin. Once inside ($d \le 1.4\text{m}$ to cabin waypoint), the doors close, transit audio and LED arrow updates play, positions shift to destination floor cabin, destination doors open, and robot and patient walk out into the hallway before doors close.
+  6. **Randomized Inference Patient Spawning:** In `main.gd`, replaced fixed initial positioning with dynamic uniform sampling via `room.get_patient_spawn_position(1, _rng)` on every startup and reset, matching the Python training distribution.
+  7. **Continuation Training (Ep 1201 -> 2400):** Warm-started 1,200 episodes from `PPOHospital-Wild-3floor_best.pt` with inside-cabin navigation.
+- **Why:** Eliminates the jarring 3-meter swoop teleportation, provides authentic elevator door and interior mechanics, reconciles training vs inference patient spawning distributions, and trains the policy to master interior cabin entry.
+- **Touches:** `sim_vision/godot/scenes/props/elevator_station.tscn`, `sim_vision/godot/scenes/room.tscn`, `sim_vision/godot/scenes/room_floor2.tscn`, `sim_vision/godot/scenes/room_floor3.tscn`, `sim_vision/godot/tools/export_nav_layout.gd`, `src/training/hospital_layout.json`, `sim_vision/godot/scripts/room.gd`, `sim_vision/godot/scripts/main.gd`, `src/training/hospital_env.py`, `src/training/hospital_env_vision.py`, `src/training/train_visual_rl_in_the_wild.py`, `docs/AI-Human-logs/Vuong.md`
+- **Evidence:** Nav layout re-exported with 164 rects; Godot GUT test suite passed with 18/18 tests in `test_room.gd` (16,952 asserts, 0 failures); completed 1,200-episode in-the-wild continuation run (Ep 1201 to 2400) reaching Peak Reward $+693.0$ and 3,861 patients helped; held-out 10-shift benchmark achieved: **$R_{team} = +394.42 \pm 69.44$**, **3.40 ± 0.80 patients helped/shift (34 total)**, **100.0% visual spotting rate**, **8.10s mean search latency**, **0.0% stagnation rate**, **0.00 collisions/shift**, with balanced floor distribution (F1: 14, F2: 12, F3: 8); best checkpoint saved at `experiments/runs/20261031_140435_PPOHospital-Wild-3floor/checkpoints/PPOHospital-Wild-3floor_best.pt`.
+
+### D-051 — Active-Search Shaping, Free Search Idleness Penalty, and 1,000-Ep Continuation Training
+- **Status:** accepted
+- **When:** 2026-10-31T15:55:00+07:00
+- **Decided by:** human-directed (/grill-me aligned)
+- **Trigger:** Observation in 3D inference: the robot did not actively seek out patients or utilize search time efficiently, sometimes idling or wandering aimlessly.
+- **Root Cause:**
+  1. The step penalty was only `PENALTY_STEP_TIME = -0.005`/step, creating negligible urgency during the `SEARCH_PATIENT` phase.
+  2. Reward for spotting and engaging patients was modest relative to passive wandering time.
+- **Decision:**
+  1. **Free Search Idleness Penalty:** Introduced `PENALTY_FREE_SEARCH_TIME = -0.04`/step ($-0.20$/s) strictly applied while `task_phase == TaskPhase.SEARCH_PATIENT`. This penalizes wandering without a spotted patient, strongly incentivizing rapid corridor and lobby visual scanning.
+  2. **Elevated Spotting & Exploration Incentives:** Boosted `REWARD_VISUAL_SPOTTED` from $+2.0 \to \mathbf{+5.0}$ and `REWARD_CELL_EXPLORATION` from $+0.05 \to \mathbf{+0.10}$.
+  3. **High Service Delivery Value:** Doubled engagement reward `REWARD_PATIENT_ENGAGED_VIS` ($+25.0 \to \mathbf{+50.0}$) and increased delivery reward `REWARD_GUIDE_ARRIVED_VIS` ($+60.0 \to \mathbf{+80.0}$).
+  4. **1,000-Episode Continuation Training:** Warm-started from Ep 2400 checkpoint (`PPOHospital-Wild-3floor_best.pt`) targeting Ep 2401 to 3400.
+- **Why:** Re-aligns policy incentives so that idling or dawdling incurs continuous negative reward, while actively finding and escorting patients yields massive positive returns (+50.0 to +80.0).
+- **Touches:** `src/training/hospital_env_vision.py`, `src/training/train_visual_rl_in_the_wild.py`, `scripts/plot_training_metrics.py`, `docs/AI-Human-logs/Vuong.md`
+- **Evidence:** GPU smoke test verified on NVIDIA GeForce RTX 4060 Laptop GPU; completed 2,000-episode GPU training run (Ep 2401 -> Ep 4400) under `experiments/runs/20261031_160344_PPOHospital-Wild-3floor`; total 6,418 patients helped with peak reward reaching **+1198.0**; 10-shift held-out benchmark achieved: **$R_{team} = +565.31 \pm 110.68$**, **3.40 ± 0.80 patients helped/shift (34 total)**, **100.0% visual spotting rate**, **8.00s mean search latency**, **0.0% stagnation rate**, **0.20 collisions/shift**, with balanced multi-floor escorting (F1: 14, F2: 12, F3: 8); best checkpoint saved at `experiments/runs/20261031_160344_PPOHospital-Wild-3floor/checkpoints/PPOHospital-Wild-3floor_best.pt`.
+
+### D-053 — 2,000-Episode Deep Convergence Training on NVIDIA RTX 4060 GPU
+- **Status:** accepted
+- **When:** 2026-10-31T21:42:00+07:00
+- **Decided by:** human
+- **Trigger:** User requested 2,000 more episodes of training following successful active-search convergence (+565.31 held-out reward).
+- **Decision:**
+  1. Warm-started from best checkpoint `experiments/runs/20261031_160344_PPOHospital-Wild-3floor/checkpoints/PPOHospital-Wild-3floor_best.pt`.
+  2. Training span configured for **Ep 4401 $\to$ Ep 6400 (2,000 episodes)**.
+  3. Running on CUDA via `.venv` with NVIDIA GeForce RTX 4060 Laptop GPU (8GB VRAM).
+  4. Saving 5 regular checkpoints every 400 episodes (`ep4800`, `ep5200`, `ep5600`, `ep6000`, `ep6400`) and continuous tracking in `metrics.jsonl`.
+- **Why:** Deepens autonomous visual search heuristics, solidifies multi-floor elevator pathing under high NPC density, and pushes escort throughput beyond 3.5 patients/shift.
+- **Touches:** `src/training/train_visual_rl_in_the_wild.py`, `scripts/plot_training_metrics.py`, `docs/AI-Human-logs/Vuong.md`
+- **Evidence:** Completed 2,000-episode GPU training run (Ep 4401 -> Ep 6400) under `experiments/runs/20261031_214132_PPOHospital-Wild-3floor`; total 6,270 patients helped (cumulative 12,688 patients across both GPU runs); peak episode reward reached **+934.8**; held-out 10-shift diagnostic benchmark achieved: **$R_{team} = +551.02 \pm 104.44$**, **3.30 ± 0.78 patients helped/shift (33 total)**, **100.0% visual spotting rate**, **8.08s mean search latency**, **0.0% stagnation rate**, **0.10 collisions/shift**, with balanced multi-floor escorting (F1: 14, F2: 11, F3: 8); best checkpoint saved at `experiments/runs/20261031_214132_PPOHospital-Wild-3floor/checkpoints/PPOHospital-Wild-3floor_best.pt`.
+
+
+
+
+

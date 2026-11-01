@@ -11,8 +11,8 @@
       "walk_speed": 0.48,
       "walks": false,
       "waypoints": [],
-      "x": -1.9,
-      "z": 7.45
+      "x": -0.9,
+      "z": 8.4
     },
     {
       "half_x": 0.25,
@@ -86,14 +86,14 @@
         ],
         [
           -3.55,
-          7.0
+          6.6
         ],
         [
-          -1.2,
-          7.0
+          -1.4,
+          6.6
         ],
         [
-          -1.2,
+          -1.4,
           5.8
         ],
         [
@@ -250,10 +250,17 @@
       "z1": 9.2
     },
     {
-      "name": "Shell/WallEastCollision",
+      "name": "Shell/WallEastNorthCollision",
       "x0": 12.0,
       "x1": 12.2,
       "z0": -9.0,
+      "z1": 3.55
+    },
+    {
+      "name": "Shell/WallEastSouthCollision",
+      "x0": 12.0,
+      "x1": 12.2,
+      "z0": 5.65,
       "z1": 9.0
     },
     {
@@ -789,11 +796,25 @@
       "z1": 2.61
     },
     {
-      "name": "Furniture/HospitalElevator/Collision",
-      "x0": 11.79,
-      "x1": 11.97,
-      "z0": 3.575,
-      "z1": 5.625
+      "name": "Furniture/HospitalElevator/CollisionWallBack",
+      "x0": 13.98,
+      "x1": 14.08,
+      "z0": 3.55,
+      "z1": 5.65
+    },
+    {
+      "name": "Furniture/HospitalElevator/CollisionWallLeft",
+      "x0": 11.88,
+      "x1": 14.08,
+      "z0": 3.55,
+      "z1": 3.65
+    },
+    {
+      "name": "Furniture/HospitalElevator/CollisionWallRight",
+      "x0": 11.88,
+      "x1": 14.08,
+      "z0": 5.55,
+      "z1": 5.65
     },
     {
       "name": "Furniture/RestroomStation/Collision",
@@ -922,11 +943,18 @@
       "z1": 9.1
     },
     {
-      "name": "Floor2/Shell/WallEastCol",
+      "name": "Floor2/Shell/WallEastNorthCol",
       "x0": 61.9,
       "x1": 62.1,
-      "z0": -9.05,
-      "z1": 9.05
+      "z0": -9.0,
+      "z1": 3.55
+    },
+    {
+      "name": "Floor2/Shell/WallEastSouthCol",
+      "x0": 61.9,
+      "x1": 62.1,
+      "z0": 5.65,
+      "z1": 9.0
     },
     {
       "name": "Floor2/Shell/WallWestCol",
@@ -1020,11 +1048,25 @@
       "z1": 9.0
     },
     {
-      "name": "Floor2/Floor2Elevator/Collision",
-      "x0": 61.79,
-      "x1": 61.97,
-      "z0": 3.575,
-      "z1": 5.625
+      "name": "Floor2/Floor2Elevator/CollisionWallBack",
+      "x0": 63.98,
+      "x1": 64.08,
+      "z0": 3.55,
+      "z1": 5.65
+    },
+    {
+      "name": "Floor2/Floor2Elevator/CollisionWallLeft",
+      "x0": 61.88,
+      "x1": 64.08,
+      "z0": 3.55,
+      "z1": 3.65
+    },
+    {
+      "name": "Floor2/Floor2Elevator/CollisionWallRight",
+      "x0": 61.88,
+      "x1": 64.08,
+      "z0": 5.55,
+      "z1": 5.65
     },
     {
       "name": "Floor2/Furniture/R201_Bed/Collision",
@@ -1125,11 +1167,18 @@
       "z1": 9.1
     },
     {
-      "name": "Floor3/Shell/WallEastCol",
+      "name": "Floor3/Shell/WallEastNorthCol",
       "x0": 111.9,
       "x1": 112.1,
-      "z0": -9.05,
-      "z1": 9.05
+      "z0": -9.0,
+      "z1": 3.55
+    },
+    {
+      "name": "Floor3/Shell/WallEastSouthCol",
+      "x0": 111.9,
+      "x1": 112.1,
+      "z0": 5.65,
+      "z1": 9.0
     },
     {
       "name": "Floor3/Shell/WallWestCol",
@@ -1223,11 +1272,25 @@
       "z1": 9.0
     },
     {
-      "name": "Floor3/Floor3Elevator/Collision",
-      "x0": 111.79,
-      "x1": 111.97,
-      "z0": 3.575,
-      "z1": 5.625
+      "name": "Floor3/Floor3Elevator/CollisionWallBack",
+      "x0": 113.98,
+      "x1": 114.08,
+      "z0": 3.55,
+      "z1": 5.65
+    },
+    {
+      "name": "Floor3/Floor3Elevator/CollisionWallLeft",
+      "x0": 111.88,
+      "x1": 114.08,
+      "z0": 3.55,
+      "z1": 3.65
+    },
+    {
+      "name": "Floor3/Floor3Elevator/CollisionWallRight",
+      "x0": 111.88,
+      "x1": 114.08,
+      "z0": 5.55,
+      "z1": 5.65
     },
     {
       "name": "Floor3/Furniture/R301_Bed/Collision",

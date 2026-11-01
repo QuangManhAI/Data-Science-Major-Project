@@ -63,11 +63,15 @@ from src.training.hospital_env import (
 )
 
 # Visual-specific reward shaping constants
-REWARD_VISUAL_SPOTTED = 2.0         # One-time bonus when patient first enters camera FOV
-REWARD_CELL_EXPLORATION = 0.05      # Curiosity reward per newly visited 1m x 1m grid cell
+PENALTY_FREE_SEARCH_TIME = -0.04    # Penalty per step (-0.20/s) when free/idle in SEARCH_PATIENT without patient engagement
+REWARD_VISUAL_SPOTTED = 5.0         # One-time bonus when patient first enters camera FOV (was 2.0)
+REWARD_CELL_EXPLORATION = 0.10      # Curiosity reward per newly visited 1m x 1m grid cell (was 0.05)
 WEIGHT_CENTERING_PENALTY = 0.3      # -0.3 * |cx| to align robot's camera heading to patient
 WEIGHT_APPROACH_EXPANSION = 1.5     # +1.5 * delta_h to reward driving towards patient
-TARGET_BOX_H = 0.85                 # Config.H_TARGET: corresponds to distance <= 1.35m
+TARGET_BOX_H = 0.50                 # Aligned with Godot (h >= 0.45 or dist <= 1.85m)
+PATIENT_TALK_DIST_M_VIS = 1.85      # Matches Godot Main.PATIENT_ENGAGE_DIST_M (1.85m)
+REWARD_PATIENT_ENGAGED_VIS = 50.0   # Emphasized reward for patient dialogue engagement (was 25.0)
+REWARD_GUIDE_ARRIVED_VIS = 80.0     # Emphasized reward for clinic room arrival (was 60.0)
 
 # Public corridor patrol waypoints per floor (static hospital map coordinates, NO patient GPS)
 PUBLIC_PATROL_WAYPOINTS: dict[int, list[tuple[float, float]]] = {
@@ -110,6 +114,7 @@ class HospitalVisualShiftEnv(HospitalShiftEnv):
         )
         self.domain_randomization = bool(domain_randomization)
         self.visited_cells: set[tuple[int, int, int]] = set()
+        self.patient_spotted_once: bool = False
         self.prev_has_det: float = 0.0
         self.prev_vision_h: float = 0.0
         self.best_vision_h: float = 0.0
@@ -121,12 +126,21 @@ class HospitalVisualShiftEnv(HospitalShiftEnv):
         self.visited_cells.clear()
         cell = (int(math.floor(self.robot_x)), int(math.floor(self.robot_z)), floor_of(self.robot_x))
         self.visited_cells.add(cell)
+        self.patient_spotted_once = False
         self.prev_has_det = 0.0
         self.prev_vision_h = 0.0
         self.best_vision_h = 0.0
         self.patrol_wp_idx = int(self.rng.integers(0, 4))
         self.last_det = {"seen": 0.0, "cx": 0.0, "cy": 0.0, "w": 0.0, "h": 0.0}
         return self._get_obs()
+
+    def _spawn_next_patient(self) -> None:
+        super()._spawn_next_patient()
+        self.patient_spotted_once = False
+        self.prev_has_det = 0.0
+        self.prev_vision_h = 0.0
+        self.best_vision_h = 0.0
+        self.last_det = {"seen": 0.0, "cx": 0.0, "cy": 0.0, "w": 0.0, "h": 0.0}
 
     def _check_los_occluded(self, x1: float, z1: float, x2: float, z2: float) -> bool:
         """Raycast check against hospital walls between camera (x1, z1) and target (x2, z2)."""
@@ -307,25 +321,32 @@ class HospitalVisualShiftEnv(HospitalShiftEnv):
                 r_exploration += REWARD_CELL_EXPLORATION
                 self.steps_since_task = 0  # Active spatial exploration resets stagnation
 
-            # 2. Visual acquisition reward
+            # 2. Visual acquisition reward (anti-reward-hacking protected)
             if det["seen"] > 0.5:
-                if self.prev_has_det < 0.5:
-                    r_visual += REWARD_VISUAL_SPOTTED  # First spotting bonus!
+                if not self.patient_spotted_once:
+                    self.patient_spotted_once = True
+                    r_visual += REWARD_VISUAL_SPOTTED  # First spotting bonus exactly ONCE per patient!
                     self.steps_since_task = 0          # Visual target acquired!
+
                 # Centering reward (align camera heading to person)
                 r_visual -= WEIGHT_CENTERING_PENALTY * abs(det["cx"])
-                # Approach sizing reward (getting closer enlarges bounding box)
-                r_visual += WEIGHT_APPROACH_EXPANSION * max(0.0, det["h"] - self.prev_vision_h)
-                if det["h"] > self.best_vision_h + 0.04:
-                    self.best_vision_h = det["h"]
-                    self.steps_since_task = 0          # Closing distance to visual target!
+
+                # Approach sizing reward: ONLY rewarded when approaching closer than best seen so far!
+                if det["h"] > self.best_vision_h:
+                    delta_approach = det["h"] - self.best_vision_h
+                    r_visual += WEIGHT_APPROACH_EXPANSION * delta_approach
+                    if det["h"] > self.best_vision_h + 0.04:
+                        self.best_vision_h = det["h"]
+                        self.steps_since_task = 0      # True physical approach resets stagnation!
+                    else:
+                        self.best_vision_h = det["h"]
 
             self.prev_has_det = det["seen"]
             self.prev_vision_h = det["h"]
 
-            # 3. Check dialogue engagement: bounding box height >= 0.85 or physical dist <= 1.35m
+            # 3. Check dialogue engagement: bounding box height >= 0.50 or physical dist <= 1.85m
             dist_to_pat = math.hypot(self.patient_x - self.robot_x, self.patient_z - self.robot_z)
-            if (det["seen"] > 0.5 and det["h"] >= TARGET_BOX_H) or (dist_to_pat <= PATIENT_TALK_DIST_M and det["seen"] > 0.5):
+            if (det["seen"] > 0.5 and det["h"] >= TARGET_BOX_H) or (dist_to_pat <= PATIENT_TALK_DIST_M_VIS and det["seen"] > 0.5):
                 resolved = resolve_destination_key(
                     self.scenario_action, self.scenario_slot, self.scenario_floor,
                     current_floor=floor_of(self.patient_x),
@@ -383,9 +404,9 @@ class HospitalVisualShiftEnv(HospitalShiftEnv):
         elif event == "elevator_transit":
             r_team = REWARD_ELEVATOR_TRANSIT
         elif event == "guide_completed":
-            r_team = REWARD_GUIDE_ARRIVED
+            r_team = REWARD_GUIDE_ARRIVED_VIS
         elif event == "engaged":
-            r_team = REWARD_PATIENT_ENGAGED
+            r_team = REWARD_PATIENT_ENGAGED_VIS
 
         # Landmark path progress shaping (only during escort or staff calling)
         r_progress = 0.0
@@ -408,8 +429,10 @@ class HospitalVisualShiftEnv(HospitalShiftEnv):
             elif 0.9 <= d_tether <= 2.2:
                 r_tether = BONUS_TETHER_GOOD
 
-        # Safety & step penalty
+        # Safety, step & idle search penalty
         r_safety = PENALTY_STEP_TIME
+        if self.task_phase == TaskPhase.SEARCH_PATIENT:
+            r_safety += PENALTY_FREE_SEARCH_TIME  # Strong penalty while free/idle without active patient task
         collided = hit_wall or (min_lidar_m < COLLISION_LIDAR_M)
         if collided:
             r_safety += PENALTY_COLLISION
@@ -468,10 +491,11 @@ class HospitalVisualShiftEnv(HospitalShiftEnv):
         if self.task_phase == TaskPhase.APPROACH_PATIENT:
             det = self.last_det
             if det["seen"] > 0.5:
-                # Steer towards bounding box center cx
-                turn_cmd = float(np.clip(-2.2 * det["cx"] + repel, -OMEGA_MAX, OMEGA_MAX))
+                # When looking directly at patient (|cx| < 0.25), suppress frontal repel so robot doesn't turn away
+                eff_repel = 0.0 if abs(det["cx"]) < 0.25 else repel
+                turn_cmd = float(np.clip(-2.2 * det["cx"] + eff_repel, -OMEGA_MAX, OMEGA_MAX))
                 v_target = V_MAX * speed_factor * max(0.25, 1.0 - abs(det["cx"]))
-                if det["h"] > 0.7:
+                if det["h"] > 0.45:
                     v_target *= 0.4
                 a_v = float(np.clip(2.0 * (v_target / V_MAX) - 1.0, -1.0, 1.0))
                 a_omega = float(np.clip(turn_cmd / OMEGA_MAX, -1.0, 1.0))

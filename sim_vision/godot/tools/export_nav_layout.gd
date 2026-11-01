@@ -24,6 +24,9 @@ func _init() -> void:
 		var door := _find_ancestor_of(cs, ["SlidingDoor"]) as SlidingDoor
 		if door != null and door.robot_can_open:
 			continue
+		var elev := _find_ancestor_of(cs, ["ElevatorStation"]) as ElevatorStation
+		if elev != null and cs.name == "Collision":
+			continue
 		var h: Vector3 = box.size / 2.0
 		var lo := Vector3(INF, INF, INF)
 		var hi := Vector3(-INF, -INF, -INF)

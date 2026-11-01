@@ -93,7 +93,7 @@ DESTINATION_POSITIONS: dict[str, tuple[float, float]] = {
     "cap_cuu": (-8.0, -5.2),
     "xet_nghiem": (0.0, -5.2),
     "nha_ve_sinh": (9.5, 6.5),
-    "thang_may": (9.0, 5.2),
+    "thang_may": (12.8, 4.6),
     "staff": (-1.8, 3.8),
     # Floor 2 Anchors (offset X = +50.0m)
     "201": (42.0, -5.2),
@@ -103,7 +103,7 @@ DESTINATION_POSITIONS: dict[str, tuple[float, float]] = {
     "220": (41.0, 5.2),
     "sanh_t2": (50.0, 5.2),
     "wc_t2": (59.5, 6.5),
-    "thang_may_t2": (59.0, 4.6),
+    "thang_may_t2": (62.8, 4.6),
     # Floor 3 Anchors (offset X = +100.0m)
     "301": (92.0, -5.2),
     "dept_tim_mach": (92.0, -5.2),
@@ -113,7 +113,7 @@ DESTINATION_POSITIONS: dict[str, tuple[float, float]] = {
     "dept_co_xuong_khop": (91.0, 5.2),
     "sanh_t3": (100.0, 5.2),
     "wc_t3": (109.5, 6.5),
-    "thang_may_t3": (109.0, 4.6),
+    "thang_may_t3": (112.8, 4.6),
 }
 
 FLOOR3_DIRECT_SLOTS = {

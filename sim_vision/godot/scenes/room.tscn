@@ -132,16 +132,34 @@ size = Vector3(24, 1.05, 0.23)
 [sub_resource type="BoxShape3D" id="shape_WallSouth"]
 size = Vector3(24.4, 3.2, 0.2)
 
-[sub_resource type="BoxMesh" id="mesh_WallEast"]
+[sub_resource type="BoxMesh" id="mesh_WallEastNorth"]
 material = SubResource("mat_wall")
-size = Vector3(0.2, 3.2, 18)
+size = Vector3(0.2, 3.2, 12.55)
 
-[sub_resource type="BoxMesh" id="mesh_DadoNS_Full"]
+[sub_resource type="BoxMesh" id="mesh_DadoEastNorth"]
 material = SubResource("mat_wall_dado")
-size = Vector3(0.23, 1.05, 18)
+size = Vector3(0.23, 1.05, 12.55)
 
-[sub_resource type="BoxShape3D" id="shape_WallEast"]
-size = Vector3(0.2, 3.2, 18)
+[sub_resource type="BoxShape3D" id="shape_WallEastNorth"]
+size = Vector3(0.2, 3.2, 12.55)
+
+[sub_resource type="BoxMesh" id="mesh_WallEastSouth"]
+material = SubResource("mat_wall")
+size = Vector3(0.2, 3.2, 3.35)
+
+[sub_resource type="BoxMesh" id="mesh_DadoEastSouth"]
+material = SubResource("mat_wall_dado")
+size = Vector3(0.23, 1.05, 3.35)
+
+[sub_resource type="BoxShape3D" id="shape_WallEastSouth"]
+size = Vector3(0.2, 3.2, 3.35)
+
+[sub_resource type="BoxMesh" id="mesh_WallEastLintel"]
+material = SubResource("mat_wall")
+size = Vector3(0.2, 0.85, 2.1)
+
+[sub_resource type="BoxShape3D" id="shape_WallEastLintel"]
+size = Vector3(0.2, 0.85, 2.1)
 
 [sub_resource type="BoxMesh" id="mesh_WallNorthSide"]
 material = SubResource("mat_wall")
@@ -331,17 +349,37 @@ mesh = SubResource("mesh_DadoEW_Full")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.6, 9.1)
 shape = SubResource("shape_WallSouth")
 
-[node name="WallEast" type="MeshInstance3D" parent="Shell" unique_id=593890661]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 12.1, 1.6, 0)
-mesh = SubResource("mesh_WallEast")
+[node name="WallEastNorth" type="MeshInstance3D" parent="Shell" unique_id=593890661]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 12.1, 1.6, -2.725)
+mesh = SubResource("mesh_WallEastNorth")
 
-[node name="WallEastDado" type="MeshInstance3D" parent="Shell" unique_id=1976494461]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 12.1, 0.525, 0)
-mesh = SubResource("mesh_DadoNS_Full")
+[node name="WallEastNorthDado" type="MeshInstance3D" parent="Shell" unique_id=1976494461]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 12.1, 0.525, -2.725)
+mesh = SubResource("mesh_DadoEastNorth")
 
-[node name="WallEastCollision" type="CollisionShape3D" parent="Shell" unique_id=139829190]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 12.1, 1.6, 0)
-shape = SubResource("shape_WallEast")
+[node name="WallEastNorthCollision" type="CollisionShape3D" parent="Shell" unique_id=139829190]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 12.1, 1.6, -2.725)
+shape = SubResource("shape_WallEastNorth")
+
+[node name="WallEastSouth" type="MeshInstance3D" parent="Shell" unique_id=593890662]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 12.1, 1.6, 7.325)
+mesh = SubResource("mesh_WallEastSouth")
+
+[node name="WallEastSouthDado" type="MeshInstance3D" parent="Shell" unique_id=1976494462]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 12.1, 0.525, 7.325)
+mesh = SubResource("mesh_DadoEastSouth")
+
+[node name="WallEastSouthCollision" type="CollisionShape3D" parent="Shell" unique_id=139829191]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 12.1, 1.6, 7.325)
+shape = SubResource("shape_WallEastSouth")
+
+[node name="WallEastLintel" type="MeshInstance3D" parent="Shell" unique_id=593890663]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 12.1, 2.775, 4.6)
+mesh = SubResource("mesh_WallEastLintel")
+
+[node name="WallEastLintelCollision" type="CollisionShape3D" parent="Shell" unique_id=139829192]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 12.1, 2.775, 4.6)
+shape = SubResource("shape_WallEastLintel")
 
 [node name="WallWestNorth" type="MeshInstance3D" parent="Shell" unique_id=1738621414]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -12.1, 1.6, -4.99)
@@ -1144,7 +1182,7 @@ transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 10.45, 0, -5.45)
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 11.3, 0, -5.55)
 
 [node name="MedicalStaffNurse" parent="Furniture" unique_id=1678832915 instance=ExtResource("56")]
-transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, -1.9, 0, 7.45)
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, -0.9, 0, 8.4)
 
 [node name="MedicalStaffDoctor" parent="Furniture" unique_id=2069227560 instance=ExtResource("57")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.2, 0, -1.35)
@@ -1156,7 +1194,7 @@ sit_duration_range = Vector2(12, 25)
 
 [node name="Patient_02" parent="Furniture" unique_id=360997957 instance=ExtResource("59")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.55, 0, 5.8)
-waypoints = Array[Vector3]([Vector3(-3.55, 0, 5.8), Vector3(-3.55, 0, 7), Vector3(-1.2, 0, 7), Vector3(-1.2, 0, 5.8), Vector3(-3.55, 0, 5.8)])
+waypoints = Array[Vector3]([Vector3(-3.55, 0, 5.8), Vector3(-3.55, 0, 6.6), Vector3(-1.4, 0, 6.6), Vector3(-1.4, 0, 5.8), Vector3(-3.55, 0, 5.8)])
 sit_duration_range = Vector2(16, 30)
 
 [node name="Patient_03" parent="Furniture" unique_id=1998185310 instance=ExtResource("60")]

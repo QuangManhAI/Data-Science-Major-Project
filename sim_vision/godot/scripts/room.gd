@@ -77,9 +77,9 @@ const ROOMS: Dictionary = {
 	},
 	"thang_may": {
 		"name": "Thang máy & Nhà vệ sinh",
-		"rect": Rect2(Vector2(6.0, 2.0), Vector2(6.0, 7.0)),
-		"door": Vector3(9.0, 0.0, 2.0),
-		"waypoint": Vector3(9.0, 0.0, 5.2),
+		"rect": Rect2(Vector2(6.0, 2.0), Vector2(8.2, 7.0)),
+		"door": Vector3(11.88, 0.0, 4.6),
+		"waypoint": Vector3(12.8, 0.0, 4.6),
 	},
 	"nha_ve_sinh": {
 		"name": "Nhà vệ sinh",
@@ -138,9 +138,9 @@ const ROOMS: Dictionary = {
 	},
 	"thang_may_t2": {
 		"name": "Thang máy tầng 2",
-		"rect": Rect2(Vector2(56.0, 2.0), Vector2(6.0, 7.0)),
-		"door": Vector3(59.0, 0.0, 2.0),
-		"waypoint": Vector3(59.0, 0.0, 4.6),
+		"rect": Rect2(Vector2(56.0, 2.0), Vector2(8.2, 7.0)),
+		"door": Vector3(61.88, 0.0, 4.6),
+		"waypoint": Vector3(62.8, 0.0, 4.6),
 	},
 	"hanh_lang_t2": {
 		"name": "Hành lang tầng 2",
@@ -185,6 +185,18 @@ const ROOMS: Dictionary = {
 		"door": Vector3(91.0, 0.0, 2.0),
 		"waypoint": Vector3(91.0, 0.0, 5.2),
 	},
+	"dept_san": {
+		"name": "Khoa sản",
+		"rect": Rect2(Vector2(88.0, 2.0), Vector2(6.0, 7.0)),
+		"door": Vector3(91.0, 0.0, 2.0),
+		"waypoint": Vector3(91.0, 0.0, 5.2),
+	},
+	"dept_nhi": {
+		"name": "Khoa nhi",
+		"rect": Rect2(Vector2(96.0, -9.0), Vector2(8.0, 7.0)),
+		"door": Vector3(100.0, 0.0, -2.0),
+		"waypoint": Vector3(100.0, 0.0, -5.2),
+	},
 	"sanh_t3": {
 		"name": "Sảnh chờ tầng 3",
 		"rect": Rect2(Vector2(94.0, 2.0), Vector2(12.0, 7.0)),
@@ -199,9 +211,9 @@ const ROOMS: Dictionary = {
 	},
 	"thang_may_t3": {
 		"name": "Thang máy tầng 3",
-		"rect": Rect2(Vector2(106.0, 2.0), Vector2(6.0, 7.0)),
-		"door": Vector3(109.0, 0.0, 2.0),
-		"waypoint": Vector3(109.0, 0.0, 4.6),
+		"rect": Rect2(Vector2(106.0, 2.0), Vector2(8.2, 7.0)),
+		"door": Vector3(111.88, 0.0, 4.6),
+		"waypoint": Vector3(112.8, 0.0, 4.6),
 	},
 	"hanh_lang_t3": {
 		"name": "Hành lang tầng 3",
@@ -263,7 +275,7 @@ static func get_floor(pos: Vector3) -> int:
 ## Xác định tầng của một mã phòng
 static func get_room_floor(room_key: String) -> int:
 	var k: String = room_key.strip_edges().to_lower()
-	if k in ["301", "302", "303", "315", "sanh_t3", "wc_t3", "thang_may_t3", "hanh_lang_t3", "dept_tim_mach", "dept_co_xuong_khop"]:
+	if k in ["301", "302", "303", "315", "sanh_t3", "wc_t3", "thang_may_t3", "hanh_lang_t3", "dept_tim_mach", "dept_co_xuong_khop", "dept_san", "dept_nhi"]:
 		return 3
 	elif k in ["201", "204", "205", "210", "220", "sanh_t2", "wc_t2", "thang_may_t2", "hanh_lang_t2", "dept_tieu_hoa", "dept_tai_mui_hong"]:
 		return 2

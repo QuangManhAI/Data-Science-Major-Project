@@ -5,6 +5,7 @@ extends Node
 ## Main quay về controller cũ khi chưa kết nối.
 
 signal action_received(v: float, omega: float, phase: int)
+signal sectors_received(sectors: Array)
 signal connection_changed(connected: bool)
 
 const URL: String = "ws://127.0.0.1:8768"
@@ -46,7 +47,7 @@ func _set_connected(value: bool) -> void:
 
 ## Gửi một bước quan sát; bỏ qua nếu bước trước chưa có trả lời (không dồn hàng đợi).
 func send_state(robot_pos: Vector3, robot_yaw: float, v: float, omega: float, lidar: PackedFloat32Array,
-		patient_pos: Vector3, phase: int, goal_pos: Vector3, task_id: int, yolo: Array = []) -> void:
+		patient_pos: Vector3, phase: int, goal_pos: Vector3, task_id: int, yolo: Array = [], dets: Array = []) -> void:
 	if not _connected or _waiting:
 		return
 	var msg: Dictionary = {
@@ -58,6 +59,8 @@ func send_state(robot_pos: Vector3, robot_yaw: float, v: float, omega: float, li
 	}
 	if not yolo.is_empty():
 		msg["yolo"] = yolo
+	if not dets.is_empty():
+		msg["dets"] = dets
 	if _ws.send_text(JSON.stringify(msg)) == OK:
 		_waiting = true
 		_next_id += 1
@@ -69,4 +72,6 @@ func _handle_message(text: String) -> void:
 	if not (data is Dictionary) or str(data.get("type", "")) != "rl_action":
 		push_warning("RLPolicyClient: bad reply %s" % text.left(200))
 		return
+	if data.has("sectors") and data["sectors"] is Array:
+		sectors_received.emit(data["sectors"])
 	action_received.emit(float(data["v"]), float(data["omega"]), int(data.get("phase", 0)))

@@ -897,6 +897,29 @@ av_remaining frozen after dialogue engagement.
 - **Touches:** `src/training/train_visual_rl_in_the_wild.py`, `scripts/plot_training_metrics.py`, `docs/AI-Human-logs/Vuong.md`
 - **Evidence:** Completed 2,000-episode GPU training run (Ep 4401 -> Ep 6400) under `experiments/runs/20261031_214132_PPOHospital-Wild-3floor`; total 6,270 patients helped (cumulative 12,688 patients across both GPU runs); peak episode reward reached **+934.8**; held-out 10-shift diagnostic benchmark achieved: **$R_{team} = +551.02 \pm 104.44$**, **3.30 ± 0.78 patients helped/shift (33 total)**, **100.0% visual spotting rate**, **8.08s mean search latency**, **0.0% stagnation rate**, **0.10 collisions/shift**, with balanced multi-floor escorting (F1: 14, F2: 11, F3: 8); best checkpoint saved at `experiments/runs/20261031_214132_PPOHospital-Wild-3floor/checkpoints/PPOHospital-Wild-3floor_best.pt`.
 
+### D-054 — Transition to Pure Vision (YOLOv6 Only, No LiDAR), 29-Dim Observation Architecture, and Sector HUD
+- **Status:** accepted
+- **When:** 2026-11-01T08:10:00+07:00
+- **Decided by:** human-aligned via /grill-me
+- **Trigger:** Transition from hybrid LiDAR + Vision to pure camera vision using the new fine-tuned 17-class model `yolo26n_hospital_robot_best_map92.6` (92.6% mAP). Eliminate physical LiDAR sensors completely.
+- **Architectural Decisions:**
+  1. **New Branch:** Dedicated branch `feat/pure-vision-yolo-no-lidar` isolated from LiDAR dependencies.
+  2. **YOLO Model Upgrade:** Integrated production model `models/yolo26n_hospital_robot_v6_best/yolo26n_hospital_robot_best_map92.6.pt` detecting 17 hospital classes: `patient` (0), `doctor` (1), and 15 hospital obstacles/furniture classes (2..16).
+  3. **29-Dimensional Pure-Vision Observation Space:** Stripped 17 LiDAR rays. Replaced with:
+     - 5-Sector Visual Depth Map: Far-Left, Left, Center, Right, Far-Right obstacle heights $h \in [0, 1]$ (5 dims).
+     - Dedicated Patient Channel: `[seen, cx_off, h, w]` (4 dims).
+     - Dedicated Doctor Channel: `[seen, cx_off, h, w]` (4 dims).
+     - Phase (4), Nav Goal (3), Kinematics (2), Tether (3), Door Clearance (4) $\to$ Total: 29 dims.
+  4. **Doctor Evasion & Visual Collision Rewards:**
+     - Strict doctor avoidance: $-5.0$ penalty for false engagement with medical personnel; robot only targets patients.
+     - Visual obstacle proximity repulsion: $-0.50 \times h_{\text{obs}}$ when sector obstacle height $h > 0.50$.
+     - Physical collision penalty: $-5.0$.
+  5. **Top-Right POV Sector Overlay HUD:** Tab-key toggled HUD in Godot robot camera view displaying real-time 5-sector visual clearance bars (green/yellow/red) and target tracking bounding boxes.
+  6. **2,000-Episode Training:** Fresh 29-dim PPO agent trained on NVIDIA RTX 4060 GPU with decaying teacher behavioral cloning warmup (first 200 episodes).
+- **Why:** Realizes an authentic low-cost autonomous hospital robot that navigates and escorts solely with monocular RGB camera perception without expensive physical LiDAR scanners.
+- **Touches:** `models/yolo26n_hospital_robot_v6_best/`, `sim_vision/python/detector.py`, `sim_vision/python/yolo_server.py`, `sim_vision/python/rl_policy_server.py`, `src/models/ppo_agent.py`, `src/training/hospital_env_vision.py`, `src/training/train_pure_vision_rl.py`, `sim_vision/godot/scripts/main.gd`, `sim_vision/godot/scenes/room.tscn`, `docs/AI-Human-logs/Vuong.md`
+
+
 
 
 

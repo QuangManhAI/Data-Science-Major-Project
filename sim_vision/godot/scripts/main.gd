@@ -98,6 +98,7 @@ func _ready() -> void:
 		_policy.name = "RLPolicyClient"
 		add_child(_policy)
 		_policy.action_received.connect(_on_policy_action)
+		_policy.sectors_received.connect(_on_policy_sectors)
 		if dialogue != null:
 			dialogue.turn_completed.connect(_on_dialogue_turn_completed)
 	else:
@@ -489,8 +490,14 @@ func _step_policy(delta: float) -> void:
 		RLEnvBridgeScript.TaskPhase.SEARCH_PATIENT if search else _rl_bridge.task_phase,
 		pat_pos if search else _leg_target(_rl_bridge.goal_position),
 		_rl_bridge.patients_helped,
-		yolo_feat
+		yolo_feat,
+		_latest_yolo_dets
 	)
+
+
+func _on_policy_sectors(sectors: Array) -> void:
+	if overlay != null:
+		overlay.set_visual_sectors(sectors)
 
 
 func _on_policy_action(v: float, omega: float, phase: int) -> void:

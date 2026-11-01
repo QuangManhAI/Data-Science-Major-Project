@@ -95,21 +95,25 @@ def compute_5_sector_depth(
         hits = cast_rays(robot_x, robot_z, ux, uz, 8.0, walls)
         # Wall distance converts to optical height proxy: h = 1.20 / d_wall
         for i in range(5):
-            d_w = float(hits[i])
-            h_wall = float(np.clip(1.20 / max(d_w, 0.5), 0.0, 1.0))
+            val = float(hits[i])
+            if not math.isfinite(val):
+                val = 8.0
+            d_w = max(0.2, min(val, 25.0))
+            h_wall = float(np.clip(1.20 / d_w, 0.0, 1.0))
             sectors[i] = h_wall
 
     # 2. Obstacle Bounding Boxes (if provided, e.g. from YOLO detections)
     if obstacle_boxes:
         for b in obstacle_boxes:
-            cx = float(b.get("cx", (float(b.get("x1", 0.0)) + float(b.get("x2", 0.0))) / 2.0 - 0.5))
-            h = float(b.get("h", float(b.get("y2", 0.0)) - float(b.get("y1", 0.0))))
+            cx_val = b.get("cx", (float(b.get("x1", 0.0)) + float(b.get("x2", 0.0))) / 2.0 - 0.5)
+            h_val = b.get("h", float(b.get("y2", 0.0)) - float(b.get("y1", 0.0)))
+            cx = float(cx_val) if math.isfinite(cx_val) else 0.0
+            h = float(h_val) if math.isfinite(h_val) else 0.0
             # Map cx in [-0.5, 0.5] to sector index 0..4
-            # Far-Left: [-0.5, -0.3], Left: [-0.3, -0.1], Center: [-0.1, 0.1], Right: [0.1, 0.3], Far-Right: [0.3, 0.5]
             sec_idx = int(np.clip(math.floor((cx + 0.5) * 5.0), 0, 4))
-            sectors[sec_idx] = max(sectors[sec_idx], h)
+            sectors[sec_idx] = max(sectors[sec_idx], float(np.clip(h, 0.0, 1.0)))
 
-    return np.clip(sectors, 0.0, 1.0)
+    return np.nan_to_num(np.clip(sectors, 0.0, 1.0), nan=0.0)
 
 
 def get_nearest_door(robot_x: float, robot_z: float) -> tuple[float, float, float]:
@@ -291,7 +295,7 @@ class HospitalPureVisionEnv(HospitalVisualShiftEnv):
         obs[27] = math.cos(angle_door)
         obs[28] = 1.0 if d_door < 2.0 else 0.0
 
-        return obs
+        return np.nan_to_num(obs, nan=0.0, posinf=1.0, neginf=-1.0).astype(np.float32)
 
     def step(self, action: np.ndarray) -> tuple[np.ndarray, float, bool, dict[str, Any]]:
         # Free search step penalty
@@ -315,6 +319,13 @@ class HospitalPureVisionEnv(HospitalVisualShiftEnv):
         doc_h = obs[11]
         if doc_seen > 0.5 and doc_h > 0.35:
             reward += PENALTY_DOCTOR_PROXIMITY * (doc_h / 0.50)
+
+        if not math.isfinite(reward):
+            reward = 0.0
+        reward = float(np.clip(reward, -50.0, 100.0))
+
+        if not math.isfinite(self.cumulative_team_reward):
+            self.cumulative_team_reward = 0.0
 
         info["cumulative_team_reward"] = self.cumulative_team_reward
         info["visual_sectors"] = obs_sectors.tolist()

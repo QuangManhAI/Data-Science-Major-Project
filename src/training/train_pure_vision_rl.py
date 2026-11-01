@@ -308,12 +308,13 @@ def run_train_pure_vision(
             if info.get("has_det", 0.0) > 0.5:
                 ever_spotted = True
 
-            ep_obs.append(obs)
+            ep_obs.append(np.nan_to_num(obs, nan=0.0).astype(np.float32))
             ep_act.append(executed_act)
             ep_teacher.append(teacher_act)
             ep_logp.append(float(logp.item()))
-            ep_rew.append(float(reward))
-            ep_val.append(float(value.item()))
+            ep_rew.append(float(np.nan_to_num(reward, nan=0.0)))
+            val_num = float(np.nan_to_num(value.item(), nan=0.0))
+            ep_val.append(val_num)
             obs = next_obs
 
         # Exact GAE for completed episode
@@ -326,7 +327,8 @@ def run_train_pure_vision(
             delta = ep_rew[t] + gamma * nextval * nextnonterminal - ep_val[t]
             lastgaelam = delta + gamma * gae_lambda * nextnonterminal * lastgaelam
             ep_adv[t] = lastgaelam
-        ep_ret = ep_adv + np.asarray(ep_val, dtype=np.float32)
+        ep_adv = np.nan_to_num(ep_adv, nan=0.0)
+        ep_ret = np.nan_to_num(ep_adv + np.asarray(ep_val, dtype=np.float32), nan=0.0)
 
         batch_obs.extend(ep_obs)
         batch_act.extend(ep_act)
@@ -394,14 +396,25 @@ def run_train_pure_vision(
             flat_adv = np.concatenate(batch_adv, axis=0)
             flat_ret = np.concatenate(batch_ret, axis=0)
 
-            flat_adv = (flat_adv - flat_adv.mean()) / (flat_adv.std() + 1e-8)
+            flat_adv = np.nan_to_num(flat_adv, nan=0.0, posinf=0.0, neginf=0.0)
+            flat_ret = np.nan_to_num(flat_ret, nan=0.0, posinf=0.0, neginf=0.0)
+            adv_std = float(flat_adv.std())
+            if adv_std > 1e-4:
+                flat_adv = (flat_adv - flat_adv.mean()) / (adv_std + 1e-8)
+            else:
+                flat_adv = flat_adv - flat_adv.mean()
+            flat_adv = np.clip(flat_adv, -5.0, 5.0)
+
             b_adv = torch.as_tensor(flat_adv, dtype=torch.float32, device=device)
             b_ret = torch.as_tensor(flat_ret, dtype=torch.float32, device=device)
 
             dataset_size = b_obs.shape[0]
             indices = np.arange(dataset_size)
 
+            update_interrupted = False
             for _ in range(ppo_epochs):
+                if update_interrupted:
+                    break
                 np.random.shuffle(indices)
                 for start_idx in range(0, dataset_size, batch_size):
                     end_idx = min(start_idx + batch_size, dataset_size)
@@ -438,10 +451,24 @@ def run_train_pure_vision(
                         + 0.5 * prior_weight * bc_loss
                     )
 
+                    if not torch.isfinite(total_loss):
+                        log_print(f"[WARN] Non-finite loss at episode {ep}: skipping step.")
+                        optimizer.zero_grad()
+                        continue
+
                     optimizer.zero_grad()
                     total_loss.backward()
                     nn.utils.clip_grad_norm_(agent.parameters(), 0.5)
-                    optimizer.step()
+
+                    params_ok = all(torch.isfinite(p).all() for p in agent.parameters())
+                    if params_ok:
+                        optimizer.step()
+                    else:
+                        log_print(f"[WARN] Non-finite parameter detected at episode {ep}: rolling back.")
+                        agent.load_state_dict(rollout_agent.state_dict())
+                        optimizer.zero_grad()
+                        update_interrupted = True
+                        break
 
             scheduler.step()
             rollout_agent.load_state_dict(agent.state_dict())
@@ -517,6 +544,19 @@ def run_train_pure_vision(
         log_file.close()
     except Exception:
         pass
+
+    # Generate training curves plot and print summary table
+    try:
+        from scripts.plot_training_metrics import load_metrics, plot_metrics, print_summary_table
+        if metrics_file.exists():
+            data = load_metrics(metrics_file)
+            print_summary_table(data)
+            curve_png = run_dir / "training_curves.png"
+            plot_metrics(data, curve_png, title_suffix=f"({run_dir.name})", show=False)
+            print(f"[INFO] Training performance curves successfully saved to: {curve_png}")
+    except Exception as e:
+        print(f"[WARN] Failed to auto-plot training metrics: {e}")
+
     return run_dir
 
 

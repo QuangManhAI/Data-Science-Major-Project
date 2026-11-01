@@ -24,7 +24,7 @@ def find_latest_wild_run(experiments_root: Path = Path("experiments/runs")) -> P
     if not experiments_root.exists():
         return None
     runs = sorted(
-        [d for d in experiments_root.iterdir() if d.is_dir() and "PPOHospital-Wild" in d.name],
+        [d for d in experiments_root.iterdir() if d.is_dir() and "PPOHospital" in d.name],
         key=lambda d: d.stat().st_mtime,
         reverse=True,
     )

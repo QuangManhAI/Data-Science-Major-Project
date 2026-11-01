@@ -36,14 +36,16 @@ const SECTOR_LABELS: Array[String] = ["FL", "L", "C", "R", "FR"]
 
 func _ready() -> void:
 	_boxes.draw.connect(_on_boxes_draw)
-	set_process_unhandled_key_input(true)
 
 
-func _unhandled_key_input(event: InputEvent) -> void:
-	if event is InputEventKey and event.pressed and not event.is_echo():
-		if event.keycode == KEY_TAB:
-			show_sector_hud = not show_sector_hud
-			_boxes.queue_redraw()
+func _unhandled_input(event: InputEvent) -> void:
+	var key := event as InputEventKey
+	if key == null or not key.pressed or key.echo:
+		return
+	if key.keycode == KEY_TAB:
+		show_sector_hud = not show_sector_hud
+		_boxes.queue_redraw()
+		get_viewport().set_input_as_handled()
 
 
 func set_viewport(viewport: SubViewport) -> void:
@@ -155,7 +157,8 @@ func _on_boxes_draw() -> void:
 		_draw_sector_hud(font, size)
 
 	# 3. Trạng thái robot & WebSocket
-	_text(font, Vector2(6, FONT_SIZE + 4), _state, TEXT_COLOR)
+	var state_y: float = (30.0 + FONT_SIZE) if show_sector_hud else (FONT_SIZE + 4)
+	_text(font, Vector2(6, state_y), _state, TEXT_COLOR)
 	_text(font, Vector2(6, size.y - 6), ViewOverlay.connection_text(_connected),
 			TEXT_COLOR if _connected else Color(1, 0.35, 0.3))
 

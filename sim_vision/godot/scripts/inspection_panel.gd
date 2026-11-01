@@ -1,13 +1,19 @@
 class_name InspectionPanel
 extends Control
 ## Bảng điều khiển kiểm tra thông số Robot (Inspection Telemetry) ở góc trên bên trái.
-## Hỗ trợ đóng/mở bằng nút bấm chuột và phím tắt 'I' hoặc 'Tab'.
-## Hiển thị trực quan dữ liệu đầu vào theo 4 Tab: LiDAR, YOLO Vision, RL Navigation, Voice & NLU.
+## Hỗ trợ đóng/mở bằng nút bấm chuột và phím tắt 'I'.
+## Hiển thị trực quan dữ liệu đầu vào theo các Tab: Thị giác (5 Sectors / LiDAR), YOLO Vision, RL Navigation, Voice & NLU.
 
 var is_open: bool = false
+var is_pure_vision: bool = false
 
+var _tab_container: TabContainer
+var _lidar_scroll: ScrollContainer
+var _sector_scroll: ScrollContainer
 var _lidar_bars: Array[ProgressBar] = []
 var _lidar_vals: Array[Label] = []
+var _sector_bars: Array[ProgressBar] = []
+var _sector_vals: Array[Label] = []
 
 # YOLO elements
 var _vis_det_bar: ProgressBar
@@ -56,7 +62,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	var key := event as InputEventKey
 	if key == null or not key.pressed or key.echo:
 		return
-	if key.keycode == KEY_I or key.keycode == KEY_TAB:
+	if key.keycode == KEY_I:
 		toggle()
 		get_viewport().set_input_as_handled()
 
@@ -70,21 +76,23 @@ func set_open(open: bool) -> void:
 	if _content != null:
 		_content.visible = is_open
 	if _toggle_btn != null:
-		_toggle_btn.text = "[▲] Thu gọn thông số (I/Tab)" if is_open else "[▼] Thông số Robot (I/Tab)"
+		_toggle_btn.text = "[▲] Thu gọn thông số (I)" if is_open else "[▼] Thông số Robot (I)"
 
 
 func _build_ui_tabs() -> void:
 	var tab_container := $ContentPanel/Tabs as TabContainer
 	if tab_container == null:
 		return
+	_tab_container = tab_container
 
-	# --- Tab 1: LiDAR ---
+	# --- Tab 1: LiDAR (Legacy / Hybrid) ---
 	var lidar_scroll := ScrollContainer.new()
 	lidar_scroll.name = "LiDAR (17 tia)"
 	var lidar_vbox := VBoxContainer.new()
 	lidar_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	lidar_scroll.add_child(lidar_vbox)
 	tab_container.add_child(lidar_scroll)
+	_lidar_scroll = lidar_scroll
 
 	_lidar_bars.clear()
 	_lidar_vals.clear()
@@ -115,6 +123,51 @@ func _build_ui_tabs() -> void:
 		_lidar_vals.append(lbl_val)
 
 		lidar_vbox.add_child(row)
+
+	# --- Tab 2: 5-Sector Visual Depth (Pure Vision) ---
+	var sector_scroll := ScrollContainer.new()
+	sector_scroll.name = "Thị giác 5 Phân vùng"
+	var sector_vbox := VBoxContainer.new()
+	sector_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	sector_scroll.add_child(sector_vbox)
+	tab_container.add_child(sector_scroll)
+	_sector_scroll = sector_scroll
+
+	var sector_names: Array[String] = [
+		"FL: Cực trái (-32°)",
+		"L : Trái     (-16°)",
+		"C : Chính diện (0°)",
+		"R : Phải     (+16°)",
+		"FR: Cực phải (+32°)"
+	]
+	_sector_bars.clear()
+	_sector_vals.clear()
+	for i: int in 5:
+		var srow := HBoxContainer.new()
+		var slbl := Label.new()
+		slbl.text = sector_names[i]
+		slbl.custom_minimum_size = Vector2(120, 0)
+		srow.add_child(slbl)
+
+		var sbar := ProgressBar.new()
+		sbar.min_value = 0.0
+		sbar.max_value = 1.0
+		sbar.step = 0.01
+		sbar.value = 0.0
+		sbar.show_percentage = false
+		sbar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		sbar.custom_minimum_size = Vector2(130, 16)
+		srow.add_child(sbar)
+		_sector_bars.append(sbar)
+
+		var sval := Label.new()
+		sval.text = "h=0.00"
+		sval.custom_minimum_size = Vector2(55, 0)
+		sval.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		srow.add_child(sval)
+		_sector_vals.append(sval)
+
+		sector_vbox.add_child(srow)
 
 	# --- Tab 2: YOLO Vision ---
 	var yolo_vbox := VBoxContainer.new()
@@ -246,9 +299,17 @@ func _create_stat_row(label_text: String, min_v: float, max_v: float, init_v: fl
 	return {"row": row, "bar": bar, "val": vlbl}
 
 
+func set_pure_vision_mode(pure_vision: bool) -> void:
+	is_pure_vision = pure_vision
+	if _tab_container != null:
+		_tab_container.set_tab_hidden(0, pure_vision)
+		_tab_container.set_tab_hidden(1, not pure_vision)
+		_tab_container.current_tab = 1 if pure_vision else 0
+
+
 ## Cập nhật toàn bộ 17 tia LiDAR
 func update_lidar(readings: PackedFloat32Array) -> void:
-	if not is_open:
+	if not is_open or is_pure_vision:
 		return
 	for i: int in mini(readings.size(), _lidar_bars.size()):
 		var norm_d: float = readings[i]
@@ -261,6 +322,22 @@ func update_lidar(readings: PackedFloat32Array) -> void:
 			_lidar_bars[i].modulate = Color(1.0, 0.85, 0.2)
 		else:
 			_lidar_bars[i].modulate = Color(0.2, 0.9, 0.3)
+
+
+## Cập nhật 5 phân vùng thị giác Pure Vision
+func update_visual_sectors(sectors: Array) -> void:
+	if not is_open:
+		return
+	for i: int in mini(sectors.size(), _sector_bars.size()):
+		var s_val: float = float(sectors[i])
+		_sector_bars[i].value = s_val
+		_sector_vals[i].text = "h=%.2f" % s_val
+		if s_val >= 0.60:
+			_sector_bars[i].modulate = Color(1.0, 0.2, 0.2)
+		elif s_val >= 0.35:
+			_sector_bars[i].modulate = Color(1.0, 0.85, 0.2)
+		else:
+			_sector_bars[i].modulate = Color(0.2, 0.9, 0.3)
 
 
 ## Cập nhật kết quả nhận diện YOLO

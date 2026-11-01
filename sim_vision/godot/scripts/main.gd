@@ -98,6 +98,10 @@ func _ready() -> void:
 		_policy.name = "RLPolicyClient"
 		add_child(_policy)
 		_policy.action_received.connect(_on_policy_action)
+		_policy.sectors_received.connect(overlay.set_visual_sectors)
+		if inspection_panel != null:
+			_policy.sectors_received.connect(inspection_panel.update_visual_sectors)
+			inspection_panel.set_pure_vision_mode(true)
 		if dialogue != null:
 			dialogue.turn_completed.connect(_on_dialogue_turn_completed)
 	else:
@@ -489,7 +493,8 @@ func _step_policy(delta: float) -> void:
 		RLEnvBridgeScript.TaskPhase.SEARCH_PATIENT if search else _rl_bridge.task_phase,
 		pat_pos if search else _leg_target(_rl_bridge.goal_position),
 		_rl_bridge.patients_helped,
-		yolo_feat
+		yolo_feat,
+		_latest_yolo_dets
 	)
 
 
@@ -813,7 +818,8 @@ func _update_wall_transparency() -> void:
 func _update_inspection_panel() -> void:
 	if inspection_panel == null or not inspection_panel.is_open or robot == null:
 		return
-	inspection_panel.update_lidar(robot.get_lidar_readings())
+	if not use_rl_controller:
+		inspection_panel.update_lidar(robot.get_lidar_readings())
 	var current_pat: CharacterBody3D = active_escorted_patient if active_escorted_patient != null else (current_target_patient if current_target_patient != null else human)
 	var search: bool = _is_search_phase()
 	var pat_pos: Vector3 = current_pat.global_position if active_escorted_patient != null else Main.get_patient_interaction_pos(current_pat)

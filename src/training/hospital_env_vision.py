@@ -132,6 +132,7 @@ class HospitalVisualShiftEnv(HospitalShiftEnv):
         self.best_vision_h = 0.0
         self.patrol_wp_idx = int(self.rng.integers(0, 4))
         self.last_det = {"seen": 0.0, "cx": 0.0, "cy": 0.0, "w": 0.0, "h": 0.0}
+        self._was_colliding = False
         return self._get_obs()
 
     def _spawn_next_patient(self) -> None:
@@ -413,16 +414,12 @@ class HospitalVisualShiftEnv(HospitalShiftEnv):
         if self.task_phase in (TaskPhase.GUIDE_ESCORT, TaskPhase.CALL_STAFF):
             nav, nav_fld, _, _ = self._nav_field(*self._nav_final_target())
             curr_dist_final = nav.distance(nav_fld, self.robot_x, self.robot_z)
-            if math.isfinite(prev_dist_final) and math.isfinite(curr_dist_final):
-                r_progress = float(np.clip(SHAPING_PROGRESS_SCALE * (prev_dist_final - curr_dist_final), -10.0, 10.0))
-            else:
-                r_progress = 0.0
-            if math.isfinite(curr_dist_final):
-                if self.best_goal_dist is None or not math.isfinite(self.best_goal_dist):
-                    self.best_goal_dist = curr_dist_final
-                elif curr_dist_final < self.best_goal_dist - 1.0:
-                    self.best_goal_dist = curr_dist_final
-                    self.steps_since_task = 0  # Escort progress along shortest path resets stagnation!
+            r_progress = SHAPING_PROGRESS_SCALE * (prev_dist_final - curr_dist_final)
+            if self.best_goal_dist is None:
+                self.best_goal_dist = curr_dist_final
+            elif curr_dist_final < self.best_goal_dist - 1.0:
+                self.best_goal_dist = curr_dist_final
+                self.steps_since_task = 0  # Escort progress along shortest path resets stagnation!
 
         # Tether shaping
         r_tether = 0.0
@@ -437,19 +434,30 @@ class HospitalVisualShiftEnv(HospitalShiftEnv):
         r_safety = PENALTY_STEP_TIME
         if self.task_phase == TaskPhase.SEARCH_PATIENT:
             r_safety += PENALTY_FREE_SEARCH_TIME  # Strong penalty while free/idle without active patient task
-        collided = hit_wall or (min_lidar_m < COLLISION_LIDAR_M)
-        if collided:
-            r_safety += PENALTY_COLLISION
-            self.collisions += 1
-        elif min_lidar_m < PROXIMITY_LIDAR_M:
-            r_safety += PENALTY_PROXIMITY * (PROXIMITY_LIDAR_M - min_lidar_m) / (PROXIMITY_LIDAR_M - COLLISION_LIDAR_M)
+
+        if getattr(self, "pure_vision", False):
+            # Pure Vision (Zero LiDAR): bumper collision only on actual physical wall hit (blocked movement)
+            collided = hit_wall and (moved_to is None) and (self.robot_v < 0.05)
+            if collided:
+                if not getattr(self, "_was_colliding", False):
+                    r_safety += PENALTY_COLLISION
+                    self.collisions += 1
+                else:
+                    r_safety += -0.5  # Sustained contact penalty while pressing against wall
+                self._was_colliding = True
+            else:
+                self._was_colliding = False
+            # Proximity penalty is handled exclusively by visual sectors in HospitalPureVisionEnv.step
+        else:
+            collided = hit_wall or (min_lidar_m < COLLISION_LIDAR_M)
+            if collided:
+                r_safety += PENALTY_COLLISION
+                self.collisions += 1
+            elif min_lidar_m < PROXIMITY_LIDAR_M:
+                r_safety += PENALTY_PROXIMITY * (PROXIMITY_LIDAR_M - min_lidar_m) / (PROXIMITY_LIDAR_M - COLLISION_LIDAR_M)
 
         total_reward = r_team + r_progress + r_tether + r_safety + r_exploration + r_visual
-        if not math.isfinite(total_reward):
-            total_reward = 0.0
         self.cumulative_team_reward += total_reward
-        if not math.isfinite(self.cumulative_team_reward):
-            self.cumulative_team_reward = 0.0
 
         done = self.step_count >= int(self.shift_duration_s / self.dt)
         exit_reason = ""

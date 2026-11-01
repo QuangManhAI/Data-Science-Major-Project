@@ -61,6 +61,34 @@ HOSPITAL_CLASSES: dict[int, str] = {
 }
 
 
+def load_class_mapping(model_path: str | Path | None = None) -> dict[int, str]:
+    """Tải từ điển 17 nhãn từ classes_17.json hoặc data.yaml nếu có."""
+    import json
+    candidates: list[Path] = []
+    if model_path:
+        p = Path(model_path).resolve()
+        candidates.extend([p.parent / "classes_17.json", p.parent / "classes.txt"])
+    candidates.extend([
+        _REPO_ROOT / "models" / "yolo26n_hospital_robot_v6_best" / "classes_17.json",
+        _REPO_ROOT / "models" / "yolo26n_hospital_robot_v6_best" / "classes.txt",
+        _THIS_DIR / "classes_17.json",
+    ])
+    for c in candidates:
+        if c.is_file():
+            try:
+                if c.suffix == ".json":
+                    with open(c, "r", encoding="utf-8") as f:
+                        raw = json.load(f)
+                    return {int(k): str(v) for k, v in raw.items()}
+                elif c.suffix == ".txt":
+                    with open(c, "r", encoding="utf-8") as f:
+                        lines = [line.strip() for line in f if line.strip()]
+                    return {i: name for i, name in enumerate(lines)}
+            except Exception:
+                continue
+    return dict(HOSPITAL_CLASSES)
+
+
 class Detector(Protocol):
     def detect(self, img: np.ndarray) -> tuple[list[dict[str, Any]], float]:
         """Trả `(detections, infer_ms)`; detections chứa x1, y1, x2, y2, conf, class_id, class_name."""
@@ -109,7 +137,11 @@ class YoloDetector:
 
         self._model: Any = YOLO(resolved_path)
         self._conf: float = conf
-        self._names: dict[int, str] = getattr(self._model, "names", HOSPITAL_CLASSES)
+        self._names: dict[int, str] = load_class_mapping(resolved_path)
+        if hasattr(self._model, "names") and isinstance(self._model.names, dict) and self._model.names:
+            for k, v in self._model.names.items():
+                if not str(v).lower().startswith("class_"):
+                    self._names[int(k)] = str(v)
         # Chạy nháp một lần để khởi động model
         self._model(
             np.zeros((480, 640, 3), dtype=np.uint8),

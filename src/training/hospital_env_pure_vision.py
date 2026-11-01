@@ -159,6 +159,7 @@ class HospitalPureVisionEnv(HospitalVisualShiftEnv):
             escort_only=escort_only,
             domain_randomization=domain_randomization,
         )
+        self.pure_vision = True
         self.last_doctor_det: dict[str, float] = {"seen": 0.0, "cx": 0.0, "cy": 0.0, "w": 0.0, "h": 0.0}
         self.last_sectors: np.ndarray = np.zeros(5, dtype=np.float32)
 
@@ -259,6 +260,8 @@ class HospitalPureVisionEnv(HospitalVisualShiftEnv):
             obs[18] = math.sin(angle_goal)
             obs[19] = math.cos(angle_goal)
         else:
+            # During GUIDE_ESCORT or CALL_STAFF, landmark goal navigation is active
+            self.set_nav_target(*self._nav_final_target())
             to_gx = self.goal_x - self.robot_x
             to_gz = self.goal_z - self.robot_z
             fwd_x = -math.sin(self.robot_yaw)
@@ -365,19 +368,29 @@ class HospitalPureVisionEnv(HospitalVisualShiftEnv):
             a_omega = omega / OMEGA_MAX
             return np.array([a_v, a_omega], dtype=np.float32)
 
-        # 3. Escort or Corridor Navigation: sector-based obstacle avoidance
+        # 3. Escort or Corridor Navigation: smooth visual sector potential field avoidance
         goal_angle = math.atan2(obs[18], obs[19])
-        v_des = ESCORT_WALK_SPEED if self.task_phase in (TaskPhase.GUIDE_ESCORT, TaskPhase.CALL_STAFF) else V_MAX
-        omega_des = float(np.clip(goal_angle * 1.5, -OMEGA_MAX, OMEGA_MAX))
+        v_base = ESCORT_WALK_SPEED if self.task_phase in (TaskPhase.GUIDE_ESCORT, TaskPhase.CALL_STAFF) else V_MAX
 
-        # Check visual sectors: if Center (sector 2) blocked (h > 0.45)
-        if sectors[2] > 0.45:
-            # Steer towards clearer side (compare left vs right sectors)
-            left_clear = max(sectors[0], sectors[1])
-            right_clear = max(sectors[3], sectors[4])
-            steer = +0.8 if left_clear < right_clear else -0.8
-            omega_des = steer
-            v_des = 0.20
+        # Repulsion from side sectors:
+        # Left sectors (0, 1) push clockwise (+yaw rate / right turn)
+        # Right sectors (3, 4) push counter-clockwise (-yaw rate / left turn)
+        repulsion = (
+            + 0.8 * (sectors[0] + 0.5 * sectors[1])
+            - 0.8 * (sectors[4] + 0.5 * sectors[3])
+        )
+
+        # Center sector controls forward speed factor
+        c_obs = sectors[2]
+        speed_factor = float(np.clip(1.0 - max(0.0, c_obs - 0.35) / 0.45, 0.0, 1.0))
+
+        v_des = v_base * speed_factor
+        omega_des = float(np.clip(goal_angle * 1.5 + repulsion, -OMEGA_MAX, OMEGA_MAX))
+
+        # If completely stopped by frontal wall or obstacle, rotate in-place towards clearer side
+        if speed_factor < 0.15:
+            v_des = 0.0
+            omega_des = 1.0 if repulsion >= 0.0 else -1.0
 
         a_v = (v_des / (0.5 * V_MAX)) - 1.0
         a_omega = omega_des / OMEGA_MAX

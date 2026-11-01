@@ -14,7 +14,7 @@ import sys
 from websockets.asyncio.server import Server, ServerConnection, serve
 from websockets.exceptions import ConnectionClosed
 
-from detector import Detector
+from detector import DEFAULT_YOLO_PATH, Detector, YoloDetector, resolve_model_path
 from protocol import WS_HOST, WS_PORT, ProtocolError, build_detections, build_error, parse_frame
 
 log = logging.getLogger("yolo_server")
@@ -75,8 +75,8 @@ async def start_server(detector: Detector, host: str = WS_HOST, port: int = WS_P
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="YOLOv8n person detection WebSocket server")
-    p.add_argument("--model", default="yolov8n.pt", help="đường dẫn yolov8n.pt (không tự tải)")
+    p = argparse.ArgumentParser(description="YOLO 17-class hospital detection WebSocket server")
+    p.add_argument("--model", default=DEFAULT_YOLO_PATH, help="đường dẫn model YOLO (mặc định: YOLOv6 17-class)")
     p.add_argument("--port", type=int, default=WS_PORT)
     return p.parse_args(argv)
 
@@ -90,14 +90,13 @@ async def _serve_forever(detector: Detector, port: int) -> None:
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(sys.argv[1:] if argv is None else argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-    # Kiểm tra trước: ultralytics sẽ tự tải model nếu không thấy file, điều này bị cấm.
-    if not os.path.isfile(args.model):
-        print(f"ERROR: model file not found: {args.model}", file=sys.stderr)
+    model_path = resolve_model_path(args.model)
+    if not os.path.isfile(model_path):
+        print(f"ERROR: model file not found: {args.model} (resolved: {model_path})", file=sys.stderr)
         return 1
-    from detector import YoloDetector
 
-    detector = YoloDetector(args.model)
-    log.info("loaded model %s", args.model)
+    detector = YoloDetector(model_path)
+    log.info("loaded model %s", model_path)
     try:
         asyncio.run(_serve_forever(detector, args.port))
     except KeyboardInterrupt:

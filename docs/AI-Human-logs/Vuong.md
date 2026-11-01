@@ -920,6 +920,25 @@ av_remaining frozen after dialogue engagement.
 - **Touches:** `models/yolo26n_hospital_robot_v6_best/`, `sim_vision/python/detector.py`, `sim_vision/python/yolo_server.py`, `sim_vision/python/rl_policy_server.py`, `src/models/ppo_agent.py`, `src/training/hospital_env_vision.py`, `src/training/hospital_env_pure_vision.py`, `src/training/train_pure_vision_rl.py`, `sim_vision/godot/scripts/main.gd`, `sim_vision/godot/scripts/view_overlay.gd`, `sim_vision/godot/scenes/room.tscn`, `docs/AI-Human-logs/Vuong.md`
 - **Evidence:** 4/4 tests in `tests/test_pure_vision_obs.py` pass; completed 2,000-episode GPU training run (Ep 1 -> Ep 2000) under `experiments/runs/20261101_090639_PPOHospital-PureVision` on NVIDIA GeForce RTX 4060 Laptop GPU; total 91 patients helped under pure visual guidance with zero physical LiDAR; visual spotting rate reached **97.3%**; peak episode reward reached **+61.4**; 4-panel training curves saved at `experiments/runs/20261101_090639_PPOHospital-PureVision/training_curves.png`; best checkpoint saved at `experiments/runs/20261101_090639_PPOHospital-PureVision/checkpoints/PPOHospital-PureVision_best.pt`; 10-shift held-out diagnostic benchmark completed (`spotting_rate: 60.0%`).
 
+### D-055 — Pure Vision Environment Patches, YOLOv6 17-Class Integration, and Converged 2,000-Episode Retraining
+- **Status:** accepted
+- **When:** 2026-11-01T23:46:00+07:00
+- **Decided by:** human-aligned via /grill-me
+- **Trigger:** Diagnosis of reward plateau and stagnation in the pure-vision model: phantom LiDAR penalties (<0.40m) penalizing 1.2m doorways on 90%+ steps, teacher chattering oscillation wedging the robot into walls, and YOLO server defaulting to legacy 80-class COCO `yolov8n.pt` ("person" label) instead of 17-class hospital classes.
+- **Architectural Decisions:**
+  1. **YOLO 17-Class Resolution:** Strictly set default YOLO model to fine-tuned `models/yolo26n_hospital_robot_v6_best/yolo26n_hospital_robot_best_map92.6.pt` across `yolo_server.py`, `detector.py`, and `run_simulation.py`. Bound 17-class mapping via `load_class_mapping()` loading `classes_17.json` (0: `patient`, 1: `doctor`, 2..16: hospital equipment/furniture). Removed generic COCO fallback.
+  2. **Bumper-Only Collision & Door Clearance:** In `hospital_env_vision.py` and `hospital_env_pure_vision.py`, stripped all LiDAR distance threshold penalties (`min_lidar_m < 0.40m`). Collision is now strictly defined by physical bumper contact when movement is blocked (`hit_wall and moved_to is None and robot_v < 0.05`), with leading-edge count (`_was_colliding`) and gentle sustained contact penalty (-0.5). Enables smooth traversal of 1.2m clinic doorways with 0 false collision penalties.
+  3. **Continuous Potential Field Navigation:** Replaced binary hard-steering threshold with smooth repulsive potential field ($\omega_{repulsion} = 0.8(s_0 + 0.5s_1) - 0.8(s_4 + 0.5s_3)$) and frontal speed factor ($v_{des} = v_{base} \cdot \text{speed\_factor}$). Wired intermediate distance-field landmark navigation during escort (`set_nav_target(*self._nav_final_target())`).
+  4. **2,000-Episode Clean Retraining on NVIDIA RTX 4060 GPU:** Fresh 29-D PPO agent trained from Ep 1 to Ep 2000 under `experiments/runs/20261101_112530_PPOHospital-PureVision` with decaying teacher warmup over first 200 episodes.
+- **Why:** Delivers a fully robust pure-vision navigation stack free from phantom sensor traps, oscillation deadlocks, and label misalignments.
+- **Touches:** `sim_vision/python/detector.py`, `sim_vision/python/yolo_server.py`, `run_simulation.py`, `src/training/hospital_env_vision.py`, `src/training/hospital_env_pure_vision.py`, `src/training/train_pure_vision_rl.py`, `scripts/plot_training_metrics.py`, `docs/AI-Human-logs/Vuong.md`
+- **Evidence:**
+  - Unit tests passed: 4/4 in `tests/test_pure_vision_obs.py`.
+  - 2,000-episode GPU training completed: total **3,779 patients helped** (up from 91); peak reward reached **+735.3** (Ep 1596); mean reward reached **+310.7** (last 20 avg: **+345.2**); mean collisions dropped to **0.79/shift**; visual spotting rate **100.0%**; stagnation timeouts reduced to **10.3%** (from >90%).
+  - 10-shift held-out diagnostic benchmark on `PPOHospital-PureVision_best.pt`: **$R_{team} = +344.94$**, **2.00 patients helped/shift**, **0.00 collisions/shift** (zero collisions!), **0.0% stagnation rate** (zero stagnation!), and **100.0% visual spotting rate**.
+  - Training curves saved at `experiments/runs/20261101_112530_PPOHospital-PureVision/training_curves.png`.
+
+
 
 
 

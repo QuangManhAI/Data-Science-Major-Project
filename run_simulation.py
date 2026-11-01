@@ -316,9 +316,12 @@ def main() -> None:
     # 1. Start YOLO server (Port 8765)
     yolo_f, yolo_log_path = get_log_handle("yolo", enable_file_logging, log_dir)
     log_info = f" (logging to {yolo_log_path.name})" if yolo_log_path else ""
-    log(f"[Launcher] Starting YOLO server on port 8765{log_info}...")
+    yolo_model_path = REPO_ROOT / "models" / "yolo26n_hospital_robot_v6_best" / "yolo26n_hospital_robot_best_map92.6.pt"
+    if not yolo_model_path.is_file():
+        yolo_model_path = PYTHON_DIR / "yolo26n_hospital_robot_best_map92.6.pt"
+    log(f"[Launcher] Starting YOLO server on port 8765 (model: {yolo_model_path.name}){log_info}...")
     yolo_proc = subprocess.Popen(
-        [str(py_exe), "yolo_server.py"],
+        [str(py_exe), "yolo_server.py", "--model", str(yolo_model_path)],
         cwd=PYTHON_DIR,
         env=sub_env,
         stdout=yolo_f if yolo_f else None,

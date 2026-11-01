@@ -481,11 +481,18 @@ func _step_policy(delta: float) -> void:
 	var target_p: CharacterBody3D = active_escorted_patient if active_escorted_patient != null else (current_target_patient if current_target_patient != null else human)
 	var pat_pos: Vector3 = target_p.global_position if active_escorted_patient != null else (robot.global_position if not search else Main.get_patient_interaction_pos(target_p))
 	var yolo_feat: Array = []
-	if not _latest_yolo_dets.is_empty():
-		var best_det: Dictionary = _latest_yolo_dets[0]
-		var cx: float = ((float(best_det.get("x1", 0.0)) + float(best_det.get("x2", 0.0))) / 2.0) - 0.5
-		var h: float = float(best_det.get("y2", 0.0)) - float(best_det.get("y1", 0.0))
-		var conf: float = float(best_det.get("conf", 0.9))
+	var best_patient_det: Dictionary = {}
+	for d_var: Variant in _latest_yolo_dets:
+		var d: Dictionary = d_var as Dictionary
+		var cid: int = int(d.get("class_id", -1))
+		var cname: String = str(d.get("class_name", ""))
+		if cid == 0 or cname == "patient":
+			if best_patient_det.is_empty() or float(d.get("conf", 0.0)) > float(best_patient_det.get("conf", 0.0)):
+				best_patient_det = d
+	if not best_patient_det.is_empty():
+		var cx: float = ((float(best_patient_det.get("x1", 0.0)) + float(best_patient_det.get("x2", 0.0))) / 2.0) - 0.5
+		var h: float = float(best_patient_det.get("y2", 0.0)) - float(best_patient_det.get("y1", 0.0))
+		var conf: float = float(best_patient_det.get("conf", 0.9))
 		yolo_feat = [1.0, cx, h, conf]
 	_policy.send_state(
 		robot.global_position, robot.rotation.y, robot.get_real_velocity().length(), robot.omega,

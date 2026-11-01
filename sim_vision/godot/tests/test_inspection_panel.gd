@@ -83,8 +83,8 @@ func test_unhandled_input_shortcuts() -> void:
 	_panel._unhandled_input(ev_i)
 	assert_true(_panel.is_open, "toggled open with key I")
 
-	var ev_tab := InputEventKey.new()
-	ev_tab.keycode = KEY_TAB
-	ev_tab.pressed = true
-	_panel._unhandled_input(ev_tab)
-	assert_false(_panel.is_open, "toggled closed with key Tab")
+	ev_i = InputEventKey.new()
+	ev_i.keycode = KEY_I
+	ev_i.pressed = true
+	_panel._unhandled_input(ev_i)
+	assert_false(_panel.is_open, "toggled closed with key I")

@@ -86,7 +86,9 @@ func test_norm_to_pixel_full_frame() -> void:
 
 
 func test_overlay_texts() -> void:
-	assert_eq(ViewOverlay.label_text({"conf": 0.87}), "person 0.87")
+	assert_eq(ViewOverlay.label_text({"conf": 0.87, "class_name": "patient"}), "patient 0.87")
+	assert_eq(ViewOverlay.label_text({"conf": 0.95, "class_name": "doctor"}), "doctor 0.95")
+	assert_eq(ViewOverlay.label_text({"conf": 0.82, "class_name": "wheelchair"}), "wheelchair 0.82")
 	assert_eq(ViewOverlay.connection_text(true), "YOLO: đã kết nối")
 	assert_eq(ViewOverlay.connection_text(false), "YOLO: mất kết nối")
 

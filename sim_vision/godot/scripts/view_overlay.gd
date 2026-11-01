@@ -120,7 +120,17 @@ static func tts_connection_text(connected: bool) -> String:
 
 
 static func label_text(det: Dictionary) -> String:
-	var cname: String = str(det.get("class_name", "person"))
+	var cname: String = str(det.get("class_name", ""))
+	if cname.is_empty():
+		var cid: int = int(det.get("class_id", -1))
+		if cid == 0:
+			cname = "patient"
+		elif cid == 1:
+			cname = "doctor"
+		elif cid >= 2:
+			cname = "obstacle_%d" % cid
+		else:
+			cname = "patient"
 	var conf: float = float(det.get("conf", 0.0))
 	return "%s %.2f" % [cname, conf]
 

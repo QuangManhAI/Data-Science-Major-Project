@@ -161,8 +161,18 @@ static func parse_message(text: String) -> Dictionary:
 	for d: Variant in m["detections"]:
 		if VisionClient.is_valid_detection(d):
 			var dd := d as Dictionary
-			dets.append({"x1": float(dd["x1"]), "y1": float(dd["y1"]), "x2": float(dd["x2"]),
-					"y2": float(dd["y2"]), "conf": float(dd["conf"])})
+			var item: Dictionary = {
+				"x1": float(dd["x1"]),
+				"y1": float(dd["y1"]),
+				"x2": float(dd["x2"]),
+				"y2": float(dd["y2"]),
+				"conf": float(dd["conf"]),
+			}
+			if dd.has("class_id"):
+				item["class_id"] = int(dd["class_id"])
+			if dd.has("class_name"):
+				item["class_name"] = str(dd["class_name"])
+			dets.append(item)
 	out["ok"] = true
 	out["dets"] = dets
 	out["infer_ms"] = float(m["infer_ms"])

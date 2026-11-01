@@ -112,7 +112,7 @@ class PolicyRunner:
             obstacle_boxes = []
 
             for d in dets:
-                cid = int(d.get("class_id", 0))
+                cid = int(d.get("class_id", -1))
                 cname = str(d.get("class_name", ""))
                 if cid == 0 or cname == "patient":
                     if patient_box is None or float(d.get("conf", 0)) > float(patient_box.get("conf", 0)):

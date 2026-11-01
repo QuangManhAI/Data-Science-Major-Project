@@ -101,3 +101,6 @@ runs/
 /models/yolo11n/*.pt
 /models/yolo26n/*.pt
 /models/yolov8x/*.pt
+
+# Release models package for teammate sharing
+release_models/

@@ -98,7 +98,6 @@ func _ready() -> void:
 		_policy.name = "RLPolicyClient"
 		add_child(_policy)
 		_policy.action_received.connect(_on_policy_action)
-		_policy.sectors_received.connect(_on_policy_sectors)
 		if dialogue != null:
 			dialogue.turn_completed.connect(_on_dialogue_turn_completed)
 	else:
@@ -309,10 +308,10 @@ func _physics_process(delta: float) -> void:
 			reset_positions(true)
 			return
 		if not _policy_active():
-			var cmd_vec: Vector2 = RLControllerScript.step_towards_goal_with_lidar(
-				robot.global_position, robot.rotation.y, _rl_bridge.goal_position, robot.get_lidar_readings(), d_tether, true
-			)
-			robot.set_command(cmd_vec.x, cmd_vec.y)
+			robot.set_command(0.0, 0.0)
+			overlay.set_status("LỖI: Mất kết nối tới RL Policy Server (ws://127.0.0.1:8768)!")
+			push_error("[Main] ERROR: RL Policy Server is disconnected or inactive! Robot halted (rule-based fallback disabled).")
+			return
 	elif _rl_bridge.task_phase == RLEnvBridgeScript.TaskPhase.CALL_STAFF:
 		# Nhân viên ở tầng khác (tầng 2 không có nhân viên) ➔ robot đi thang máy một mình, bệnh nhân chờ tại chỗ
 		var robot_floor: int = Room.get_floor(robot.global_position)
@@ -337,10 +336,10 @@ func _physics_process(delta: float) -> void:
 			reset_positions(true)
 			return
 		if not _policy_active():
-			var cmd_vec: Vector2 = RLControllerScript.step_towards_goal_with_lidar(
-				robot.global_position, robot.rotation.y, _leg_target(_rl_bridge.goal_position), robot.get_lidar_readings(), 0.0, false
-			)
-			robot.set_command(cmd_vec.x, cmd_vec.y)
+			robot.set_command(0.0, 0.0)
+			overlay.set_status("LỖI: Mất kết nối tới RL Policy Server (ws://127.0.0.1:8768)!")
+			push_error("[Main] ERROR: RL Policy Server is disconnected or inactive! Robot halted (rule-based fallback disabled).")
+			return
 	if _policy_active():
 		_step_policy(delta)
 
@@ -490,14 +489,8 @@ func _step_policy(delta: float) -> void:
 		RLEnvBridgeScript.TaskPhase.SEARCH_PATIENT if search else _rl_bridge.task_phase,
 		pat_pos if search else _leg_target(_rl_bridge.goal_position),
 		_rl_bridge.patients_helped,
-		yolo_feat,
-		_latest_yolo_dets
+		yolo_feat
 	)
-
-
-func _on_policy_sectors(sectors: Array) -> void:
-	if overlay != null:
-		overlay.set_visual_sectors(sectors)
 
 
 func _on_policy_action(v: float, omega: float, phase: int) -> void:

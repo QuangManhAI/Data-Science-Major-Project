@@ -159,4 +159,5 @@ func step(state: int, dets: Array, time_since_seen_s: float) -> Dictionary:
 	if has_external_action:
 		var target_det: Dictionary = Controller.pick_target(dets) if not dets.is_empty() else {}
 		return _cmd(external_state, external_v, external_omega, target_det)
-	return super.step(state, dets, time_since_seen_s)
+	push_error("[RLController] ERROR: RL policy server disconnected or not providing action! Robot halted (rule-based fallback disabled).")
+	return _cmd(state, 0.0, 0.0, {})

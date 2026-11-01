@@ -1,7 +1,6 @@
 """YOLO server WebSocket (G2). Nhận `frame`, trả `detections` hoặc `error` (Mục 2.2).
 
-Hỗ trợ model 17 nhãn bệnh viện yolo26n_hospital_robot_best_map92.6.pt.
-Chạy: python yolo_server.py [--model models/yolo26n_hospital_robot_v6_best/yolo26n_hospital_robot_best_map92.6.pt] [--port 8765]
+Chạy: python yolo_server.py --model yolov8n.pt [--port 8765]
 """
 
 from __future__ import annotations
@@ -15,7 +14,7 @@ import sys
 from websockets.asyncio.server import Server, ServerConnection, serve
 from websockets.exceptions import ConnectionClosed
 
-from detector import DEFAULT_YOLO_PATH, FALLBACK_YOLO_PATH, Detector
+from detector import Detector
 from protocol import WS_HOST, WS_PORT, ProtocolError, build_detections, build_error, parse_frame
 
 log = logging.getLogger("yolo_server")
@@ -76,9 +75,8 @@ async def start_server(detector: Detector, host: str = WS_HOST, port: int = WS_P
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="Hospital YOLO detection WebSocket server")
-    default_model = DEFAULT_YOLO_PATH if os.path.exists(DEFAULT_YOLO_PATH) else FALLBACK_YOLO_PATH
-    p.add_argument("--model", default=default_model, help="đường dẫn file model .pt")
+    p = argparse.ArgumentParser(description="YOLOv8n person detection WebSocket server")
+    p.add_argument("--model", default="yolov8n.pt", help="đường dẫn yolov8n.pt (không tự tải)")
     p.add_argument("--port", type=int, default=WS_PORT)
     return p.parse_args(argv)
 
@@ -92,6 +90,7 @@ async def _serve_forever(detector: Detector, port: int) -> None:
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(sys.argv[1:] if argv is None else argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    # Kiểm tra trước: ultralytics sẽ tự tải model nếu không thấy file, điều này bị cấm.
     if not os.path.isfile(args.model):
         print(f"ERROR: model file not found: {args.model}", file=sys.stderr)
         return 1

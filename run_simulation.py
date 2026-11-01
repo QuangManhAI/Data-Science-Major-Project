@@ -234,11 +234,13 @@ def main() -> None:
     parser.add_argument(
         "--controller",
         choices=["fsm", "rl"],
-        default="fsm",
+        default=None,
         help="Robot navigation controller mode ('fsm' rule-based or 'rl' RLController + RLEnvBridge)",
     )
     parser.add_argument(
         "--rl-checkpoint",
+        "--checkpoint",
+        dest="rl_checkpoint",
         type=str,
         default=None,
         help="PPO checkpoint (.pt) served by rl_policy_server.py on port 8768 (default: experiments/checkpoints/PPOHospital-full_strongest.pt)",
@@ -292,6 +294,8 @@ def main() -> None:
             clean_argv.append(s)
 
     args = parser.parse_args(clean_argv)
+    if args.controller is None:
+        args.controller = "rl" if args.rl_checkpoint else "fsm"
 
     # Register exit hooks
     atexit.register(cleanup)
@@ -381,10 +385,14 @@ def main() -> None:
     ok_stt = wait_for_ws(8766, desc="STT Server", proc=stt_proc, log_path=stt_log_path)
     if should_run_tts and tts_proc is not None:
         wait_for_ws(8767, desc="TTS Server", proc=tts_proc, log_path=tts_log_path)
-    if rl_proc is not None and not wait_for_ws(8768, desc="RL Policy Server", proc=rl_proc, log_path=rl_log_path):
-        log("[Launcher] WARNING: RL policy server not ready; Godot falls back to the rule-based RL controller.")
+    ok_rl = True
+    if rl_proc is not None:
+        ok_rl = wait_for_ws(8768, desc="RL Policy Server", proc=rl_proc, log_path=rl_log_path)
+        if not ok_rl:
+            log("[Launcher] ERROR: RL Policy Server (port 8768) failed to start or is not responding!")
+            log("          Rule-based fallback is disabled. Aborting simulation launch.")
 
-    if not ok_yolo or not ok_stt:
+    if not ok_yolo or not ok_stt or not ok_rl:
         log("[Launcher] ERROR: One or more backend servers failed to start.")
         cleanup()
         sys.exit(1)

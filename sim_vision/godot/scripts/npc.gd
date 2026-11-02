@@ -67,10 +67,10 @@ func _process(delta: float) -> void:
 	cooldown_left = maxf(cooldown_left - delta, 0.0)
 	if robot == null or not robot_state_fn.is_valid():
 		return
-	var h_pos: Vector3 = human.get_interaction_position() if (human != null and human.has_method("get_interaction_position")) else (human.global_position if human != null else Vector3.ZERO)
+	var h_pos: Vector3 = human.global_position if human != null else Vector3.ZERO
 	var dist: float = Human.flat_distance(h_pos, robot.global_position)
 	var r_state: int = robot_state_fn.call()
-	if r_state == Config.RobotState.APPROACH and dist <= Config.SAFE_DIST_HUMAN + 0.35 and robot.get("v") != null and absf(robot.v) < 0.05:
+	if r_state == Config.RobotState.APPROACH and dist <= Config.TALK_TRIGGER_DIST and robot.get("v") != null and absf(robot.v) < 0.35:
 		r_state = Config.RobotState.ARRIVED
 	var next: String = Npc.next_state(state, r_state, dist, cooldown_left, turns_done)
 	if state == IDLE and next == NOTICE:

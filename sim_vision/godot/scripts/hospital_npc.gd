@@ -217,15 +217,8 @@ func set_state(new_state: State) -> void:
 			_play_anim(&"npc/walk")
 
 
-## Trả về vị trí tương tác (nơi robot tiếp cận và nói chuyện, cũng như nơi bệnh nhân đứng dậy bắt đầu đi).
-## Nếu NPC đang ngồi và có waypoints (trong đó waypoints[1] là điểm đứng ngoài hành lang),
-## trả về waypoints[1] để tránh robot tiếp cận từ sau lưng ghế hoặc kẹt vào va chạm của ghế.
+## Trả về vị trí thực tế của NPC (tọa độ vật lý chính xác của bệnh nhân).
 func get_interaction_position() -> Vector3:
-	if is_seated:
-		if waypoints.size() >= 2:
-			return waypoints[1]
-		var fwd: Vector3 = -global_transform.basis.z.normalized()
-		return global_position + fwd * 0.9
 	return global_position
 
 
@@ -233,13 +226,9 @@ func get_interaction_position() -> Vector3:
 func escort_step_towards(target: Vector3, max_step: float, delta: float) -> void:
 	if current_state != State.ESCORTED or is_seated:
 		if is_seated:
-			if waypoints.size() >= 2:
-				global_position = waypoints[1]
-				_anchor_pos = waypoints[1]
-			else:
-				var fwd: Vector3 = -global_transform.basis.z.normalized()
-				global_position = global_position + fwd * 0.9
-				_anchor_pos = global_position
+			var fwd: Vector3 = -global_transform.basis.z.normalized()
+			global_position = global_position + fwd * 0.6
+			_anchor_pos = global_position
 		set_state(State.ESCORTED)
 	var model := get_node_or_null(^"Model") as Node3D
 	if model != null and model.position != Vector3.ZERO:

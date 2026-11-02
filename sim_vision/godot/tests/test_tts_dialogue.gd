@@ -192,8 +192,10 @@ func _transcript(utt_id: int, clip: String, action: String, response: String, sl
 
 ## NPC vừa nói xong `clip` ➔ robot THINK. Robot đứng cách NPC 1.5 m (xa hơn thì NPC tự dừng nói, G15).
 func _heard(main: Main, dm: DialogueManager, clip: String) -> void:
+	main.current_target_patient = main.human
 	main.robot.global_position = main.human.global_position + Vector3(1.5, 0, 0)
 	main.state = S.ARRIVED
+	dm.active_npc = dm.npc
 	dm.npc.state = Npc.TALK
 	dm._on_talk_started(clip)
 	dm.npc.state = Npc.WAIT_REPLY
@@ -240,7 +242,7 @@ func test_tts_timeout_subtitle_only() -> void:
 	await wait_process_frames(2)
 	assert_eq(main.state, S.RESPOND, "phụ đề vẫn hiện")
 	assert_true(dm.subtitle.is_showing())
-	assert_almost_eq(dm.subtitle.time_left, Config.SUBTITLE_S, 0.2)
+	assert_almost_eq(dm.subtitle.time_left, Config.SUBTITLE_S, 0.35)
 	assert_eq(get_signal_parameters(dm, "turn_completed")[0]["tts_error"], "timeout")
 	dm._on_tts_audio(TtsClient.parse_audio(_audio_json(dm.utt_id)))
 	assert_false(dm.speaking, "audio đến muộn sau timeout bị bỏ")

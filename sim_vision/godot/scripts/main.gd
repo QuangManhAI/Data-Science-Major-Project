@@ -17,7 +17,7 @@ const RLEnvBridgeScript = preload("res://scripts/rl_env_bridge.gd")
 const RLControllerScript = preload("res://scripts/rl_controller.gd")
 const RLPolicyClientScript = preload("res://scripts/rl_policy_client.gd")
 const InspectionPanelScript = preload("res://scripts/inspection_panel.gd")
-const PATIENT_ENGAGE_DIST_M: float = 1.85  # Khoảng cách tiếp cận để bắt đầu hội thoại tự nhiên, khớp TALK_TRIGGER_DIST
+const PATIENT_ENGAGE_DIST_M: float = 1.85  # Khoảng cách tiếp cận thực tế đến vị trí bệnh nhân để bắt đầu hội thoại
 const TASK_TIMEOUT_S: float = 45.0         # = stagnation_timeout_s lúc train: không tiến triển quá lâu ➔ hủy
 const TASK_PROGRESS_M: float = 1.0         # = STAGNATION_PROGRESS_M: lại gần đích thêm 1 m ➔ đặt lại đồng hồ
 const ARRIVED_WAIT_S: float = 10.0         # đứng ARRIVED mà NPC không bắt đầu nói ➔ đi tiếp
@@ -385,8 +385,6 @@ func get_active_speaking_patient() -> CharacterBody3D:
 static func get_patient_interaction_pos(pat: CharacterBody3D) -> Vector3:
 	if pat == null:
 		return Vector3.ZERO
-	if pat.has_method("get_interaction_position"):
-		return pat.get_interaction_position()
 	return pat.global_position
 
 
@@ -455,32 +453,8 @@ func _is_search_phase() -> bool:
 func _step_policy(delta: float) -> void:
 	if Main.is_dialogue_state(state):
 		return
-	if _is_search_phase():
-		var d_human: float = human_distance()
-		if state == Config.RobotState.ARRIVED:
-			_arrived_wait_s += delta
-			if _arrived_wait_s > ARRIVED_WAIT_S:
-				overlay.set_status("Bệnh nhân không phản hồi, chuyển sang người khác")
-				reset_positions(true)
-				return
-			if d_human <= Config.TALK_TRIGGER_DIST + 1.0:
-				robot.set_command(0.0, 0.0)
-				return
-			state = Config.RobotState.SEARCH  # bệnh nhân đi xa trước khi nói ➔ tìm lại
-		elif d_human <= PATIENT_ENGAGE_DIST_M:
-			print("[ESCORT_DEBUG] >>> Reached patient engage dist (d=%.2fm <= %.2fm), waiting for speech..." % [d_human, PATIENT_ENGAGE_DIST_M])
-			_arrived_wait_s = 0.0
-			robot.set_command(0.0, 0.0)
-			state = Config.RobotState.ARRIVED
-			overlay.show_detections([], _display_state_name(), _connected)
-			return
-	_policy_accum += delta
-	if _policy_accum < RLPolicyClientScript.STEP_DT_S:
-		return
-	_policy_accum = fmod(_policy_accum, RLPolicyClientScript.STEP_DT_S)
-	var search: bool = _is_search_phase()
-	var target_p: CharacterBody3D = active_escorted_patient if active_escorted_patient != null else (current_target_patient if current_target_patient != null else human)
-	var pat_pos: Vector3 = target_p.global_position if active_escorted_patient != null else (robot.global_position if not search else Main.get_patient_interaction_pos(target_p))
+
+	# Parse multi-class YOLO detections for patient channel
 	var yolo_feat: Array = []
 	var best_patient_det: Dictionary = {}
 	for d_var: Variant in _latest_yolo_dets:
@@ -490,11 +464,57 @@ func _step_policy(delta: float) -> void:
 		if cid == 0 or cname == "patient":
 			if best_patient_det.is_empty() or float(d.get("conf", 0.0)) > float(best_patient_det.get("conf", 0.0)):
 				best_patient_det = d
+	var yolo_cx: float = 0.0
+	var yolo_h: float = 0.0
 	if not best_patient_det.is_empty():
-		var cx: float = ((float(best_patient_det.get("x1", 0.0)) + float(best_patient_det.get("x2", 0.0))) / 2.0) - 0.5
-		var h: float = float(best_patient_det.get("y2", 0.0)) - float(best_patient_det.get("y1", 0.0))
+		yolo_cx = ((float(best_patient_det.get("x1", 0.0)) + float(best_patient_det.get("x2", 0.0))) / 2.0) - 0.5
+		yolo_h = float(best_patient_det.get("y2", 0.0)) - float(best_patient_det.get("y1", 0.0))
 		var conf: float = float(best_patient_det.get("conf", 0.9))
-		yolo_feat = [1.0, cx, h, conf]
+		yolo_feat = [1.0, yolo_cx, yolo_h, conf]
+
+	if _is_search_phase():
+		var closest_info: Dictionary = get_closest_available_patient()
+		var candidate_pat: CharacterBody3D = closest_info.get("patient") as CharacterBody3D
+		var d_human: float = float(closest_info.get("dist", 999.0))
+
+		# Bind candidate patient if within visual/physical approach radius
+		if candidate_pat != null and d_human <= Config.TALK_TRIGGER_DIST + 1.5:
+			if current_target_patient != candidate_pat:
+				current_target_patient = candidate_pat
+			current_target_patient.set("pardon_enabled", false)
+
+		var yolo_patient_close: bool = (not best_patient_det.is_empty() and yolo_h >= 0.40 and absf(yolo_cx) < 0.35 and d_human <= PATIENT_ENGAGE_DIST_M)
+
+		if state == Config.RobotState.ARRIVED:
+			_arrived_wait_s += delta
+			if _arrived_wait_s > ARRIVED_WAIT_S:
+				overlay.set_status("Bệnh nhân không phản hồi, chuyển sang người khác")
+				reset_positions(true)
+				return
+			if d_human <= PATIENT_ENGAGE_DIST_M + 0.5:
+				robot.set_command(0.0, 0.0)
+				return
+			state = Config.RobotState.SEARCH  # bệnh nhân đi xa trước khi nói ➔ tìm lại
+		elif d_human <= PATIENT_ENGAGE_DIST_M or yolo_patient_close:
+			if candidate_pat != null:
+				current_target_patient = candidate_pat
+				current_target_patient.set("pardon_enabled", false)
+				if current_target_patient.get("walks") == true:
+					current_target_patient.set("walks", false)
+			print("[ESCORT_DEBUG] >>> Reached patient engage dist (d=%.2fm <= %.2fm, yolo_close=%s), waiting for speech..." % [d_human, PATIENT_ENGAGE_DIST_M, str(yolo_patient_close)])
+			_arrived_wait_s = 0.0
+			robot.set_command(0.0, 0.0)
+			state = Config.RobotState.ARRIVED
+			overlay.show_detections([], _display_state_name(), _connected)
+			return
+
+	_policy_accum += delta
+	if _policy_accum < RLPolicyClientScript.STEP_DT_S:
+		return
+	_policy_accum = fmod(_policy_accum, RLPolicyClientScript.STEP_DT_S)
+	var search: bool = _is_search_phase()
+	var target_p: CharacterBody3D = active_escorted_patient if active_escorted_patient != null else (current_target_patient if current_target_patient != null else human)
+	var pat_pos: Vector3 = target_p.global_position if active_escorted_patient != null else (robot.global_position if not search else target_p.global_position)
 	_policy.send_state(
 		robot.global_position, robot.rotation.y, robot.get_real_velocity().length(), robot.omega,
 		robot.get_lidar_readings(), pat_pos,
@@ -931,11 +951,35 @@ func reset_positions(is_task_transition: bool = false) -> void:
 	_update_viewer_camera()
 
 
+func get_closest_available_patient() -> Dictionary:
+	var patients: Array[CharacterBody3D] = get_available_patients()
+	var best_p: CharacterBody3D = null
+	var min_d: float = INF
+	if robot == null:
+		return {"patient": current_target_patient if current_target_patient != null else human, "dist": 999.0}
+	var r_pos: Vector3 = robot.global_position
+	var cur_fl: int = Room.get_floor(r_pos)
+	for p: CharacterBody3D in patients:
+		if Room.get_floor(p.global_position) != cur_fl:
+			continue
+		var d: float = Human.flat_distance(r_pos, p.global_position)
+		if d < min_d:
+			min_d = d
+			best_p = p
+	if best_p == null:
+		best_p = current_target_patient if current_target_patient != null else human
+		min_d = Human.flat_distance(r_pos, best_p.global_position)
+	return {"patient": best_p, "dist": min_d}
+
+
 func human_distance() -> float:
 	var spk: CharacterBody3D = get_active_speaking_patient() if Main.is_dialogue_state(state) else null
-	var target_pat: CharacterBody3D = spk if spk != null else (active_escorted_patient if active_escorted_patient != null else (current_target_patient if current_target_patient != null else human))
-	var target_pos: Vector3 = target_pat.global_position if active_escorted_patient != null else Main.get_patient_interaction_pos(target_pat)
-	return Human.flat_distance(robot.global_position, target_pos)
+	if spk != null:
+		return Human.flat_distance(robot.global_position, spk.global_position)
+	if active_escorted_patient != null:
+		return Human.flat_distance(robot.global_position, active_escorted_patient.global_position)
+	var closest: Dictionary = get_closest_available_patient()
+	return float(closest.get("dist", 999.0))
 
 
 func _setup_hospital_npcs() -> void:
@@ -944,7 +988,13 @@ func _setup_hospital_npcs() -> void:
 		human.setup_robot(robot)
 		var h_npc_node: Node = human.get_node_or_null(^"Npc")
 		if h_npc_node != null and h_npc_node.has_method("setup"):
-			h_npc_node.setup(robot, func() -> int: return Config.RobotState.SEARCH if (is_task_busy() or Main.is_dialogue_state(state)) else state)
+			h_npc_node.setup(robot, func() -> int:
+				if is_task_busy() or Main.is_dialogue_state(state):
+					return Config.RobotState.SEARCH
+				if current_target_patient != null and current_target_patient != human:
+					return Config.RobotState.SEARCH
+				return state
+			)
 	var furn: Node = room.get_node_or_null(^"Furniture") if room != null else null
 	if furn != null:
 		for child: Node in furn.get_children():
@@ -956,7 +1006,14 @@ func _setup_hospital_npcs() -> void:
 					for col: Node in h_npc.find_children("*", "CollisionShape3D", true, false):
 						(col as CollisionShape3D).disabled = true
 				else:
-					h_npc.setup_robot(robot, func() -> int: return Config.RobotState.SEARCH if (is_task_busy() or Main.is_dialogue_state(state)) else state)
+					var pat_body := h_npc as CharacterBody3D
+					h_npc.setup_robot(robot, func() -> int:
+						if is_task_busy() or Main.is_dialogue_state(state):
+							return Config.RobotState.SEARCH
+						if current_target_patient != null and current_target_patient != pat_body:
+							return Config.RobotState.SEARCH
+						return state
+					)
 					if dialogue != null and h_npc.has_npc():
 						dialogue.register_npc(h_npc.get_npc())
 	if escort_only_mode:

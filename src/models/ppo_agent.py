@@ -88,3 +88,10 @@ class PPOHospitalAgent(nn.Module):
         entropy = dist.entropy().sum(-1)
         value = self.critic(obs).squeeze(-1)
         return action, log_prob, entropy, value
+    @staticmethod
+    def decode_action(a_v: float, a_omega: float, v_max: float = 0.8, omega_max: float = 1.2) -> tuple[float, float]:
+        """Decode normalized network actions [-1, 1] into physical (v [m/s], omega [rad/s])."""
+        v = float(np.clip((a_v + 1.0) * 0.5 * v_max, 0.0, v_max))
+        omega = float(np.clip(a_omega * omega_max, -omega_max, omega_max))
+        return v, omega
+

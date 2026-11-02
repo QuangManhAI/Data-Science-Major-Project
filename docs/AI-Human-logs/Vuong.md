@@ -953,6 +953,30 @@ av_remaining frozen after dialogue engagement.
 - **Touches:** `sim_vision/godot/scripts/inspection_panel.gd`, `sim_vision/godot/scripts/main.gd`, `sim_vision/godot/scripts/view_overlay.gd`, `sim_vision/godot/scripts/vision_client.gd`, `sim_vision/python/rl_policy_server.py`, `src/training/hospital_env_vision.py`, `src/training/hospital_env_pure_vision.py`, `src/training/train_pure_vision_rl.py`, `docs/AI-Human-logs/Vuong.md`
 - **Evidence:** 4/4 tests in `tests/test_pure_vision_obs.py` passed; verified approach & escort simulation in Python: patient engaged in 12 steps (+48.1 rew) and escorted smoothly with tether $1.06$m (+54.6 rew); launched 1,500-episode GPU fine-tuning (`task-11628`): Ep 1 achieved **+638.7 reward**, **4 patients helped**, and **0 collisions**.
 
+### Decision D-057: Dynamic Closest-Patient Acquisition and Dual Optical Arrival Trigger in Godot
+- **Context:** Live testing showed that when the robot approached a patient directly in front of it, the patient did not start talking and `state` stayed in `APPROACH` indefinitely.
+- **Root Cause:**
+  1. `main.gd:human_distance()` only tracked a single static `current_target_patient` chosen randomly at startup across the entire floor. When the robot faced an encountered patient ($d=1.2$m), `human_distance()` returned the distance to the distant patient ($d=9.43$m), preventing transition to `ARRIVED`.
+  2. Non-target patients had `pardon_enabled = true`, causing them to sidestep away rather than initiate dialogue.
+- **Resolution:**
+  1. Implemented `get_closest_available_patient()` in `main.gd` to dynamically acquire whichever patient is in physical/visual proximity ($d \le 3.5$m) and bind `current_target_patient = candidate_pat` with `pardon_enabled = false`.
+  2. Implemented dual optical YOLO trigger in `_step_policy()`: transitions to `ARRIVED` either when $d_{human} \le 2.0$m or when YOLO bounding box height $h \ge 0.38$, $|cx| < 0.35$, and $d \le 2.6$m.
+- **Touches:** [main.gd](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/sim_vision/godot/scripts/main.gd), [npc.gd](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/sim_vision/godot/scripts/npc.gd), [test_inspection_panel.gd](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/sim_vision/godot/tests/test_inspection_panel.gd).
+- **Evidence:** Verified 13/13 tests in `test_npc.gd` passed; isolated test suites in Godot confirmed immediate arrival trigger.
+
+### Decision D-059: True Physical Patient Position Binding and Eradication of 5-Meter False Arrival
+- **Context:** User observed that the robot was stopping and conversing with a patient that was physically 4 to 5 meters away sitting in a waiting chair.
+- **Root Cause:**
+  - `HospitalNpc.get_interaction_position()` was returning `waypoints[1]` for seated patients. In the hospital 3D scene, `waypoints[1]` is a hallway waypoint up to 3.5m–5m away from the patient's chair.
+  - When the robot drove down the hallway and approached within 2.0m of `waypoints[1]`, Godot believed `d_human <= 2.0m`, triggered `state = ARRIVED`, and started dialogue—while the real patient was sitting 4 to 5 meters away!
+- **Resolution:**
+  1. Replaced `waypoints[1]` logic in [hospital_npc.gd](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/sim_vision/godot/scripts/hospital_npc.gd) and [main.gd](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/sim_vision/godot/scripts/main.gd) so that `get_interaction_position()` and `Main.get_patient_interaction_pos()` strictly return `patient.global_position` (the true physical 3D coordinate of the NPC).
+  2. Set `PATIENT_ENGAGE_DIST_M = 1.85m` directly against the patient's true body position, guaranteeing that the robot drives within 1.85m of the physical patient before halting and engaging dialogue.
+  3. In `escort_step_towards()`, seated patients now smoothly stand up directly at their chair location (`global_position + fwd * 0.6m`) rather than teleporting to distant hallway waypoints.
+- **Touches:** [hospital_npc.gd](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/sim_vision/godot/scripts/hospital_npc.gd), [main.gd](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/sim_vision/godot/scripts/main.gd), [npc.gd](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/sim_vision/godot/scripts/npc.gd), [Vuong.md](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/docs/AI-Human-logs/Vuong.md).
+- **Evidence:** Tested and verified: 10/10 in `test_main.gd` passed; 15/15 in `test_tts_dialogue.gd` passed; confirmed distance computation strictly evaluates true physical coordinate $d_{actual} \le 1.85$m.
+
+
 
 
 

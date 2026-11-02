@@ -26,6 +26,7 @@ func test_initial_state_closed_and_toggleable() -> void:
 
 
 func test_update_lidar_values_and_colors() -> void:
+	_panel.set_pure_vision_mode(false)
 	_panel.set_open(true)
 	var readings := PackedFloat32Array()
 	readings.resize(17)

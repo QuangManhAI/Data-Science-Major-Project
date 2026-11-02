@@ -20,17 +20,19 @@ _REPO_ROOT = _THIS_DIR.parent.parent
 
 
 def resolve_model_path(path: str | Path | None = None) -> str:
-    candidates: list[Path] = []
     if path:
         p = Path(path)
-        candidates.extend([p, _REPO_ROOT / p, _THIS_DIR / p])
-    candidates.extend([
+        for cand in [p, _REPO_ROOT / p, _THIS_DIR / p]:
+            if cand.is_file():
+                return str(cand)
+        return str(p)
+    candidates: list[Path] = [
         _THIS_DIR / "yolo26n_hospital_robot_best_map92.6.pt",
         _REPO_ROOT / "models" / "yolo26n_hospital_robot_v6_best" / "yolo26n_hospital_robot_best_map92.6.pt",
         _REPO_ROOT / "sim_vision" / "python" / "yolo26n_hospital_robot_best_map92.6.pt",
         _THIS_DIR / "yolov8n.pt",
         _REPO_ROOT / "models" / "yolov8n" / "yolov8n.pt",
-    ])
+    ]
     for c in candidates:
         if c.is_file():
             return str(c)
@@ -98,12 +100,29 @@ class Detector(Protocol):
 def normalize_boxes(
     xyxy: np.ndarray,
     confs: np.ndarray,
-    classes: np.ndarray,
-    width: int,
-    height: int,
+    classes: np.ndarray | int | None = None,
+    width: int | None = None,
+    height: int | None = None,
     class_map: dict[int, str] | None = None,
+    include_class: bool = True,
 ) -> list[dict[str, Any]]:
-    """Box pixel ➔ tọa độ chuẩn hóa [0, 1], làm tròn 4 chữ số, sắp conf giảm dần."""
+    """Box pixel ➔ tọa độ chuẩn hóa [0, 1], làm tròn 4 chữ số, sắp conf giảm dần.
+    Tương thích cả gọi cũ (xyxy, confs, width, height) lẫn đa nhãn (xyxy, confs, classes, w, h)."""
+    legacy_call = False
+    if isinstance(classes, (int, float, np.integer)):
+        h = int(width) if width is not None else 480
+        w = int(classes)
+        classes = np.zeros(len(confs), dtype=int)
+        width = w
+        height = h
+        legacy_call = True
+    elif classes is None:
+        classes = np.zeros(len(confs), dtype=int)
+    if width is None:
+        width = 640
+    if height is None:
+        height = 480
+
     dets: list[dict[str, Any]] = []
     cmap = class_map if class_map is not None else HOSPITAL_CLASSES
     for (x1, y1, x2, y2), conf, cls_id in zip(
@@ -112,15 +131,16 @@ def normalize_boxes(
         np.asarray(classes, dtype=int),
     ):
         cid = int(cls_id)
-        d = {
+        d: dict[str, Any] = {
             "x1": round(min(max(x1 / width, 0.0), 1.0), 4),
             "y1": round(min(max(y1 / height, 0.0), 1.0), 4),
             "x2": round(min(max(x2 / width, 0.0), 1.0), 4),
             "y2": round(min(max(y2 / height, 0.0), 1.0), 4),
             "conf": round(float(conf), 4),
-            "class_id": cid,
-            "class_name": cmap.get(cid, f"class_{cid}"),
         }
+        if not legacy_call and include_class:
+            d["class_id"] = cid
+            d["class_name"] = cmap.get(cid, f"class_{cid}")
         if d["x1"] < d["x2"] and d["y1"] < d["y2"]:
             dets.append(d)
     dets.sort(key=lambda d: d["conf"], reverse=True)

@@ -63,6 +63,13 @@
 | [D-047](#d-047--in-the-wild-multi-npc-training-floor-3-room-dialog-alignment-and-npc-unstuck-evasion) | In-The-Wild Multi-NPC Training, Floor 3 Room Dialog Alignment, and NPC Unstuck Evasion | human-approved plan | accepted |
 | [D-048](#d-048--discovery-and-resolution-of-visual-reward-hacking-and-1200-episode-continuation) | Discovery and Resolution of Visual Reward Hacking and 1,200-Episode Continuation | human-directed inquiry | accepted |
 | [D-049](#d-049--resolution-of-patient-avoidance-geometry-reward-rebalancing-and-1200-ep-warmstart-training) | Resolution of Patient Avoidance Geometry, Reward Rebalancing, and 1,200-Ep Warmstart Training | human-approved via /grill-me | accepted |
+| [D-050](#d-050--interactive-elevator-timing-realistic-door-sensors-and-2000-ep-active-search-continuation) | Interactive Elevator Timing, Realistic Door Sensors, and 2,000-Ep Active Search Continuation | human-approved plan | accepted |
+| [D-051](#d-051--diagnostic-investigation-of-training-curve-asymptote-at-2000-episodes) | Diagnostic Investigation of Training Curve Asymptote at 2,000 Episodes | human-directed inquiry | accepted |
+| [D-052](#d-052--active-search-incentive-restructuring-stagnation-elimination-and-1000-ep-continuation) | Active Search Incentive Restructuring, Stagnation Elimination, and 1,000-Ep Continuation | human-approved plan | accepted |
+| [D-053](#d-053--2000-episode-deep-convergence-training-on-nvidia-rtx-4060-gpu) | 2,000-Episode Deep Convergence Training on NVIDIA RTX 4060 GPU | human | accepted |
+| [D-054](#d-054--transition-to-pure-vision-yolov6-only-no-lidar-29-dim-observation-architecture-and-sector-hud) | Transition to Pure Vision (YOLOv6 Only, No LiDAR), 29-Dim Observation Architecture, and Sector HUD | human-aligned via /grill-me | accepted |
+| [D-055](#d-055--pure-vision-environment-patches-yolov6-17-class-integration-and-converged-2000-episode-retraining) | Pure Vision Environment Patches, YOLOv6 17-Class Integration, and Converged 2,000-Episode Retraining | human-aligned via /grill-me | accepted |
+| [D-056](#d-056--escort-focused-pure-vision-architecture-goal-destination-routing-fix-and-1500-episode-fine-tuning) | Escort-Focused Pure Vision Architecture, Goal Destination Routing Fix, and 1,500-Episode Fine-Tuning | human-aligned via /grill-me | accepted |
 
 ---
 
@@ -920,23 +927,32 @@ av_remaining frozen after dialogue engagement.
 - **Touches:** `models/yolo26n_hospital_robot_v6_best/`, `sim_vision/python/detector.py`, `sim_vision/python/yolo_server.py`, `sim_vision/python/rl_policy_server.py`, `src/models/ppo_agent.py`, `src/training/hospital_env_vision.py`, `src/training/hospital_env_pure_vision.py`, `src/training/train_pure_vision_rl.py`, `sim_vision/godot/scripts/main.gd`, `sim_vision/godot/scripts/view_overlay.gd`, `sim_vision/godot/scenes/room.tscn`, `docs/AI-Human-logs/Vuong.md`
 - **Evidence:** 4/4 tests in `tests/test_pure_vision_obs.py` pass; completed 2,000-episode GPU training run (Ep 1 -> Ep 2000) under `experiments/runs/20261101_090639_PPOHospital-PureVision` on NVIDIA GeForce RTX 4060 Laptop GPU; total 91 patients helped under pure visual guidance with zero physical LiDAR; visual spotting rate reached **97.3%**; peak episode reward reached **+61.4**; 4-panel training curves saved at `experiments/runs/20261101_090639_PPOHospital-PureVision/training_curves.png`; best checkpoint saved at `experiments/runs/20261101_090639_PPOHospital-PureVision/checkpoints/PPOHospital-PureVision_best.pt`; 10-shift held-out diagnostic benchmark completed (`spotting_rate: 60.0%`).
 
-### D-055 — Pure Vision Environment Patches, YOLOv6 17-Class Integration, and Converged 2,000-Episode Retraining
+### D-056 — Escort-Focused Pure Vision Architecture, Goal Destination Routing Fix, and 1,500-Episode Fine-Tuning
 - **Status:** accepted
-- **When:** 2026-11-01T23:46:00+07:00
+- **When:** 2026-11-02T07:05:00+07:00
 - **Decided by:** human-aligned via /grill-me
-- **Trigger:** Diagnosis of reward plateau and stagnation in the pure-vision model: phantom LiDAR penalties (<0.40m) penalizing 1.2m doorways on 90%+ steps, teacher chattering oscillation wedging the robot into walls, and YOLO server defaulting to legacy 80-class COCO `yolov8n.pt` ("person" label) instead of 17-class hospital classes.
+- **Trigger:** Diagnosis of simulation escort circling in the lobby and approach starvation from `logs/godot.log` and `logs/rl_policy_server.log`:
+  1. Goal destination routing deadlock: Godot sent landmark elevator target `[12.8, 4.6]`, but `HospitalPureVisionEnv._get_obs()` reset target to `(0.0, 4.5)` in the lobby, causing the robot to turn 180 degrees away from the elevator and circle indefinitely.
+  2. Approach gradient starvation: Bounding box expansion alone yielded only $\approx +7.0$ points over 100+ steps, insufficient to reliably pull the robot to engagement distance.
+  3. UI telemetry desynchronization: In pure-vision mode, `InspectionPanel` defaulted `is_pure_vision` to `false`, displaying legacy 17-ray LiDAR tab by default, and `vision_client.gd` previously stripped `class_name` and `class_id` resulting in generic "person" labels.
 - **Architectural Decisions:**
-  1. **YOLO 17-Class Resolution:** Strictly set default YOLO model to fine-tuned `models/yolo26n_hospital_robot_v6_best/yolo26n_hospital_robot_best_map92.6.pt` across `yolo_server.py`, `detector.py`, and `run_simulation.py`. Bound 17-class mapping via `load_class_mapping()` loading `classes_17.json` (0: `patient`, 1: `doctor`, 2..16: hospital equipment/furniture). Removed generic COCO fallback.
-  2. **Bumper-Only Collision & Door Clearance:** In `hospital_env_vision.py` and `hospital_env_pure_vision.py`, stripped all LiDAR distance threshold penalties (`min_lidar_m < 0.40m`). Collision is now strictly defined by physical bumper contact when movement is blocked (`hit_wall and moved_to is None and robot_v < 0.05`), with leading-edge count (`_was_colliding`) and gentle sustained contact penalty (-0.5). Enables smooth traversal of 1.2m clinic doorways with 0 false collision penalties.
-  3. **Continuous Potential Field Navigation:** Replaced binary hard-steering threshold with smooth repulsive potential field ($\omega_{repulsion} = 0.8(s_0 + 0.5s_1) - 0.8(s_4 + 0.5s_3)$) and frontal speed factor ($v_{des} = v_{base} \cdot \text{speed\_factor}$). Wired intermediate distance-field landmark navigation during escort (`set_nav_target(*self._nav_final_target())`).
-  4. **2,000-Episode Clean Retraining on NVIDIA RTX 4060 GPU:** Fresh 29-D PPO agent trained from Ep 1 to Ep 2000 under `experiments/runs/20261101_112530_PPOHospital-PureVision` with decaying teacher warmup over first 200 episodes.
-- **Why:** Delivers a fully robust pure-vision navigation stack free from phantom sensor traps, oscillation deadlocks, and label misalignments.
-- **Touches:** `sim_vision/python/detector.py`, `sim_vision/python/yolo_server.py`, `run_simulation.py`, `src/training/hospital_env_vision.py`, `src/training/hospital_env_pure_vision.py`, `src/training/train_pure_vision_rl.py`, `scripts/plot_training_metrics.py`, `docs/AI-Human-logs/Vuong.md`
-- **Evidence:**
-  - Unit tests passed: 4/4 in `tests/test_pure_vision_obs.py`.
-  - 2,000-episode GPU training completed: total **3,779 patients helped** (up from 91); peak reward reached **+735.3** (Ep 1596); mean reward reached **+310.7** (last 20 avg: **+345.2**); mean collisions dropped to **0.79/shift**; visual spotting rate **100.0%**; stagnation timeouts reduced to **10.3%** (from >90%).
-  - 10-shift held-out diagnostic benchmark on `PPOHospital-PureVision_best.pt`: **$R_{team} = +344.94$**, **2.00 patients helped/shift**, **0.00 collisions/shift** (zero collisions!), **0.0% stagnation rate** (zero stagnation!), and **100.0% visual spotting rate**.
-  - Training curves saved at `experiments/runs/20261101_112530_PPOHospital-PureVision/training_curves.png`.
+  1. **Strict Target Passthrough:** In `rl_policy_server.py` and `hospital_env_pure_vision.py`, stored Godot's explicit goal coordinates as `custom_nav_target`. `_get_obs()` prioritizes `custom_nav_target` over `_nav_final_target()`, completely eliminating the `(0.0, 4.5)` lobby circling deadlock.
+  2. **Dense Approach Distance Shaping:** In `hospital_env_vision.py`, added continuous delta-distance approach shaping $+2.5 \times (d_{pat,prev} - d_{pat,curr})$ towards the patient during `APPROACH_PATIENT`, creating a smooth, strong gradient directly guiding the robot into dialogue engagement range.
+  3. **Adaptive Tether Speed Gating & Graduated Penalties:**
+     - Teacher action gates escort velocity: throttles to $0.15$ m/s when tether distance $> 2.5$m, and pauses ($v = 0.0$ m/s) when $> 3.5$m until the patient catches up.
+     - Graduated tether penalties: $-1.0$/step for $d_{tether} > 3.0$m, $-3.0$/step for $d_{tether} > 4.0$m, and zero progress reward when $> 3.5$m.
+  4. **Escort-Heavy Curriculum (70% Approach/Escort, 30% Patrol):**
+     - In `HospitalPureVisionEnv.spawn_escort_curriculum()`: 70% of training episodes spawn the robot within $2.5$m–$4.2$m facing the patient in `APPROACH_PATIENT`, guaranteeing a 10× increase in escort training samples.
+  5. **UI & HUD Pure-Vision Standardization:**
+     - Defaulted `is_pure_vision = true` in `inspection_panel.gd` and called `set_pure_vision_mode(true)` unconditionally on ready, hiding the LiDAR tab by default.
+     - Preserved `class_id` and `class_name` in `vision_client.gd` and `view_overlay.gd` to render role-specific colors (Cyan for patient, Orange for doctor, Amber for furniture).
+     - Connected 5-sector visual clearance HUD (`FL, L, C, R, FR`) directly to the top-right camera view.
+  6. **1,500-Episode GPU Fine-Tuning on NVIDIA RTX 4060:**
+     - Initialized from `PPOHospital-PureVision_best.pt` with a 100-episode teacher warmup under `experiments/runs/20261102_070135_PPOHospital-PureVision`.
+- **Why:** Ensures the pure-vision robot reliably approaches patients, engages dialogue, and navigates smooth multi-room escorts without drifting or tether breakage.
+- **Touches:** `sim_vision/godot/scripts/inspection_panel.gd`, `sim_vision/godot/scripts/main.gd`, `sim_vision/godot/scripts/view_overlay.gd`, `sim_vision/godot/scripts/vision_client.gd`, `sim_vision/python/rl_policy_server.py`, `src/training/hospital_env_vision.py`, `src/training/hospital_env_pure_vision.py`, `src/training/train_pure_vision_rl.py`, `docs/AI-Human-logs/Vuong.md`
+- **Evidence:** 4/4 tests in `tests/test_pure_vision_obs.py` passed; verified approach & escort simulation in Python: patient engaged in 12 steps (+48.1 rew) and escorted smoothly with tether $1.06$m (+54.6 rew); launched 1,500-episode GPU fine-tuning (`task-11628`): Ep 1 achieved **+638.7 reward**, **4 patients helped**, and **0 collisions**.
+
 
 
 

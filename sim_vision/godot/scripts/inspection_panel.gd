@@ -5,7 +5,7 @@ extends Control
 ## Hiển thị trực quan dữ liệu đầu vào theo các Tab: Thị giác (5 Sectors / LiDAR), YOLO Vision, RL Navigation, Voice & NLU.
 
 var is_open: bool = false
-var is_pure_vision: bool = false
+var is_pure_vision: bool = true
 
 var _tab_container: TabContainer
 var _lidar_scroll: ScrollContainer
@@ -55,6 +55,7 @@ var _target_room_lbl: Label
 func _ready() -> void:
 	_toggle_btn.pressed.connect(toggle)
 	_build_ui_tabs()
+	set_pure_vision_mode(true)
 	set_open(false)
 
 

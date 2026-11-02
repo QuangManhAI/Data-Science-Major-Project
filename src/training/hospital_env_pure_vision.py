@@ -33,10 +33,14 @@ from src.training.hospital_env import (
     _DOORS,
     DESTINATION_POSITIONS,
     ESCORT_WALK_SPEED,
+    ROBOT_BOUND_X_M,
+    ROBOT_BOUND_Z_M,
+    ROBOT_RADIUS_M,
     TaskPhase,
     _STRUCTURE,
     cast_rays,
     floor_of,
+    is_blocked,
     signed_angle_rad,
 )
 from src.training.hospital_env_vision import (
@@ -169,6 +173,36 @@ class HospitalPureVisionEnv(HospitalVisualShiftEnv):
         self.last_sectors = np.zeros(5, dtype=np.float32)
         return self._get_obs()
 
+    def spawn_escort_curriculum(self) -> np.ndarray:
+        """Spawn robot within 2.5m - 4.2m facing patient for escort-heavy training."""
+        px, pz = self.patient_x, self.patient_z
+        x_base = 100.0 if px >= 75.0 else (50.0 if px >= 25.0 else 0.0)
+
+        for _ in range(30):
+            d = float(self.rng.uniform(2.5, 4.2))
+            angle = float(self.rng.uniform(-math.pi, math.pi))
+            rx = px + d * math.cos(angle)
+            rz = pz + d * math.sin(angle)
+
+            if (
+                abs(rx - x_base) <= ROBOT_BOUND_X_M
+                and abs(rz) <= ROBOT_BOUND_Z_M
+                and not is_blocked(rx, rz, ROBOT_RADIUS_M + 0.15)
+                and not self._npc_blocks_move(rx, rz)
+            ):
+                to_pat_x = px - rx
+                to_pat_z = pz - rz
+                yaw = math.atan2(-to_pat_x, -to_pat_z)
+                yaw += float(self.rng.uniform(-0.20, 0.20))
+                self.robot_x = rx
+                self.robot_z = rz
+                self.robot_yaw = ((yaw + math.pi) % (2.0 * math.pi)) - math.pi
+                self.task_phase = TaskPhase.APPROACH_PATIENT
+                self.patient_spotted_once = True
+                break
+
+        return self._get_obs()
+
     def _compute_doctor_det(self) -> tuple[float, float, float, float]:
         """Compute pinhole camera detection for patrolling doctor obstacle."""
         if not getattr(self, "doctor_active", False):
@@ -261,7 +295,10 @@ class HospitalPureVisionEnv(HospitalVisualShiftEnv):
             obs[19] = math.cos(angle_goal)
         else:
             # During GUIDE_ESCORT or CALL_STAFF, landmark goal navigation is active
-            self.set_nav_target(*self._nav_final_target())
+            if getattr(self, "custom_nav_target", None) is not None:
+                self.set_nav_target(*self.custom_nav_target)
+            else:
+                self.set_nav_target(*self._nav_final_target())
             to_gx = self.goal_x - self.robot_x
             to_gz = self.goal_z - self.robot_z
             fwd_x = -math.sin(self.robot_yaw)
@@ -371,6 +408,14 @@ class HospitalPureVisionEnv(HospitalVisualShiftEnv):
         # 3. Escort or Corridor Navigation: smooth visual sector potential field avoidance
         goal_angle = math.atan2(obs[18], obs[19])
         v_base = ESCORT_WALK_SPEED if self.task_phase in (TaskPhase.GUIDE_ESCORT, TaskPhase.CALL_STAFF) else V_MAX
+
+        # In GUIDE_ESCORT: adapt forward speed according to patient tether
+        if self.task_phase == TaskPhase.GUIDE_ESCORT:
+            d_p = math.hypot(self.patient_x - self.robot_x, self.patient_z - self.robot_z)
+            if d_p > 3.5:
+                v_base = 0.0  # Pause and wait for patient to catch up
+            elif d_p > 2.5:
+                v_base = 0.15  # Slow down to allow patient to close distance
 
         # Repulsion from side sectors:
         # Left sectors (0, 1) push clockwise (+yaw rate / right turn)

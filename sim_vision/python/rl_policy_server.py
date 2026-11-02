@@ -92,8 +92,10 @@ class PolicyRunner:
         if phase in (TaskPhase.GUIDE_ESCORT, TaskPhase.CALL_STAFF):
             env.task_phase = TaskPhase(phase)
             final_x, final_z = (float(t) for t in msg["goal"])
+            env.custom_nav_target = (final_x, final_z)
             env.set_nav_target(final_x, final_z)
         else:
+            env.custom_nav_target = None
             if env.task_phase not in (TaskPhase.SEARCH_PATIENT, TaskPhase.APPROACH_PATIENT):
                 env.task_phase = TaskPhase.SEARCH_PATIENT
             final_x, final_z = env.patient_x, env.patient_z

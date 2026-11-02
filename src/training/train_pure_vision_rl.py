@@ -163,6 +163,7 @@ def run_train_pure_vision(
     eval_every: int = 200,
     eval_episodes: int = 15,
     bc_enabled: bool = True,
+    escort_curriculum: bool = True,
     env_mode: str = "full",
     smoke: bool = False,
 ) -> Path:
@@ -201,41 +202,24 @@ def run_train_pure_vision(
     best_eval = -float("inf")
     ckpt_prefix = "PPOHospital-PureVision"
 
+    timestamp = dt.datetime.now().strftime("%Y%m%d_%H%M%S")
+    run_dir = Path(experiments_root) / "runs" / f"{timestamp}_{ckpt_prefix}"
+    ckpt_dir = run_dir / "checkpoints"
+    ckpt_dir.mkdir(parents=True, exist_ok=True)
+    metrics_file = run_dir / "metrics.jsonl"
+    log_file = (run_dir / "train.log").open("a", encoding="utf-8")
+
+    def log_print(msg: str = "") -> None:
+        print(msg, flush=True)
+        log_file.write(msg + "\n")
+        log_file.flush()
+
     if resume_from:
         r_path = Path(resume_from)
-        run_dir = r_path.parent.parent if r_path.is_file() else r_path
-        ckpt_file = r_path if r_path.is_file() else (run_dir / "checkpoints" / f"{ckpt_prefix}_best.pt")
+        ckpt_file = r_path if r_path.is_file() else (r_path / "checkpoints" / f"{ckpt_prefix}_best.pt")
         ckpt = torch.load(ckpt_file, map_location=device, weights_only=True)
         agent.load_state_dict(ckpt["model_state_dict"])
-        if "optimizer_state_dict" in ckpt:
-            try:
-                optimizer.load_state_dict(ckpt["optimizer_state_dict"])
-            except Exception:
-                pass
-        start_ep = int(ckpt.get("episode", 0)) + 1
-        end_ep = start_ep + episodes - 1
-        ckpt_dir = run_dir / "checkpoints"
-        metrics_file = run_dir / "metrics.jsonl"
-        log_file = (run_dir / "train.log").open("a", encoding="utf-8")
-
-        def log_print(msg: str = "") -> None:
-            print(msg, flush=True)
-            log_file.write(msg + "\n")
-            log_file.flush()
-
-        log_print(f" Resumed Pure-Vision Training : Continuing from Ep {start_ep} in {run_dir.name}")
-    else:
-        timestamp = dt.datetime.now().strftime("%Y%m%d_%H%M%S")
-        run_dir = Path(experiments_root) / "runs" / f"{timestamp}_{ckpt_prefix}"
-        ckpt_dir = run_dir / "checkpoints"
-        ckpt_dir.mkdir(parents=True, exist_ok=True)
-        metrics_file = run_dir / "metrics.jsonl"
-        log_file = (run_dir / "train.log").open("a", encoding="utf-8")
-
-        def log_print(msg: str = "") -> None:
-            print(msg, flush=True)
-            log_file.write(msg + "\n")
-            log_file.flush()
+        log_print(f" Initialized from Checkpoint : Loaded weights from {ckpt_file.name}")
 
     rollout_agent.load_state_dict(agent.state_dict())
     regular_save_interval = max(1, episodes // 5)
@@ -272,12 +256,14 @@ def run_train_pure_vision(
             domain_randomization=True,
         )
 
-        # Behavioral Cloning Teacher Warmup (Decays from 0.20 to 0.0 over first 200 episodes)
-        warmup_span = 200
+        # Behavioral Cloning Teacher Warmup (Decays from 0.20 to 0.0 over warmup_span episodes)
+        warmup_span = 100 if resume_from else 200
         progress_in_warmup = max(0.0, min(1.0, (ep - start_ep) / float(warmup_span)))
         prior_weight = 0.20 * (1.0 - progress_in_warmup) if bc_enabled else 0.0
 
         obs = env.reset()
+        if escort_curriculum and (np.random.RandomState(ep_seed).uniform() < 0.70):
+            obs = env.spawn_escort_curriculum()
         done = False
         ep_obs, ep_act, ep_teacher, ep_logp, ep_rew, ep_val = [], [], [], [], [], []
         ever_spotted = False
@@ -564,10 +550,11 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="PPO Pure-Vision (YOLO Only, Zero LiDAR) Training")
     parser.add_argument("--episodes", type=int, default=2000)
     parser.add_argument("--start-episode", type=int, default=1)
-    parser.add_argument("--resume", type=str, default=None)
+    parser.add_argument("--resume", "--resume-from", dest="resume", type=str, default=None)
     parser.add_argument("--device", type=str, default="auto", choices=["auto", "cuda", "cpu", "mps"])
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--smoke", action="store_true")
+    parser.add_argument("--escort-curriculum", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--stagnation-timeout", type=float, default=60.0)
     parser.add_argument("--stagnation-penalty", type=float, default=-10.0)
     parser.add_argument("--shift-duration", type=float, default=300.0)
@@ -582,6 +569,7 @@ def main() -> None:
         device_name=args.device,
         seed=args.seed,
         smoke=args.smoke,
+        escort_curriculum=args.escort_curriculum,
         stagnation_timeout_s=args.stagnation_timeout,
         stagnation_penalty=args.stagnation_penalty,
         shift_duration_s=args.shift_duration,

@@ -101,11 +101,12 @@ func _ready() -> void:
 		_policy.sectors_received.connect(overlay.set_visual_sectors)
 		if inspection_panel != null:
 			_policy.sectors_received.connect(inspection_panel.update_visual_sectors)
-			inspection_panel.set_pure_vision_mode(true)
 		if dialogue != null:
 			dialogue.turn_completed.connect(_on_dialogue_turn_completed)
 	else:
 		_controller = get_node(controller_path)
+	if inspection_panel != null:
+		inspection_panel.set_pure_vision_mode(true)
 	if seed >= 0:
 		_rng.seed = seed
 	else:
@@ -825,7 +826,7 @@ func _update_wall_transparency() -> void:
 func _update_inspection_panel() -> void:
 	if inspection_panel == null or not inspection_panel.is_open or robot == null:
 		return
-	if not use_rl_controller:
+	if not use_rl_controller and not inspection_panel.is_pure_vision:
 		inspection_panel.update_lidar(robot.get_lidar_readings())
 	var current_pat: CharacterBody3D = active_escorted_patient if active_escorted_patient != null else (current_target_patient if current_target_patient != null else human)
 	var search: bool = _is_search_phase()

@@ -260,6 +260,7 @@ class HospitalVisualShiftEnv(HospitalShiftEnv):
 
         # Measure path progress only when destination landmark is active
         prev_dist_final = 0.0
+        prev_dist_pat = math.hypot(self.patient_x - self.robot_x, self.patient_z - self.robot_z)
         if self.task_phase in (TaskPhase.GUIDE_ESCORT, TaskPhase.CALL_STAFF):
             nav, nav_fld, _, _ = self._nav_field(*self._nav_final_target())
             prev_dist_final = nav.distance(nav_fld, self.robot_x, self.robot_z)
@@ -342,6 +343,10 @@ class HospitalVisualShiftEnv(HospitalShiftEnv):
                     else:
                         self.best_vision_h = det["h"]
 
+            if self.task_phase == TaskPhase.APPROACH_PATIENT:
+                curr_dist_pat = math.hypot(self.patient_x - self.robot_x, self.patient_z - self.robot_z)
+                r_visual += 2.5 * (prev_dist_pat - curr_dist_pat)
+
             self.prev_has_det = det["seen"]
             self.prev_vision_h = det["h"]
 
@@ -421,14 +426,18 @@ class HospitalVisualShiftEnv(HospitalShiftEnv):
                 self.best_goal_dist = curr_dist_final
                 self.steps_since_task = 0  # Escort progress along shortest path resets stagnation!
 
-        # Tether shaping
+        # Tether shaping (graduated penalties to keep patient close)
         r_tether = 0.0
         if self.task_phase == TaskPhase.GUIDE_ESCORT:
-            if d_tether > TETHER_MAX_M:
+            if d_tether > 4.0:
                 r_progress = 0.0
-                r_tether = PENALTY_TETHER_STRETCH
-            elif 0.9 <= d_tether <= 2.2:
-                r_tether = BONUS_TETHER_GOOD
+                r_tether = -3.0
+            elif d_tether > 3.0:
+                if d_tether > TETHER_MAX_M:
+                    r_progress = 0.0
+                r_tether = -1.0
+            elif 0.9 <= d_tether <= 2.5:
+                r_tether = 0.15
 
         # Safety, step & idle search penalty
         r_safety = PENALTY_STEP_TIME

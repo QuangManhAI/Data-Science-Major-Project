@@ -964,17 +964,27 @@ av_remaining frozen after dialogue engagement.
 - **Touches:** [main.gd](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/sim_vision/godot/scripts/main.gd), [npc.gd](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/sim_vision/godot/scripts/npc.gd), [test_inspection_panel.gd](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/sim_vision/godot/tests/test_inspection_panel.gd).
 - **Evidence:** Verified 13/13 tests in `test_npc.gd` passed; isolated test suites in Godot confirmed immediate arrival trigger.
 
-### Decision D-059: True Physical Patient Position Binding and Eradication of 5-Meter False Arrival
-- **Context:** User observed that the robot was stopping and conversing with a patient that was physically 4 to 5 meters away sitting in a waiting chair.
-- **Root Cause:**
-  - `HospitalNpc.get_interaction_position()` was returning `waypoints[1]` for seated patients. In the hospital 3D scene, `waypoints[1]` is a hallway waypoint up to 3.5m–5m away from the patient's chair.
-  - When the robot drove down the hallway and approached within 2.0m of `waypoints[1]`, Godot believed `d_human <= 2.0m`, triggered `state = ARRIVED`, and started dialogue—while the real patient was sitting 4 to 5 meters away!
-- **Resolution:**
-  1. Replaced `waypoints[1]` logic in [hospital_npc.gd](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/sim_vision/godot/scripts/hospital_npc.gd) and [main.gd](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/sim_vision/godot/scripts/main.gd) so that `get_interaction_position()` and `Main.get_patient_interaction_pos()` strictly return `patient.global_position` (the true physical 3D coordinate of the NPC).
-  2. Set `PATIENT_ENGAGE_DIST_M = 1.85m` directly against the patient's true body position, guaranteeing that the robot drives within 1.85m of the physical patient before halting and engaging dialogue.
-  3. In `escort_step_towards()`, seated patients now smoothly stand up directly at their chair location (`global_position + fwd * 0.6m`) rather than teleporting to distant hallway waypoints.
-- **Touches:** [hospital_npc.gd](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/sim_vision/godot/scripts/hospital_npc.gd), [main.gd](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/sim_vision/godot/scripts/main.gd), [npc.gd](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/sim_vision/godot/scripts/npc.gd), [Vuong.md](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/docs/AI-Human-logs/Vuong.md).
-- **Evidence:** Tested and verified: 10/10 in `test_main.gd` passed; 15/15 in `test_tts_dialogue.gd` passed; confirmed distance computation strictly evaluates true physical coordinate $d_{actual} \le 1.85$m.
+### Decision D-060: Eradication of Simulation Oracle Variables & Pure Vision Sim-to-Real Hardware Alignment
+- **Status:** accepted
+- **When:** 2026-11-02T12:50:00+07:00
+- **Decided by:** human-aligned via /grill-me
+- **Trigger:** Human practitioner observed that during inference experiments, even when the YOLO vision server was completely disconnected, the robot continued navigating and escorting because the policy secretly relied on simulation oracle variables:
+  1. `obs[0..4]` (5-sector depth) raycast against simulation map walls (`_STRUCTURE`).
+  2. `obs[22..24]` (tether) computed Euclidean ground-truth distance (`math.hypot`) from oracle patient coordinates.
+  3. `obs[25..28]` (doorway) performed global lookup from `_DOORS` dictionary.
+- **Architectural Decisions:**
+  1. **Zero Map Raycasting in Visual Depth Sectors (`obs[0..4]`):** Removed all wall raycasting from `compute_5_sector_depth()`. Sectors are now populated *exclusively* by mapping 2D obstacle bounding boxes (`doctor`, `wheelchair`, `hospital_bed`, `stretcher_cart`, etc.) from YOLO into the 5 angular sectors. If YOLO is disconnected, sectors are strictly `0.0`.
+  2. **Side-by-Side Companion Escort Formation (`obs[22..24]`):**
+     - Replaced oracle coordinate tether calculation with peripheral visual companion tracking.
+     - In `GUIDE_ESCORT`, the patient steps towards a companion waypoint $1.0\text{m}$ forward and $0.55\text{m}$ to the right/left ($\approx 29^\circ$ bearing), remaining in the robot front camera's $75^\circ$ FOV.
+     - Tether distance is derived purely from optical bounding box height $h_{pat}$. If the patient is lost from the camera FOV, tether flags immediately trigger warning/break (`[1.0, 1.0, 1.0]`), forcing the robot to halt rather than blindly navigating forward.
+  3. **Visual Doorway Detection (`obs[25..28]`):**
+     - Eliminated `_DOORS` global coordinate lookup. Doorway channels are populated strictly when YOLO detects a door in camera FOV (`class: door`); if no door is visible, channels are strictly `0.0`.
+  4. **Hierarchical Local Odometry Navigation (`obs[17..19]`):**
+     - Local waypoint heading error derived from wheel encoder/IMU dead-reckoning in robot local body coordinates, matching real physical mobile robot hardware.
+- **Touches:** [`src/training/hospital_env_pure_vision.py`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/src/training/hospital_env_pure_vision.py), [`sim_vision/python/rl_policy_server.py`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/sim_vision/python/rl_policy_server.py), [`sim_vision/godot/scripts/rl_env_bridge.gd`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/sim_vision/godot/scripts/rl_env_bridge.gd), [`sim_vision/godot/scripts/main.gd`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/sim_vision/godot/scripts/main.gd), [`tests/test_disconnection_pure_vision.py`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/tests/test_disconnection_pure_vision.py).
+- **Evidence:** 3/3 passed in `tests/test_disconnection_pure_vision.py`; 11/11 passed in `test_pure_vision_obs.py` and `test_rl_hospital.py`; 164/164 passed in Godot GUT test suite. When YOLO is disconnected, all visual channels immediately zero out, matching physical robot reality.
+
 
 
 

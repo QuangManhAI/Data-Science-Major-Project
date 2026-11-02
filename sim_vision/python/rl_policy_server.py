@@ -111,6 +111,7 @@ class PolicyRunner:
             # Parse multi-class YOLO detections from Godot
             patient_box = None
             doctor_box = None
+            door_box = None
             obstacle_boxes = []
 
             for d in dets:
@@ -123,6 +124,9 @@ class PolicyRunner:
                     if doctor_box is None or float(d.get("conf", 0)) > float(doctor_box.get("conf", 0)):
                         doctor_box = d
                     obstacle_boxes.append(d)
+                elif cid == 5 or cname == "door":
+                    if door_box is None or float(d.get("conf", 0)) > float(door_box.get("conf", 0)):
+                        door_box = d
                 else:
                     obstacle_boxes.append(d)
 
@@ -134,14 +138,13 @@ class PolicyRunner:
                     "conf": float(msg["yolo"][3]),
                 }
 
-            # Update 5-Sector Visual Depth Map
-            from src.training.hospital_env import _STRUCTURE
+            # Update 5-Sector Visual Depth Map (Strict Sim-to-Real: Zero map raycasts)
             sectors = compute_5_sector_depth(
                 robot_x=x,
                 robot_z=z,
                 robot_yaw=yaw,
                 fl=floor_of(x),
-                structure_walls=_STRUCTURE,
+                structure_walls=None,
                 obstacle_boxes=obstacle_boxes,
             )
             obs[0:5] = sectors
@@ -205,6 +208,39 @@ class PolicyRunner:
                     obs[17] = float(np.clip(env.nav_remaining / 25.0, 0.0, 1.0))
                     obs[18] = math.sin(angle_goal)
                     obs[19] = math.cos(angle_goal)
+
+            # Robot kinematics [20..21]
+            obs[20] = float(np.clip(v / V_MAX, 0.0, 1.0))
+            obs[21] = float(np.clip(omega / OMEGA_MAX, -1.0, 1.0))
+
+            # Patient tether [22..24] (Strictly from peripheral camera lock, zero oracle coords)
+            if env.task_phase in (TaskPhase.GUIDE_ESCORT, TaskPhase.CALL_STAFF):
+                if patient_box is not None:
+                    h_pat = float(patient_box.get("h", float(patient_box.get("y2", 0.0)) - float(patient_box.get("y1", 0.0))))
+                    d_vis_tether = float(np.clip(1.20 / max(h_pat, 0.05), 0.5, 5.0))
+                    obs[22] = float(np.clip(d_vis_tether / 5.0, 0.0, 1.0))
+                    obs[23] = 1.0 if d_vis_tether > 2.0 else 0.0
+                    obs[24] = 1.0 if d_vis_tether > 3.5 else 0.0
+                else:
+                    # Patient lost from camera FOV
+                    obs[22] = 1.0
+                    obs[23] = 1.0
+                    obs[24] = 1.0
+            else:
+                obs[22:25] = 0.0
+
+            # Doorway geometry [25..28] (Strictly from YOLO 'door' detection, zero oracle _DOORS)
+            if door_box is not None:
+                door_cx = float(door_box.get("cx", (float(door_box.get("x1", 0.0)) + float(door_box.get("x2", 0.0))) / 2.0 - 0.5))
+                door_h = float(door_box.get("h", float(door_box.get("y2", 0.0)) - float(door_box.get("y1", 0.0))))
+                d_vis_door = float(np.clip(1.20 / max(door_h, 0.05), 0.5, 10.0))
+                angle_door = float(-math.atan(door_cx * math.tan(CAMERA_HFOV_RAD / 2.0)))
+                obs[25] = float(np.clip(d_vis_door / 10.0, 0.0, 1.0))
+                obs[26] = math.sin(angle_door)
+                obs[27] = math.cos(angle_door)
+                obs[28] = 1.0 if d_vis_door < 2.0 else 0.0
+            else:
+                obs[25:29] = 0.0
 
         # =========================================================================
         # 2. HYBRID / LEGACY MODE (31-D or 37-D with LiDAR)

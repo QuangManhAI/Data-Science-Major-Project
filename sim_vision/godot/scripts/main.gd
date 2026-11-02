@@ -260,7 +260,7 @@ func _physics_process(delta: float) -> void:
 	if _rl_bridge.task_phase == RLEnvBridgeScript.TaskPhase.GUIDE_ESCORT:
 		var has_escort: bool = active_escorted_patient != null
 		if has_escort:
-			RLEnvBridgeScript.step_escorted_patient(active_escorted_patient, robot.global_position, delta, _rl_bridge.escort_trail)
+			RLEnvBridgeScript.step_escorted_patient(active_escorted_patient, robot.global_position, delta, _rl_bridge.escort_trail, robot.rotation.y)
 		var d_goal: float = Human.flat_distance(robot.global_position, _rl_bridge.goal_position)
 		var esc_p: CharacterBody3D = active_escorted_patient if has_escort else human
 		var d_tether: float = Human.flat_distance(robot.global_position, esc_p.global_position)

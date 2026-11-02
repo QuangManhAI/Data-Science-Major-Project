@@ -77,44 +77,27 @@ def compute_5_sector_depth(
     robot_x: float,
     robot_z: float,
     robot_yaw: float,
-    fl: int,
-    structure_walls: dict[int, np.ndarray],
+    fl: int = 1,
+    structure_walls: dict[int, np.ndarray] | None = None,
     obstacle_boxes: list[dict[str, Any]] | None = None,
 ) -> np.ndarray:
     """Compute 5-sector visual obstacle proximity [0..1]^5.
 
-    Combines:
-    1. Optical pinhole raycast to hospital walls at sector ray bearings.
-    2. Any detected 2D obstacle bounding boxes mapped into horizontal sectors.
+    Strict Sim-to-Real:
+    Zero LiDAR, Zero map wall raycasting.
+    Populated EXCLUSIVELY by mapping 2D obstacle bounding boxes into the 5 camera sectors.
+    If no obstacles are detected (or YOLO is disconnected), all sectors are 0.0.
     """
     sectors = np.zeros(5, dtype=np.float32)
 
-    # 1. Optical Wall Raycast across the 5 sectors
-    if fl in structure_walls:
-        walls = structure_walls[fl]
-        ray_yaws = robot_yaw + SECTOR_ANGLES_RAD
-        # Robot fwd in world is (-sin(yaw), -cos(yaw))
-        ux = -np.sin(ray_yaws)
-        uz = -np.cos(ray_yaws)
-        hits = cast_rays(robot_x, robot_z, ux, uz, 8.0, walls)
-        # Wall distance converts to optical height proxy: h = 1.20 / d_wall
-        for i in range(5):
-            val = float(hits[i])
-            if not math.isfinite(val):
-                val = 8.0
-            d_w = max(0.2, min(val, 25.0))
-            h_wall = float(np.clip(1.20 / d_w, 0.0, 1.0))
-            sectors[i] = h_wall
-
-    # 2. Obstacle Bounding Boxes (if provided, e.g. from YOLO detections)
     if obstacle_boxes:
         for b in obstacle_boxes:
             cx_val = b.get("cx", (float(b.get("x1", 0.0)) + float(b.get("x2", 0.0))) / 2.0 - 0.5)
             h_val = b.get("h", float(b.get("y2", 0.0)) - float(b.get("y1", 0.0)))
             cx = float(cx_val) if math.isfinite(cx_val) else 0.0
             h = float(h_val) if math.isfinite(h_val) else 0.0
-            # Map cx in [-0.5, 0.5] to sector index 0..4
-            sec_idx = int(np.clip(math.floor((cx + 0.5) * 5.0), 0, 4))
+            offset = cx if abs(cx) <= 0.5 else cx * 0.5
+            sec_idx = int(np.clip(math.floor((offset + 0.5) * 5.0), 0, 4))
             sectors[sec_idx] = max(sectors[sec_idx], float(np.clip(h, 0.0, 1.0)))
 
     return np.nan_to_num(np.clip(sectors, 0.0, 1.0), nan=0.0)
@@ -228,13 +211,82 @@ class HospitalPureVisionEnv(HospitalVisualShiftEnv):
         conf = float(np.clip(0.95 - 0.04 * math.hypot(self.doctor_x - self.robot_x, self.doctor_z - self.robot_z), 0.45, 0.98)) if det["seen"] > 0.5 else 0.0
         return det["seen"], det["cx"], det["h"], conf
 
+    def _compute_door_det(self) -> dict[str, float]:
+        """Compute visual pinhole detection for doors in camera FOV."""
+        fl = floor_of(self.robot_x)
+        best_det = {"seen": 0.0, "cx": 0.0, "cy": 0.0, "w": 0.0, "h": 0.0}
+        best_dist = 999.0
+
+        for (floor, side), (centres, _) in _DOORS.items():
+            if floor != fl:
+                continue
+            z_line = -2.0 if side == "north" else 2.0
+            for c in centres:
+                d = math.hypot(self.robot_x - c, self.robot_z - z_line)
+                if d > 8.0:
+                    continue
+                det = compute_pinhole_detection(
+                    robot_x=self.robot_x,
+                    robot_z=self.robot_z,
+                    robot_yaw=self.robot_yaw,
+                    target_x=c,
+                    target_z=z_line,
+                    target_seated=False,
+                    is_blocked_fn=self._check_los_occluded,
+                    domain_randomization=self.domain_randomization,
+                    rng=self.rng,
+                )
+                if det["seen"] > 0.5 and d < best_dist:
+                    best_dist = d
+                    best_det = det
+
+        return best_det
+
+    def _step_escorted_patient(self) -> None:
+        """Patient walks in peripheral escort formation (side-by-side) within camera FOV."""
+        fwd_x = -math.sin(self.robot_yaw)
+        fwd_z = -math.cos(self.robot_yaw)
+        right_x = math.cos(self.robot_yaw)
+        right_z = -math.sin(self.robot_yaw)
+
+        # Companion waypoint: 1.0m forward, 0.55m to the right (bearing ~29 deg, inside 75 deg FOV)
+        target_x = self.robot_x + fwd_x * 1.0 + right_x * 0.55
+        target_z = self.robot_z + fwd_z * 1.0 + right_z * 0.55
+
+        # If blocked by wall, fall back to narrower offset or standard trail
+        if is_blocked(target_x, target_z, 0.28):
+            target_x = self.robot_x + fwd_x * 0.50 + right_x * 0.35
+            if is_blocked(target_x, target_z, 0.28):
+                return super()._step_escorted_patient()
+
+        dx = target_x - self.patient_x
+        dz = target_z - self.patient_z
+        dist = math.hypot(dx, dz)
+        if dist <= 0.20:
+            return
+
+        step = min(ESCORT_WALK_SPEED * self.dt, dist)
+        sx = (dx / dist) * step
+        sz = (dz / dist) * step
+
+        candidates = [(sx, sz)]
+        if abs(sx) > 1e-3:
+            candidates.append((math.copysign(step, sx), 0.0))
+        if abs(sz) > 1e-3:
+            candidates.append((0.0, math.copysign(step, sz)))
+
+        for cx, cz in candidates:
+            px_new, pz_new = self.patient_x + cx, self.patient_z + cz
+            if not is_blocked(px_new, pz_new, 0.28):
+                self.patient_x, self.patient_z = px_new, pz_new
+                return
+
     def _get_obs(self) -> np.ndarray:
-        """Build 29-D pure-vision observation vector. ZERO LiDAR."""
+        """Build 29-D pure-vision observation vector. ZERO LiDAR, ZERO Map Raycasts."""
         obs = np.zeros(OBS_DIM, dtype=np.float32)
         fl = floor_of(self.robot_x)
 
-        # 1. Compute 5-Sector Visual Depth Map [0..4]
-        # Include doctor bounding box as an obstacle for sector clearance
+        # 1. Compute 5-Sector Visual Depth Map [0..4] (Strictly from detected obstacles)
         doc_seen, doc_cx, doc_h, doc_conf = self._compute_doctor_det()
         obs_boxes = []
         if doc_seen > 0.5:
@@ -245,7 +297,7 @@ class HospitalPureVisionEnv(HospitalVisualShiftEnv):
             robot_z=self.robot_z,
             robot_yaw=self.robot_yaw,
             fl=fl,
-            structure_walls=_STRUCTURE,
+            structure_walls=None,
             obstacle_boxes=obs_boxes,
         )
         self.last_sectors = sectors
@@ -312,28 +364,36 @@ class HospitalPureVisionEnv(HospitalVisualShiftEnv):
         obs[20] = float(np.clip(self.robot_v / V_MAX, 0.0, 1.0))
         obs[21] = float(np.clip(self.robot_omega / OMEGA_MAX, -1.0, 1.0))
 
-        # 7. Patient Tether Status [22..24]
+        # 7. Patient Tether Status [22..24] (Visual Tether from Peripheral Companion Camera Lock)
         if self.task_phase in (TaskPhase.GUIDE_ESCORT, TaskPhase.CALL_STAFF):
-            d_p = math.hypot(self.patient_x - self.robot_x, self.patient_z - self.robot_z)
-            obs[22] = float(np.clip(d_p / 5.0, 0.0, 1.0))
-            obs[23] = 1.0 if d_p > 2.0 else 0.0
-            obs[24] = 1.0 if d_p > 3.5 else 0.0
+            if pat_seen > 0.5:
+                d_vis_tether = float(np.clip(1.20 / max(pat_h, 0.05), 0.5, 5.0))
+                obs[22] = float(np.clip(d_vis_tether / 5.0, 0.0, 1.0))
+                obs[23] = 1.0 if d_vis_tether > 2.0 else 0.0
+                obs[24] = 1.0 if d_vis_tether > 3.5 else 0.0
+            else:
+                # Lost sight of escorted patient in camera FOV!
+                obs[22] = 1.0
+                obs[23] = 1.0
+                obs[24] = 1.0
         else:
             obs[22] = 0.0
             obs[23] = 0.0
             obs[24] = 0.0
 
-        # 8. Doorway Geometry [25..28]
-        door_x, door_z, d_door = get_nearest_door(self.robot_x, self.robot_z)
-        to_dx = door_x - self.robot_x
-        to_dz = door_z - self.robot_z
-        fwd_x = -math.sin(self.robot_yaw)
-        fwd_z = -math.cos(self.robot_yaw)
-        angle_door = signed_angle_rad(fwd_x, fwd_z, to_dx, to_dz)
-        obs[25] = float(np.clip(d_door / 10.0, 0.0, 1.0))
-        obs[26] = math.sin(angle_door)
-        obs[27] = math.cos(angle_door)
-        obs[28] = 1.0 if d_door < 2.0 else 0.0
+        # 8. Doorway Geometry [25..28] (Visual Door Detection, Zero Oracle Lookup)
+        door_det = self._compute_door_det()
+        if door_det["seen"] > 0.5:
+            door_cx = door_det["cx"]
+            door_h = door_det["h"]
+            d_vis_door = float(np.clip(1.20 / max(door_h, 0.05), 0.5, 10.0))
+            angle_door = float(-math.atan(door_cx * math.tan(CAMERA_HFOV_RAD / 2.0)))
+            obs[25] = float(np.clip(d_vis_door / 10.0, 0.0, 1.0))
+            obs[26] = math.sin(angle_door)
+            obs[27] = math.cos(angle_door)
+            obs[28] = 1.0 if d_vis_door < 2.0 else 0.0
+        else:
+            obs[25:29] = 0.0
 
         return np.nan_to_num(obs, nan=0.0, posinf=1.0, neginf=-1.0).astype(np.float32)
 

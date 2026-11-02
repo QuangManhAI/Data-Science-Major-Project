@@ -301,29 +301,19 @@ static func compute_step_reward(
 	}
 
 
-## Bệnh nhân đi theo sau robot trong pha GUIDE_ESCORT: lần lượt qua các dấu robot đã đi (cách nhau
-## ESCORT_CRUMB_SPACING_M), không cắt góc xuyên khung cửa; dừng khi cách robot ESCORT_STOP_DIST_M.
-## Di chuyển bằng move_and_slide nên va chạm tường / đồ đạc như người thật.
-static func step_escorted_patient(patient: CharacterBody3D, robot_pos: Vector3, delta: float, trail: Array[Vector3] = []) -> void:
+## Bệnh nhân đi cùng robot trong pha GUIDE_ESCORT theo đội hình bạn đồng hành (side-by-side companion formation).
+## Bệnh nhân đi chếch phía trước-bên phải robot (~29-35 độ) để luôn nằm trong góc nhìn camera 75 độ của robot,
+## cho phép YOLO nhận diện liên tục mà không cần biến thần thánh từ simulation.
+static func step_escorted_patient(patient: CharacterBody3D, robot_pos: Vector3, delta: float, trail: Array[Vector3] = [], robot_yaw: float = 0.0) -> void:
 	if patient == null:
 		return
-	if not trail.is_empty() and Human.flat_distance(robot_pos, trail[-1]) > ESCORT_TRAIL_JUMP_M:
-		trail.clear()  # robot vừa đi thang máy
-	if trail.is_empty() or Human.flat_distance(robot_pos, trail[-1]) >= ESCORT_CRUMB_SPACING_M:
-		trail.append(robot_pos)
-		if trail.size() > ESCORT_TRAIL_MAX:
-			trail.pop_front()
+	var fwd := Vector3(-sin(robot_yaw), 0.0, -cos(robot_yaw))
+	var right := Vector3(cos(robot_yaw), 0.0, -sin(robot_yaw))
+	var companion_target: Vector3 = robot_pos + fwd * 1.0 + right * 0.55
 
-	var d_robot: float = Human.flat_distance(patient.global_position, robot_pos)
-	if d_robot <= ESCORT_STOP_DIST_M:
+	var d_target: float = Human.flat_distance(patient.global_position, companion_target)
+	if d_target <= 0.20:
 		patient.escort_stop()
 		return
-	while trail.size() > 1:
-		var d0: float = Human.flat_distance(patient.global_position, trail[0])
-		var d1: float = Human.flat_distance(patient.global_position, trail[1])
-		if d0 <= ESCORT_CRUMB_REACH_M or d1 <= d0 or (trail.size() > 3 and d_robot > 2.5 and d1 < d0 + 0.3):
-			trail.pop_front()
-		else:
-			break
-	var step: float = minf(ESCORT_WALK_SPEED * delta, d_robot - ESCORT_STOP_DIST_M)
-	patient.escort_step_towards(trail[0], step, delta)
+	var step: float = minf(ESCORT_WALK_SPEED * delta, d_target)
+	patient.escort_step_towards(companion_target, step, delta)

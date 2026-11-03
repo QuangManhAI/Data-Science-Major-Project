@@ -1033,7 +1033,32 @@ av_remaining frozen after dialogue engagement.
   3. **Strict Reward Mathematical Synchronization:**
      - Synced `self.cumulative_team_reward` to the exact running sum of clipped step rewards (`self.cumulative_pure_vision_reward += reward`), guaranteeing telemetry matches actual PPO advantage buffers.
 - **Touches:** [`src/training/hospital_env_vision.py`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/src/training/hospital_env_vision.py), [`src/training/hospital_env_pure_vision.py`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/src/training/hospital_env_pure_vision.py), [`tests/test_multi_patient_shift.py`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/tests/test_multi_patient_shift.py), [`docs/bugs/20261103_pure_vision_multi_patient_reward_and_standup_bugs.md`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/docs/bugs/20261103_pure_vision_multi_patient_reward_and_standup_bugs.md), [`docs/AI-Human-logs/Vuong.md`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/docs/AI-Human-logs/Vuong.md).
-- **Evidence:** 9/9 unit tests pass in `tests/test_multi_patient_shift.py` and `tests/test_disconnection_pure_vision.py`; single-episode simulation verified 2 real patients delivered in shift (`Helped=2/6`, Step 365 Patient 2 arrived +80, Step 861 Patient 1 arrived +80, Total reward = +239.20 with zero phantom spikes).
+### Decision D-065: Cross-Floor Elevator Transit vs Final Room Delivery Disambiguation
+- **Status:** accepted
+- **When:** 2026-11-03T10:00:00+07:00
+- **Decided by:** human observation in visual mock training ("wait, i just re watch the mock training, its only escort patient to the elevator not other rooms in upper floor? is it my wrong seeing or a bugs?")
+- **Root Cause & Fix:**
+  - *Bug:* When escorting a patient to an upper floor clinic (e.g. Room 205 on Floor 2), the intermediate navigation target was `self.goal_key = "thang_may"`. When arriving at the elevator, the environment checked `floor_of(goal_pos) != cur_fl`. Since `"thang_may"` is on Floor 1, `1 != 1` was False, bypassing elevator transit. The room arrival block then matched `self.goal_key == "thang_may"` and erroneously treated the elevator threshold as the final clinic destination, marking the patient `served = True` and abandoning them at the elevator door!
+  - *Fix:* Integrated `resolve_final_target(action, slot, floor)` to explicitly disambiguate intermediate elevator transit from final clinic delivery:
+    ```python
+    final_target = resolve_final_target(self.scenario_action, self.scenario_slot, self.scenario_floor)
+    if self.goal_key in ("thang_may", "thang_may_t2", "thang_may_t3") and final_target != self.goal_key:
+        # Cross-floor elevator ride:
+        dest_fl = floor_of(DESTINATION_POSITIONS.get(final_target, (0.0, 4.5))[0])
+        shift = float(dest_fl - cur_fl) * 50.0
+        self.robot_x += shift; self.patient_x += shift; p["x"] += shift
+        self.goal_key = final_target  # Switches target to Room 205 on Floor 2!
+        reward += REWARD_ELEVATOR_TRANSIT
+    else:
+        # Arrived at actual clinic room (e.g. Room 205):
+        p["served"] = True
+        self.patients_helped += 1
+        reward += REWARD_GUIDE_ARRIVED_VIS
+        self.returning_to_lobby = True  # Routes back to elevator to return to Floor 1!
+    ```
+- **Touches:** [`src/training/hospital_env_pure_vision.py`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/src/training/hospital_env_pure_vision.py), [`tests/test_multi_patient_shift.py`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/tests/test_multi_patient_shift.py), [`docs/bugs/20261103_pure_vision_multi_patient_reward_and_standup_bugs.md`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/docs/bugs/20261103_pure_vision_multi_patient_reward_and_standup_bugs.md), [`docs/AI-Human-logs/Vuong.md`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/docs/AI-Human-logs/Vuong.md).
+- **Evidence:** 10/10 unit tests pass in `tests/test_multi_patient_shift.py` and `tests/test_disconnection_pure_vision.py`; end-to-end simulation verified Patient 0 rides elevator to Floor 2, is delivered inside Room 205, and robot returns to Floor 1 lobby.
+
 
 
 

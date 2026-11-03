@@ -49,6 +49,7 @@ from src.training.hospital_env import (
     is_blocked,
     nav_grid,
     resolve_destination_key,
+    resolve_final_target,
     signed_angle_rad,
 )
 from src.training.hospital_env_vision import (
@@ -657,57 +658,55 @@ class HospitalPureVisionEnv(HospitalVisualShiftEnv):
                 self.last_known_tether = 1.0
                 self.lost_sight_steps = 0
 
-        # 1c. GUIDE_ESCORT Elevator Transit (Cross-Floor Escort)
-        if self.task_phase == TaskPhase.GUIDE_ESCORT and self.active_patient_idx is not None:
-            active_x, active_z = DESTINATION_POSITIONS.get(self.goal_key, (0.0, 4.5))
-            if floor_of(active_x) != cur_fl:
-                elev_x, elev_z = ELEVATOR_POSITIONS[cur_fl]
-                d_r = math.hypot(elev_x - self.robot_x, elev_z - self.robot_z)
-                d_p = math.hypot(elev_x - self.patient_x, elev_z - self.patient_z)
-                if d_r <= GOAL_ARRIVE_ROBOT_M and d_p <= GOAL_ARRIVE_PATIENT_M:
-                    target_fl = floor_of(active_x)
-                    shift = float(target_fl - cur_fl) * 50.0
-                    self.robot_x += shift
-                    self.patient_x += shift
-                    self.patients[self.active_patient_idx]["x"] += shift
-                    self.steps_since_task = 0
-                    reward += REWARD_ELEVATOR_TRANSIT
-                    info["elevator_transit"] = True
-
-        # 1d. GUIDE_ESCORT Room Arrival (Task Completion & Anti-Reward-Farming)
+        # 1c. GUIDE_ESCORT Elevator Transit or Room Arrival
         if self.task_phase == TaskPhase.GUIDE_ESCORT and self.active_patient_idx is not None:
             dest_x, dest_z = DESTINATION_POSITIONS.get(self.goal_key, (0.0, 4.5))
             d_r = math.hypot(dest_x - self.robot_x, dest_z - self.robot_z)
             d_p = math.hypot(dest_x - self.patient_x, dest_z - self.patient_z)
             if d_r <= GOAL_ARRIVE_ROBOT_M and d_p <= GOAL_ARRIVE_PATIENT_M:
-                # Successfully delivered patient! Mark SERVED
-                self.patients[self.active_patient_idx]["served"] = True
-                self.patients_helped += 1
-                self.steps_since_task = 0
-                reward += REWARD_GUIDE_ARRIVED_VIS
-                info["guide_completed"] = True
-
-                # Check if all 6 patients on Floor 1 are served
-                if all(p.get("served", False) for p in self.patients):
-                    done = True
-                    info["exit_reason"] = "ALL_PATIENTS_SERVED"
-                    reward += 100.0  # Full shift bonus!
+                final_target = resolve_final_target(self.scenario_action, self.scenario_slot, self.scenario_floor)
+                # Check if this arrival is at an elevator for cross-floor transit
+                if self.goal_key in ("thang_may", "thang_may_t2", "thang_may_t3") and final_target != self.goal_key:
+                    # Ride elevator with patient to destination floor
+                    dest_fl = floor_of(DESTINATION_POSITIONS.get(final_target, (0.0, 4.5))[0])
+                    shift = float(dest_fl - cur_fl) * 50.0
+                    self.robot_x += shift
+                    self.patient_x += shift
+                    self.patients[self.active_patient_idx]["x"] += shift
+                    self.goal_key = final_target
+                    self.steps_since_task = 0
+                    self.escort_trail.clear()
+                    reward += REWARD_ELEVATOR_TRANSIT
+                    info["elevator_transit"] = True
                 else:
-                    new_fl = floor_of(self.robot_x)
-                    if new_fl > 1:
-                        self.returning_to_lobby = True
-                        self.task_phase = TaskPhase.SEARCH_PATIENT
-                        self.goal_key = f"thang_may_t{new_fl}"
-                        self.active_patient_idx = None
-                        self.patient_x = -999.0
-                        self.patient_z = -999.0
+                    # Successfully arrived at final destination room! Mark SERVED
+                    self.patients[self.active_patient_idx]["served"] = True
+                    self.patients_helped += 1
+                    self.steps_since_task = 0
+                    reward += REWARD_GUIDE_ARRIVED_VIS
+                    info["guide_completed"] = True
+
+                    # Check if all 6 patients on Floor 1 are served
+                    if all(p.get("served", False) for p in self.patients):
+                        done = True
+                        info["exit_reason"] = "ALL_PATIENTS_SERVED"
+                        reward += 100.0  # Full shift bonus!
                     else:
-                        self.returning_to_lobby = False
-                        self.task_phase = TaskPhase.SEARCH_PATIENT
-                        self.goal_key = "patient"
-                        self.active_patient_idx = None
-                        self.patient_x = -999.0
-                        self.patient_z = -999.0
+                        new_fl = floor_of(self.robot_x)
+                        if new_fl > 1:
+                            self.returning_to_lobby = True
+                            self.task_phase = TaskPhase.SEARCH_PATIENT
+                            self.goal_key = f"thang_may_t{new_fl}"
+                            self.active_patient_idx = None
+                            self.patient_x = -999.0
+                            self.patient_z = -999.0
+                        else:
+                            self.returning_to_lobby = False
+                            self.task_phase = TaskPhase.SEARCH_PATIENT
+                            self.goal_key = "patient"
+                            self.active_patient_idx = None
+                            self.patient_x = -999.0
+                            self.patient_z = -999.0
 
         # 2. Continuous Visual Obstacle Proximity Repulsion
         obs_sectors = obs[0:5]

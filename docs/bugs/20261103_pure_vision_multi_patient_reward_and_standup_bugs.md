@@ -77,6 +77,20 @@ During the 2,000-episode continuous multi-patient shift training run (`train_pur
 
 ---
 
+### Bug 3: Elevator Premature Delivery Termination (Patient Left at Elevator Door)
+* **Root Location:** `src/training/hospital_env_pure_vision.py` lines 661–689 (`HospitalPureVisionEnv.step()`).
+* **Mechanism:**
+  - When a patient's destination is on Floor 2 or 3 (e.g. Room 205), `resolve_destination_key` correctly directed the robot to `self.goal_key = "thang_may"` on Floor 1.
+  - However, in `step()`, Block 1c evaluated `if floor_of(active_x) != cur_fl:`. Since `"thang_may"` is at $X = 0.0$ (Floor 1), `floor_of(active_x)` was `1 == cur_fl`, so elevator transit was bypassed!
+  - Block 1d then evaluated arrival at `self.goal_key`. Since the robot and patient were at the elevator, the environment erroneously concluded that the patient had reached their final destination, marked them `served = True` right in front of the elevator door, and never escorted them to Room 205 on the upper floor!
+* **Resolution:**
+  - Disambiguated elevator arrivals using `resolve_final_target(action, slot, floor)`:
+    - If `self.goal_key in ("thang_may", "thang_may_t2", "thang_may_t3") and final_target != self.goal_key`: This is **cross-floor elevator transit**. The robot and patient ride the elevator up to `dest_fl`, `self.goal_key` transitions to `final_target` (e.g. `"205"`), and escorting continues along the upper floor corridor.
+    - Else: This is the **actual room arrival** at the final clinic. Mark `p["served"] = True`, award $+80.0$, and initiate return to Floor 1 via `returning_to_lobby = True`.
+  - Added full end-to-end integration test `test_cross_floor_elevator_transit_and_room_delivery` in `tests/test_multi_patient_shift.py`.
+
+---
+
 ## 4. Verification Results
 - **Unit Tests:** 9/9 passed (`pytest tests/test_multi_patient_shift.py tests/test_disconnection_pure_vision.py`).
 - **Real Episode Validation (`scratch/diagnose_helped.py`):**

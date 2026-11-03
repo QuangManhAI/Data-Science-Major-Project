@@ -964,26 +964,22 @@ av_remaining frozen after dialogue engagement.
 - **Touches:** [main.gd](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/sim_vision/godot/scripts/main.gd), [npc.gd](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/sim_vision/godot/scripts/npc.gd), [test_inspection_panel.gd](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/sim_vision/godot/tests/test_inspection_panel.gd).
 - **Evidence:** Verified 13/13 tests in `test_npc.gd` passed; isolated test suites in Godot confirmed immediate arrival trigger.
 
-### Decision D-060: Eradication of Simulation Oracle Variables & Pure Vision Sim-to-Real Hardware Alignment
+### Decision D-061: 2,000-Episode Fine-Tuning Execution on Real-World Sim-to-Real Rules
 - **Status:** accepted
-- **When:** 2026-11-02T12:50:00+07:00
-- **Decided by:** human-aligned via /grill-me
-- **Trigger:** Human practitioner observed that during inference experiments, even when the YOLO vision server was completely disconnected, the robot continued navigating and escorting because the policy secretly relied on simulation oracle variables:
-  1. `obs[0..4]` (5-sector depth) raycast against simulation map walls (`_STRUCTURE`).
-  2. `obs[22..24]` (tether) computed Euclidean ground-truth distance (`math.hypot`) from oracle patient coordinates.
-  3. `obs[25..28]` (doorway) performed global lookup from `_DOORS` dictionary.
-- **Architectural Decisions:**
-  1. **Zero Map Raycasting in Visual Depth Sectors (`obs[0..4]`):** Removed all wall raycasting from `compute_5_sector_depth()`. Sectors are now populated *exclusively* by mapping 2D obstacle bounding boxes (`doctor`, `wheelchair`, `hospital_bed`, `stretcher_cart`, etc.) from YOLO into the 5 angular sectors. If YOLO is disconnected, sectors are strictly `0.0`.
-  2. **Side-by-Side Companion Escort Formation (`obs[22..24]`):**
-     - Replaced oracle coordinate tether calculation with peripheral visual companion tracking.
-     - In `GUIDE_ESCORT`, the patient steps towards a companion waypoint $1.0\text{m}$ forward and $0.55\text{m}$ to the right/left ($\approx 29^\circ$ bearing), remaining in the robot front camera's $75^\circ$ FOV.
-     - Tether distance is derived purely from optical bounding box height $h_{pat}$. If the patient is lost from the camera FOV, tether flags immediately trigger warning/break (`[1.0, 1.0, 1.0]`), forcing the robot to halt rather than blindly navigating forward.
-  3. **Visual Doorway Detection (`obs[25..28]`):**
-     - Eliminated `_DOORS` global coordinate lookup. Doorway channels are populated strictly when YOLO detects a door in camera FOV (`class: door`); if no door is visible, channels are strictly `0.0`.
-  4. **Hierarchical Local Odometry Navigation (`obs[17..19]`):**
-     - Local waypoint heading error derived from wheel encoder/IMU dead-reckoning in robot local body coordinates, matching real physical mobile robot hardware.
-- **Touches:** [`src/training/hospital_env_pure_vision.py`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/src/training/hospital_env_pure_vision.py), [`sim_vision/python/rl_policy_server.py`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/sim_vision/python/rl_policy_server.py), [`sim_vision/godot/scripts/rl_env_bridge.gd`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/sim_vision/godot/scripts/rl_env_bridge.gd), [`sim_vision/godot/scripts/main.gd`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/sim_vision/godot/scripts/main.gd), [`tests/test_disconnection_pure_vision.py`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/tests/test_disconnection_pure_vision.py).
-- **Evidence:** 3/3 passed in `tests/test_disconnection_pure_vision.py`; 11/11 passed in `test_pure_vision_obs.py` and `test_rl_hospital.py`; 164/164 passed in Godot GUT test suite. When YOLO is disconnected, all visual channels immediately zero out, matching physical robot reality.
+- **When:** 2026-11-03T07:32:00+07:00
+- **Decided by:** human-directed, agent-executed
+- **Trigger:** Request to finetune for 2,000 episodes under the newly established zero-oracle Sim-to-Real rules.
+- **Execution & Results:**
+  - Trained 2,000 episodes under `experiments/runs/20261102_204414_PPOHospital-PureVision` on NVIDIA RTX 4060 GPU.
+  - Zero map raycasting in 5-sector depth (`obs[0..4]`), peripheral side-by-side companion escort tracking (`obs[22..24]`), and optical door detection (`obs[25..28]`).
+  - Total patients escorted: **3,323 patients** (1.66 ± 1.28 patients/shift).
+  - Peak reward reached: **+954.3** (Ep 810).
+  - Visual spotting rate: **100.0%**.
+  - Collision rate: **1.02 collisions/shift**.
+  - Best checkpoint saved to [`experiments/runs/20261102_204414_PPOHospital-PureVision/checkpoints/PPOHospital-PureVision_best.pt`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/experiments/runs/20261102_204414_PPOHospital-PureVision/checkpoints/PPOHospital-PureVision_best.pt).
+- **Touches:** [`src/training/train_pure_vision_rl.py`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/src/training/train_pure_vision_rl.py), [`src/training/hospital_env_pure_vision.py`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/src/training/hospital_env_pure_vision.py), [`experiments/runs/20261102_204414_PPOHospital-PureVision/`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/experiments/runs/20261102_204414_PPOHospital-PureVision/).
+- **Evidence:** All 2,000 episodes completed; verified with `test_disconnection_pure_vision.py` (3/3 passed) and Godot GUT tests (164/164 passed). Telemetry plot saved to `training_curves.png`.
+
 
 
 

@@ -147,6 +147,7 @@ def run_train_pure_vision(
     stagnation_timeout_s: float = 60.0,
     stagnation_penalty: float = -10.0,
     shift_duration_s: float = 300.0,
+    steps_per_epoch: int = 10000,
     update_freq_episodes: int = 5,
     ppo_epochs: int = 4,
     batch_size: int = 256,
@@ -173,6 +174,7 @@ def run_train_pure_vision(
     if smoke:
         episodes = 2
         shift_duration_s = 6.0
+        steps_per_epoch = 60
         update_freq_episodes = 1
         eval_every = 2
         eval_episodes = 2
@@ -186,7 +188,12 @@ def run_train_pure_vision(
     rollout_agent.eval()
 
     optimizer = torch.optim.AdamW(agent.parameters(), lr=lr_init, eps=1e-5)
-    total_updates = max(1, episodes // update_freq_episodes)
+    approx_steps_per_ep = max(30, int(shift_duration_s / 0.2) * 0.75)
+    total_steps_est = episodes * approx_steps_per_ep
+    if steps_per_epoch > 0:
+        total_updates = max(1, int(total_steps_est / steps_per_epoch))
+    else:
+        total_updates = max(1, episodes // update_freq_episodes)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
         optimizer, T_max=total_updates, eta_min=lr_min
     )
@@ -235,6 +242,10 @@ def run_train_pure_vision(
     log_print(f" Observation Space   : 29 Dims (5-Sector Visual Depth + Patient/Doctor Channels)")
     log_print(f" Environment Mode    : {env_mode.upper()} (Crowded Hospital Multi-Floor Navigation)")
     log_print(f" Shift Duration      : {shift_duration_s:.1f}s ({int(shift_duration_s / 0.2)} steps)")
+    if steps_per_epoch > 0:
+        log_print(f" Steps per Epoch     : {steps_per_epoch:,d} steps (~{max(1, round(steps_per_epoch / (shift_duration_s / 0.2)))} shifts/epoch)")
+    else:
+        log_print(f" Update Frequency    : Every {update_freq_episodes} shifts")
     log_print(f" Stagnation Timeout  : {stagnation_timeout_s:.1f}s (Penalty: {stagnation_penalty:.1f})")
     log_print(f" Periodic Checkpoint : Every {regular_save_interval} episodes (Target: 5 checkpoints)")
     if mock_train:
@@ -411,7 +422,8 @@ def run_train_pure_vision(
             f.write(json.dumps(rec) + "\n")
 
         # PPO Batch Update
-        if ep % update_freq_episodes == 0 and batch_obs:
+        should_update = (len(batch_obs) >= steps_per_epoch) if steps_per_epoch > 0 else (ep % update_freq_episodes == 0)
+        if (should_update or ep == end_ep) and batch_obs:
             b_obs = torch.as_tensor(np.asarray(batch_obs), dtype=torch.float32, device=device)
             b_act = torch.as_tensor(np.asarray(batch_act), dtype=torch.float32, device=device)
             b_tea = torch.as_tensor(np.asarray(batch_teacher), dtype=torch.float32, device=device)
@@ -620,6 +632,7 @@ def main() -> None:
     parser.add_argument("--stagnation-timeout", type=float, default=60.0)
     parser.add_argument("--stagnation-penalty", type=float, default=-10.0)
     parser.add_argument("--shift-duration", type=float, default=300.0)
+    parser.add_argument("--steps-per-epoch", type=int, default=10000, help="Rollout environment steps gathered per PPO update epoch (default: 10000)")
     parser.add_argument("--eval-every", type=int, default=200)
     parser.add_argument("--eval-episodes", type=int, default=15)
     parser.add_argument("--visual", "--render", dest="visual", action="store_true", help="Launch interactive non-headless visual GUI")
@@ -638,6 +651,7 @@ def main() -> None:
         stagnation_timeout_s=args.stagnation_timeout,
         stagnation_penalty=args.stagnation_penalty,
         shift_duration_s=args.shift_duration,
+        steps_per_epoch=args.steps_per_epoch,
         eval_every=args.eval_every,
         eval_episodes=args.eval_episodes,
         visual=args.visual,

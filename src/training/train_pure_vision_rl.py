@@ -632,6 +632,7 @@ def main() -> None:
     parser.add_argument("--stagnation-timeout", type=float, default=60.0)
     parser.add_argument("--stagnation-penalty", type=float, default=-10.0)
     parser.add_argument("--shift-duration", type=float, default=300.0)
+    parser.add_argument("--max-steps", "--steps-per-episode", dest="max_steps", type=int, default=None, help="Maximum environment steps per episode / shift (e.g. 10000 steps = 2000s)")
     parser.add_argument("--steps-per-epoch", type=int, default=10000, help="Rollout environment steps gathered per PPO update epoch (default: 10000)")
     parser.add_argument("--eval-every", type=int, default=200)
     parser.add_argument("--eval-episodes", type=int, default=15)
@@ -639,6 +640,10 @@ def main() -> None:
     parser.add_argument("--mock-train", "--no-save", dest="mock_train", action="store_true", help="Execute complete training pipeline without saving checkpoints")
     parser.add_argument("--fps", type=int, default=30, help="Target FPS for visual rendering")
     args = parser.parse_args()
+
+    shift_duration = args.shift_duration
+    if args.max_steps is not None:
+        shift_duration = float(args.max_steps) * 0.2
 
     run_train_pure_vision(
         episodes=args.episodes,
@@ -650,7 +655,7 @@ def main() -> None:
         escort_curriculum=args.escort_curriculum,
         stagnation_timeout_s=args.stagnation_timeout,
         stagnation_penalty=args.stagnation_penalty,
-        shift_duration_s=args.shift_duration,
+        shift_duration_s=shift_duration,
         steps_per_epoch=args.steps_per_epoch,
         eval_every=args.eval_every,
         eval_episodes=args.eval_episodes,

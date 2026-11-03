@@ -166,6 +166,9 @@ def run_train_pure_vision(
     escort_curriculum: bool = True,
     env_mode: str = "full",
     smoke: bool = False,
+    visual: bool = False,
+    mock_train: bool = False,
+    fps: int = 30,
 ) -> Path:
     if smoke:
         episodes = 2
@@ -234,13 +237,30 @@ def run_train_pure_vision(
     log_print(f" Shift Duration      : {shift_duration_s:.1f}s ({int(shift_duration_s / 0.2)} steps)")
     log_print(f" Stagnation Timeout  : {stagnation_timeout_s:.1f}s (Penalty: {stagnation_penalty:.1f})")
     log_print(f" Periodic Checkpoint : Every {regular_save_interval} episodes (Target: 5 checkpoints)")
+    if mock_train:
+        log_print(" Mock-Train Mode     : ENABLED (Weights updated in memory, NO checkpoints saved to disk)")
+    if visual:
+        log_print(f" Visual GUI Renderer : ENABLED (Target FPS: {fps})")
     log_print(f" Output Directory    : {run_dir}")
     log_print("=" * 86)
+
+    renderer = None
+    if visual:
+        try:
+            from src.ui.visual_env_renderer import VisualEnvRenderer
+            renderer = VisualEnvRenderer(
+                window_name="Hospital Pure-Vision RL Training Visualizer",
+                target_fps=fps,
+            )
+        except Exception as e:
+            log_print(f"[WARN] Failed to initialize VisualEnvRenderer: {e}. Falling back to headless.")
+            renderer = None
 
     t_start = time.time()
     batch_obs, batch_act, batch_teacher, batch_logp = [], [], [], []
     batch_adv, batch_ret = [], []
     ep_width = len(str(end_ep))
+    user_exit = False
 
     for ep in range(start_ep, end_ep + 1):
         ep_seed = seed + ep * 17
@@ -262,8 +282,6 @@ def run_train_pure_vision(
         prior_weight = 0.20 * (1.0 - progress_in_warmup) if bc_enabled else 0.0
 
         obs = env.reset()
-        if escort_curriculum and (np.random.RandomState(ep_seed).uniform() < 0.70):
-            obs = env.spawn_escort_curriculum()
         done = False
         ep_obs, ep_act, ep_teacher, ep_logp, ep_rew, ep_val = [], [], [], [], [], []
         ever_spotted = False
@@ -290,6 +308,21 @@ def run_train_pure_vision(
                 executed_act = np.clip(pi_act_np, -1.0, 1.0)
 
             next_obs, reward, done, info = env.step(executed_act)
+
+            if renderer is not None:
+                keep_going = renderer.render_step(
+                    env=env,
+                    action=executed_act,
+                    reward=reward,
+                    step_idx=env.step_count,
+                    episode_idx=ep,
+                    total_episodes=end_ep,
+                    info=info,
+                    is_mock_train=mock_train,
+                )
+                if not keep_going:
+                    user_exit = True
+                    break
 
             if info.get("has_det", 0.0) > 0.5:
                 ever_spotted = True
@@ -351,13 +384,17 @@ def run_train_pure_vision(
         log_print(
             f"Ep {ep:{ep_width}d}/{end_ep} | "
             f"R_team: {r_team:+6.1f} (avg20: {roll20_mean:+6.1f}, peak: {peak_r_team:+6.1f}) | "
-            f"Helped: {tasks} (total: {total_helped}) | "
+            f"Helped: {tasks}/6 (total: {total_helped}) | "
             f"Col: {collisions} | "
             f"Spotted: {'YES' if ever_spotted else 'NO '} | "
             f"Exit: {exit_reason:<18s} | "
             f"{steps:4d} steps ({duration_s:4.1f}s) | "
             f"ETA: {format_eta(eta_s)}"
         )
+
+        if user_exit:
+            log_print("\n[INFO] User requested clean exit from visual GUI.")
+            break
 
         with metrics_file.open("a", encoding="utf-8") as f:
             rec = {
@@ -430,6 +467,11 @@ def run_train_pure_vision(
                     v_loss = 0.5 * ((new_val - m_ret) ** 2).mean()
                     bc_loss = ((action_mean - m_tea) ** 2).mean()
 
+                    last_policy_loss = float(policy_loss.item())
+                    last_v_loss = float(v_loss.item())
+                    last_entropy = float(entropy.item())
+                    last_bc_loss = float(bc_loss.item())
+
                     total_loss = (
                         policy_loss
                         + vf_coef * v_loss
@@ -458,6 +500,14 @@ def run_train_pure_vision(
 
             scheduler.step()
             rollout_agent.load_state_dict(agent.state_dict())
+            if renderer is not None:
+                renderer.update_ppo_stats({
+                    "policy_loss": last_policy_loss if 'last_policy_loss' in locals() else 0.0,
+                    "value_loss": last_v_loss if 'last_v_loss' in locals() else 0.0,
+                    "entropy": last_entropy if 'last_entropy' in locals() else 0.0,
+                    "bc_loss": last_bc_loss if 'last_bc_loss' in locals() else 0.0,
+                    "lr": float(scheduler.get_last_lr()[0]),
+                })
 
             batch_obs.clear()
             batch_act.clear()
@@ -469,19 +519,22 @@ def run_train_pure_vision(
         # Save Best Model on rolling-20 peak
         if len(rolling_20) >= 10 and roll20_mean > best_roll20:
             best_roll20 = roll20_mean
-            ckpt_path = ckpt_dir / f"{ckpt_prefix}_best.pt"
-            torch.save(
-                {
-                    "episode": ep,
-                    "model_state_dict": agent.state_dict(),
-                    "optimizer_state_dict": optimizer.state_dict(),
-                    "best_roll20": best_roll20,
-                    "best_eval_score": best_eval,
-                    "peak_r_team": peak_r_team,
-                    "git_commit": get_git_commit(),
-                },
-                ckpt_path,
-            )
+            if not mock_train:
+                ckpt_path = ckpt_dir / f"{ckpt_prefix}_best.pt"
+                torch.save(
+                    {
+                        "episode": ep,
+                        "model_state_dict": agent.state_dict(),
+                        "optimizer_state_dict": optimizer.state_dict(),
+                        "best_roll20": best_roll20,
+                        "best_eval_score": best_eval,
+                        "peak_r_team": peak_r_team,
+                        "git_commit": get_git_commit(),
+                    },
+                    ckpt_path,
+                )
+            else:
+                log_print(f" [MOCK-TRAIN] Peak avg20 reward reached ({best_roll20:+.1f}) | Checkpoint saving bypassed.")
 
         # Periodic Evaluation
         if ep % eval_every == 0:
@@ -508,24 +561,33 @@ def run_train_pure_vision(
 
         # Regular Checkpoint Saving (Target ~5 checkpoints)
         if ep % regular_save_interval == 0 or ep == end_ep:
-            periodic_ckpt_path = ckpt_dir / f"{ckpt_prefix}_ep{ep}.pt"
-            torch.save(
-                {
-                    "episode": ep,
-                    "model_state_dict": agent.state_dict(),
-                    "optimizer_state_dict": optimizer.state_dict(),
-                    "best_roll20": best_roll20,
-                    "best_eval_score": best_eval,
-                    "peak_r_team": peak_r_team,
-                    "git_commit": get_git_commit(),
-                },
-                periodic_ckpt_path,
-            )
-            log_print(f" [CKPT] Saved periodic checkpoint ({ep - start_ep + 1}/{episodes}): {periodic_ckpt_path.name}")
+            if not mock_train:
+                periodic_ckpt_path = ckpt_dir / f"{ckpt_prefix}_ep{ep}.pt"
+                torch.save(
+                    {
+                        "episode": ep,
+                        "model_state_dict": agent.state_dict(),
+                        "optimizer_state_dict": optimizer.state_dict(),
+                        "best_roll20": best_roll20,
+                        "best_eval_score": best_eval,
+                        "peak_r_team": peak_r_team,
+                        "git_commit": get_git_commit(),
+                    },
+                    periodic_ckpt_path,
+                )
+                log_print(f" [CKPT] Saved periodic checkpoint ({ep - start_ep + 1}/{episodes}): {periodic_ckpt_path.name}")
+            else:
+                log_print(f" [MOCK-TRAIN] Episode {ep} completed | Periodic checkpoint saving bypassed.")
+
+    if renderer is not None:
+        renderer.close()
 
     log_print("=" * 86)
     log_print(f" Pure-Vision Training complete! Episodes completed: {completed_in_run} (Final Ep: {end_ep})")
-    log_print(f" Final Best Checkpoint: {ckpt_dir / f'{ckpt_prefix}_best.pt'}")
+    if not mock_train:
+        log_print(f" Final Best Checkpoint: {ckpt_dir / f'{ckpt_prefix}_best.pt'}")
+    else:
+        log_print(" [MOCK-TRAIN] Mock training finished cleanly without modifying checkpoint files.")
     try:
         log_file.close()
     except Exception:
@@ -560,6 +622,9 @@ def main() -> None:
     parser.add_argument("--shift-duration", type=float, default=300.0)
     parser.add_argument("--eval-every", type=int, default=200)
     parser.add_argument("--eval-episodes", type=int, default=15)
+    parser.add_argument("--visual", "--render", dest="visual", action="store_true", help="Launch interactive non-headless visual GUI")
+    parser.add_argument("--mock-train", "--no-save", dest="mock_train", action="store_true", help="Execute complete training pipeline without saving checkpoints")
+    parser.add_argument("--fps", type=int, default=30, help="Target FPS for visual rendering")
     args = parser.parse_args()
 
     run_train_pure_vision(
@@ -575,6 +640,9 @@ def main() -> None:
         shift_duration_s=args.shift_duration,
         eval_every=args.eval_every,
         eval_episodes=args.eval_episodes,
+        visual=args.visual,
+        mock_train=args.mock_train,
+        fps=args.fps,
     )
 
 

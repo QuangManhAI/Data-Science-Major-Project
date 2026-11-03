@@ -32,15 +32,22 @@ from src.models.ppo_agent import OBS_DIM_PURE_VISION, OMEGA_MAX, V_MAX
 from src.training.hospital_env import (
     _DOORS,
     DESTINATION_POSITIONS,
+    ELEVATOR_POSITIONS,
     ESCORT_WALK_SPEED,
+    GOAL_ARRIVE_PATIENT_M,
+    GOAL_ARRIVE_ROBOT_M,
+    HOSPITAL_NPCS,
+    REWARD_ELEVATOR_TRANSIT,
     ROBOT_BOUND_X_M,
     ROBOT_BOUND_Z_M,
+    ROBOT_DOCK,
     ROBOT_RADIUS_M,
     TaskPhase,
     _STRUCTURE,
     cast_rays,
     floor_of,
     is_blocked,
+    resolve_destination_key,
     signed_angle_rad,
 )
 from src.training.hospital_env_vision import (
@@ -147,44 +154,194 @@ class HospitalPureVisionEnv(HospitalVisualShiftEnv):
             domain_randomization=domain_randomization,
         )
         self.pure_vision = True
+        self.patients: list[dict[str, Any]] = []
+        self.active_patient_idx: int | None = None
+        self.returning_to_lobby: bool = False
         self.last_doctor_det: dict[str, float] = {"seen": 0.0, "cx": 0.0, "cy": 0.0, "w": 0.0, "h": 0.0}
         self.last_sectors: np.ndarray = np.zeros(5, dtype=np.float32)
 
     def reset(self, seed: int | None = None) -> np.ndarray:
-        obs = super().reset(seed=seed)
+        if seed is not None:
+            self.rng = np.random.default_rng(seed)
+
+        # 1. Start strictly at Floor 1 Main Entrance / Dock facing inward
+        self.robot_x, self.robot_z, self.robot_yaw = ROBOT_DOCK
+        self.robot_v = 0.0
+        self.robot_omega = 0.0
+
+        # 2. Populate 6 Floor 1 Patients from Scene Layout with diverse destinations
+        dest_pool = [
+            ("guide", "101", 1),
+            ("guide", "nha_thuoc", 1),
+            ("guide", "205", 2),
+            ("guide", "210", 2),
+            ("guide", "301", 3),
+            ("guide", "303", 3),
+        ]
+        if hasattr(self, "rng"):
+            self.rng.shuffle(dest_pool)
+
+        self.patients = []
+        raw_patients = [n for n in HOSPITAL_NPCS if n.get("role") == "patient"]
+        for i, p in enumerate(raw_patients):
+            pert_x = float(self.rng.uniform(-0.3, 0.3)) if self.domain_randomization else 0.0
+            pert_z = float(self.rng.uniform(-0.3, 0.3)) if self.domain_randomization else 0.0
+            cx = float(p["x"]) + pert_x
+            cz = float(p["z"]) + pert_z
+            if is_blocked(cx, cz, 0.30):
+                cx, cz = float(p["x"]), float(p["z"])
+            self.patients.append({
+                "id": p.get("name", f"Patient_{i+1:02d}"),
+                "home_x": cx,
+                "home_z": cz,
+                "x": cx,
+                "z": cz,
+                "seated": bool(p.get("seated", False)),
+                "served": False,
+                "destination": dest_pool[i % len(dest_pool)],
+            })
+
+        self.active_patient_idx = None
+        self.returning_to_lobby = False
+        self.task_phase = TaskPhase.SEARCH_PATIENT
+        self.goal_key = "patient"
+        self.patient_x = -999.0
+        self.patient_z = -999.0
+        self.patient_seated = False
+        self.patrol_wp_idx = 0
+        self.patients_helped = 0
+        self.step_count = 0
+        self.steps_since_task = 0
+        self.cumulative_team_reward = 0.0
+        self.escort_trail.clear()
         self.last_doctor_det = {"seen": 0.0, "cx": 0.0, "cy": 0.0, "w": 0.0, "h": 0.0}
+        self.last_det = {"seen": 0.0, "cx": 0.0, "cy": 0.0, "w": 0.0, "h": 0.0}
         self.last_sectors = np.zeros(5, dtype=np.float32)
+
+        # Setup NPCs as obstacles
+        self.npcs = [
+            {**n, "home": (n["x"], n["z"]), "wp_index": 0, "pardoning": False, "target": None, "pardon_t": 0.0, "cooldown": 0.0, "blocked_t": 0.0}
+            for n in HOSPITAL_NPCS
+        ] if self.env_mode == "full" else []
+
+        self.doctor_active = True
+        self.doctor_x = -6.0
+        self.doctor_z = -0.6
+        self.doctor_dir = 1.0
+
         return self._get_obs()
 
     def spawn_escort_curriculum(self) -> np.ndarray:
-        """Spawn robot within 2.5m - 4.2m facing patient for escort-heavy training."""
-        px, pz = self.patient_x, self.patient_z
-        x_base = 100.0 if px >= 75.0 else (50.0 if px >= 25.0 else 0.0)
+        """Deprecated: All episodes start at Floor 1 front entrance/dock."""
+        return self.reset()
 
-        for _ in range(30):
-            d = float(self.rng.uniform(2.5, 4.2))
-            angle = float(self.rng.uniform(-math.pi, math.pi))
-            rx = px + d * math.cos(angle)
-            rz = pz + d * math.sin(angle)
+    def _compute_yolo_det(self) -> tuple[float, float, float, float]:
+        """Compute pinhole detection across multiple unserved patients or currently escorted patient."""
+        fl = floor_of(self.robot_x)
 
-            if (
-                abs(rx - x_base) <= ROBOT_BOUND_X_M
-                and abs(rz) <= ROBOT_BOUND_Z_M
-                and not is_blocked(rx, rz, ROBOT_RADIUS_M + 0.15)
-                and not self._npc_blocks_move(rx, rz)
-            ):
-                to_pat_x = px - rx
-                to_pat_z = pz - rz
-                yaw = math.atan2(-to_pat_x, -to_pat_z)
-                yaw += float(self.rng.uniform(-0.20, 0.20))
-                self.robot_x = rx
-                self.robot_z = rz
-                self.robot_yaw = ((yaw + math.pi) % (2.0 * math.pi)) - math.pi
-                self.task_phase = TaskPhase.APPROACH_PATIENT
-                self.patient_spotted_once = True
-                break
+        # 1. During GUIDE_ESCORT or CALL_STAFF: track active escorted patient
+        if self.task_phase in (TaskPhase.GUIDE_ESCORT, TaskPhase.CALL_STAFF):
+            if self.active_patient_idx is not None and self.active_patient_idx < len(self.patients):
+                p = self.patients[self.active_patient_idx]
+                target_x, target_z, is_seated = p["x"], p["z"], p["seated"]
+            else:
+                target_x, target_z, is_seated = self.patient_x, self.patient_z, getattr(self, "patient_seated", False)
 
-        return self._get_obs()
+            if floor_of(target_x) != fl:
+                self.last_det = {"seen": 0.0, "cx": 0.0, "cy": 0.0, "w": 0.0, "h": 0.0}
+                return 0.0, 0.0, 0.0, 0.0
+
+            det = compute_pinhole_detection(
+                robot_x=self.robot_x,
+                robot_z=self.robot_z,
+                robot_yaw=self.robot_yaw,
+                target_x=target_x,
+                target_z=target_z,
+                target_seated=is_seated,
+                is_blocked_fn=self._check_los_occluded,
+                domain_randomization=self.domain_randomization,
+                rng=self.rng,
+            )
+            self.last_det = det
+            conf = float(np.clip(0.95 - 0.04 * math.hypot(target_x - self.robot_x, target_z - self.robot_z), 0.45, 0.98)) if det["seen"] > 0.5 else 0.0
+            return det["seen"], det["cx"], det["h"], conf
+
+        # 2. During APPROACH_PATIENT: track currently locked unserved patient
+        if self.task_phase == TaskPhase.APPROACH_PATIENT:
+            if self.active_patient_idx is not None and self.active_patient_idx < len(self.patients):
+                p = self.patients[self.active_patient_idx]
+                target_x, target_z, is_seated = p["x"], p["z"], p["seated"]
+            else:
+                target_x, target_z, is_seated = self.patient_x, self.patient_z, getattr(self, "patient_seated", False)
+
+            if floor_of(target_x) != fl:
+                self.last_det = {"seen": 0.0, "cx": 0.0, "cy": 0.0, "w": 0.0, "h": 0.0}
+                return 0.0, 0.0, 0.0, 0.0
+
+            det = compute_pinhole_detection(
+                robot_x=self.robot_x,
+                robot_z=self.robot_z,
+                robot_yaw=self.robot_yaw,
+                target_x=target_x,
+                target_z=target_z,
+                target_seated=is_seated,
+                is_blocked_fn=self._check_los_occluded,
+                domain_randomization=self.domain_randomization,
+                rng=self.rng,
+            )
+            self.last_det = det
+            conf = float(np.clip(0.95 - 0.04 * math.hypot(target_x - self.robot_x, target_z - self.robot_z), 0.45, 0.98)) if det["seen"] > 0.5 else 0.0
+            return det["seen"], det["cx"], det["h"], conf
+
+        # 3. During SEARCH_PATIENT: scan all unserved patients on current floor
+        if getattr(self, "returning_to_lobby", False):
+            # Robot is returning to Floor 1 via elevator; don't acquire patients on Floor 2/3
+            self.last_det = {"seen": 0.0, "cx": 0.0, "cy": 0.0, "w": 0.0, "h": 0.0}
+            return 0.0, 0.0, 0.0, 0.0
+
+        best_det = {"seen": 0.0, "cx": 0.0, "cy": 0.0, "w": 0.0, "h": 0.0}
+        best_h = 0.0
+        best_idx = None
+
+        for idx, p in enumerate(self.patients):
+            if p.get("served", False):
+                continue  # Never speak to served patients again!
+            if floor_of(p["x"]) != fl:
+                continue
+
+            det = compute_pinhole_detection(
+                robot_x=self.robot_x,
+                robot_z=self.robot_z,
+                robot_yaw=self.robot_yaw,
+                target_x=p["x"],
+                target_z=p["z"],
+                target_seated=p["seated"],
+                is_blocked_fn=self._check_los_occluded,
+                domain_randomization=self.domain_randomization,
+                rng=self.rng,
+            )
+            if det["seen"] > 0.5 and det["h"] > best_h:
+                best_h = det["h"]
+                best_det = det
+                best_idx = idx
+
+        if best_idx is not None:
+            # Dynamically acquire this unserved patient!
+            self.active_patient_idx = best_idx
+            p = self.patients[best_idx]
+            self.patient_x = p["x"]
+            self.patient_z = p["z"]
+            self.patient_seated = p["seated"]
+            self.scenario_action, self.scenario_slot, self.scenario_floor = p["destination"]
+            self.task_phase = TaskPhase.APPROACH_PATIENT
+            self.patient_spotted_once = True
+            self.steps_since_task = 0
+            self.last_det = best_det
+            conf = float(np.clip(0.95 - 0.04 * math.hypot(p["x"] - self.robot_x, p["z"] - self.robot_z), 0.45, 0.98))
+            return best_det["seen"], best_det["cx"], best_det["h"], conf
+
+        self.last_det = {"seen": 0.0, "cx": 0.0, "cy": 0.0, "w": 0.0, "h": 0.0}
+        return 0.0, 0.0, 0.0, 0.0
 
     def _compute_doctor_det(self) -> tuple[float, float, float, float]:
         """Compute pinhole camera detection for patrolling doctor obstacle."""
@@ -244,6 +401,12 @@ class HospitalPureVisionEnv(HospitalVisualShiftEnv):
 
     def _step_escorted_patient(self) -> None:
         """Patient walks in peripheral escort formation (side-by-side) within camera FOV."""
+        if self.active_patient_idx is None or self.active_patient_idx >= len(self.patients):
+            return
+
+        p = self.patients[self.active_patient_idx]
+        cur_px, cur_pz = p["x"], p["z"]
+
         fwd_x = -math.sin(self.robot_yaw)
         fwd_z = -math.cos(self.robot_yaw)
         right_x = math.cos(self.robot_yaw)
@@ -253,14 +416,15 @@ class HospitalPureVisionEnv(HospitalVisualShiftEnv):
         target_x = self.robot_x + fwd_x * 1.0 + right_x * 0.55
         target_z = self.robot_z + fwd_z * 1.0 + right_z * 0.55
 
-        # If blocked by wall, fall back to narrower offset or standard trail
+        # If blocked by wall, fall back to narrower offset
         if is_blocked(target_x, target_z, 0.28):
             target_x = self.robot_x + fwd_x * 0.50 + right_x * 0.35
             if is_blocked(target_x, target_z, 0.28):
-                return super()._step_escorted_patient()
+                target_x = self.robot_x - fwd_x * 0.8
+                target_z = self.robot_z - fwd_z * 0.8
 
-        dx = target_x - self.patient_x
-        dz = target_z - self.patient_z
+        dx = target_x - cur_px
+        dz = target_z - cur_pz
         dist = math.hypot(dx, dz)
         if dist <= 0.20:
             return
@@ -276,8 +440,9 @@ class HospitalPureVisionEnv(HospitalVisualShiftEnv):
             candidates.append((0.0, math.copysign(step, sz)))
 
         for cx, cz in candidates:
-            px_new, pz_new = self.patient_x + cx, self.patient_z + cz
+            px_new, pz_new = cur_px + cx, cur_pz + cz
             if not is_blocked(px_new, pz_new, 0.28):
+                p["x"], p["z"] = px_new, pz_new
                 self.patient_x, self.patient_z = px_new, pz_new
                 return
 
@@ -324,7 +489,19 @@ class HospitalPureVisionEnv(HospitalVisualShiftEnv):
         obs[13 + phase_idx] = 1.0
 
         # 5. Nav Goal Target [17..19]
-        if self.task_phase == TaskPhase.APPROACH_PATIENT and pat_seen > 0.5:
+        if getattr(self, "returning_to_lobby", False):
+            # Navigating back to elevator on current floor to return down to Floor 1
+            elev_key = f"thang_may_t{fl}" if fl > 1 else "thang_may"
+            self.set_nav_target(*DESTINATION_POSITIONS.get(elev_key, (0.0, 4.5)))
+            to_gx = self.goal_x - self.robot_x
+            to_gz = self.goal_z - self.robot_z
+            fwd_x = -math.sin(self.robot_yaw)
+            fwd_z = -math.cos(self.robot_yaw)
+            angle_goal = signed_angle_rad(fwd_x, fwd_z, to_gx, to_gz)
+            obs[17] = float(np.clip(self.nav_remaining / 25.0, 0.0, 1.0))
+            obs[18] = math.sin(angle_goal)
+            obs[19] = math.cos(angle_goal)
+        elif self.task_phase == TaskPhase.APPROACH_PATIENT and pat_seen > 0.5:
             d_vis = float(np.clip(1.20 / max(pat_h, 0.05), 0.8, 15.0))
             angle_vis = float(-math.atan(pat_cx * math.tan(CAMERA_HFOV_RAD / 2.0)))
             obs[17] = float(np.clip(d_vis / 25.0, 0.0, 1.0))
@@ -403,18 +580,106 @@ class HospitalPureVisionEnv(HospitalVisualShiftEnv):
             PENALTY_FREE_SEARCH_TIME if self.task_phase == TaskPhase.SEARCH_PATIENT else 0.0
         )
 
+        prev_fl = floor_of(self.robot_x)
         obs, reward, done, info = super().step(action)
         reward += free_search_penalty
 
-        # 1. Continuous Visual Obstacle Proximity Repulsion
-        # When any visual sector exceeds 0.50 (obstacle closer than ~1.2m)
+        # 1. Multi-Patient Phase Management & Transitions
+        cur_fl = floor_of(self.robot_x)
+
+        # 1a. Return to Floor 1 Lobby Elevator Transit
+        if getattr(self, "returning_to_lobby", False):
+            if (prev_fl > 1 and cur_fl == 1) or (cur_fl > 1 and math.hypot(ELEVATOR_POSITIONS[cur_fl][0] - self.robot_x, ELEVATOR_POSITIONS[cur_fl][1] - self.robot_z) <= GOAL_ARRIVE_ROBOT_M):
+                if cur_fl > 1:
+                    shift = float(1 - cur_fl) * 50.0
+                    self.robot_x += shift
+                self.returning_to_lobby = False
+                self.goal_key = "patient"
+                self.steps_since_task = 0
+                reward += REWARD_ELEVATOR_TRANSIT
+                self.cumulative_team_reward += REWARD_ELEVATOR_TRANSIT
+                info["return_transit"] = True
+
+        # 1b. APPROACH_PATIENT Arrival Check (Dialogue Trigger)
+        if self.task_phase == TaskPhase.APPROACH_PATIENT and self.active_patient_idx is not None:
+            pat_seen, pat_cx, pat_h, _ = self._compute_yolo_det()
+            d_phys = math.hypot(self.patient_x - self.robot_x, self.patient_z - self.robot_z)
+            if (
+                pat_h >= TARGET_BOX_H
+                or d_phys <= PATIENT_TALK_DIST_M_VIS
+                or (pat_seen > 0.5 and pat_h >= 0.38 and d_phys <= 2.2)
+            ):
+                resolved = resolve_destination_key(
+                    self.scenario_action,
+                    self.scenario_slot,
+                    self.scenario_floor,
+                    current_floor=floor_of(self.patient_x),
+                )
+                self.task_phase = TaskPhase.GUIDE_ESCORT
+                self.goal_key = resolved
+                self.steps_since_task = 0
+                reward += REWARD_PATIENT_ENGAGED_VIS
+                info["patient_engaged"] = True
+
+        # 1c. GUIDE_ESCORT Elevator Transit (Cross-Floor Escort)
+        if self.task_phase == TaskPhase.GUIDE_ESCORT and self.active_patient_idx is not None:
+            active_x, active_z = DESTINATION_POSITIONS.get(self.goal_key, (0.0, 4.5))
+            if floor_of(active_x) != cur_fl:
+                elev_x, elev_z = ELEVATOR_POSITIONS[cur_fl]
+                d_r = math.hypot(elev_x - self.robot_x, elev_z - self.robot_z)
+                d_p = math.hypot(elev_x - self.patient_x, elev_z - self.patient_z)
+                if d_r <= GOAL_ARRIVE_ROBOT_M and d_p <= GOAL_ARRIVE_PATIENT_M:
+                    target_fl = floor_of(active_x)
+                    shift = float(target_fl - cur_fl) * 50.0
+                    self.robot_x += shift
+                    self.patient_x += shift
+                    self.patients[self.active_patient_idx]["x"] += shift
+                    self.steps_since_task = 0
+                    reward += REWARD_ELEVATOR_TRANSIT
+                    info["elevator_transit"] = True
+
+        # 1d. GUIDE_ESCORT Room Arrival (Task Completion & Anti-Reward-Farming)
+        if self.task_phase == TaskPhase.GUIDE_ESCORT and self.active_patient_idx is not None:
+            dest_x, dest_z = DESTINATION_POSITIONS.get(self.goal_key, (0.0, 4.5))
+            d_r = math.hypot(dest_x - self.robot_x, dest_z - self.robot_z)
+            d_p = math.hypot(dest_x - self.patient_x, dest_z - self.patient_z)
+            if d_r <= GOAL_ARRIVE_ROBOT_M and d_p <= GOAL_ARRIVE_PATIENT_M:
+                # Successfully delivered patient! Mark SERVED
+                self.patients[self.active_patient_idx]["served"] = True
+                self.patients_helped += 1
+                self.steps_since_task = 0
+                reward += REWARD_GUIDE_ARRIVED_VIS
+                info["guide_completed"] = True
+
+                # Check if all 6 patients on Floor 1 are served
+                if all(p.get("served", False) for p in self.patients):
+                    done = True
+                    info["exit_reason"] = "ALL_PATIENTS_SERVED"
+                    reward += 100.0  # Full shift bonus!
+                else:
+                    new_fl = floor_of(self.robot_x)
+                    if new_fl > 1:
+                        self.returning_to_lobby = True
+                        self.task_phase = TaskPhase.SEARCH_PATIENT
+                        self.goal_key = f"thang_may_t{new_fl}"
+                        self.active_patient_idx = None
+                        self.patient_x = -999.0
+                        self.patient_z = -999.0
+                    else:
+                        self.returning_to_lobby = False
+                        self.task_phase = TaskPhase.SEARCH_PATIENT
+                        self.goal_key = "patient"
+                        self.active_patient_idx = None
+                        self.patient_x = -999.0
+                        self.patient_z = -999.0
+
+        # 2. Continuous Visual Obstacle Proximity Repulsion
         obs_sectors = obs[0:5]
         for s_val in obs_sectors:
             if s_val > 0.50:
                 reward += -WEIGHT_VISUAL_OBSTACLE * (s_val - 0.50)
 
-        # 2. Strict Doctor Avoidance Penalty
-        # If robot faces doctor at close range (doc_seen > 0.5 and doc_h > 0.35)
+        # 3. Strict Doctor Avoidance Penalty
         doc_seen = obs[9]
         doc_h = obs[11]
         if doc_seen > 0.5 and doc_h > 0.35:
@@ -429,6 +694,8 @@ class HospitalPureVisionEnv(HospitalVisualShiftEnv):
 
         info["cumulative_team_reward"] = self.cumulative_team_reward
         info["visual_sectors"] = obs_sectors.tolist()
+        info["patients_helped"] = self.patients_helped
+        info["total_patients"] = len(self.patients)
         return obs, reward, done, info
 
     def teacher_action(self) -> np.ndarray:
@@ -469,12 +736,11 @@ class HospitalPureVisionEnv(HospitalVisualShiftEnv):
         goal_angle = math.atan2(obs[18], obs[19])
         v_base = ESCORT_WALK_SPEED if self.task_phase in (TaskPhase.GUIDE_ESCORT, TaskPhase.CALL_STAFF) else V_MAX
 
-        # In GUIDE_ESCORT: adapt forward speed according to patient tether
+        # In GUIDE_ESCORT: adapt forward speed according to visual patient tether
         if self.task_phase == TaskPhase.GUIDE_ESCORT:
-            d_p = math.hypot(self.patient_x - self.robot_x, self.patient_z - self.robot_z)
-            if d_p > 3.5:
+            if obs[24] > 0.5:  # Tether broken or lost from camera
                 v_base = 0.0  # Pause and wait for patient to catch up
-            elif d_p > 2.5:
+            elif obs[23] > 0.5:  # Tether stretched (> 2.0m)
                 v_base = 0.15  # Slow down to allow patient to close distance
 
         # Repulsion from side sectors:

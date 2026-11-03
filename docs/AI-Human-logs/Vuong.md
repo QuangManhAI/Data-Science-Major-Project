@@ -70,6 +70,10 @@
 | [D-054](#d-054--transition-to-pure-vision-yolov6-only-no-lidar-29-dim-observation-architecture-and-sector-hud) | Transition to Pure Vision (YOLOv6 Only, No LiDAR), 29-Dim Observation Architecture, and Sector HUD | human-aligned via /grill-me | accepted |
 | [D-055](#d-055--pure-vision-environment-patches-yolov6-17-class-integration-and-converged-2000-episode-retraining) | Pure Vision Environment Patches, YOLOv6 17-Class Integration, and Converged 2,000-Episode Retraining | human-aligned via /grill-me | accepted |
 | [D-056](#d-056--escort-focused-pure-vision-architecture-goal-destination-routing-fix-and-1500-episode-fine-tuning) | Escort-Focused Pure Vision Architecture, Goal Destination Routing Fix, and 1,500-Episode Fine-Tuning | human-aligned via /grill-me | accepted |
+| [D-057](#decision-d-057-dynamic-closest-patient-acquisition-and-dual-optical-arrival-trigger-in-godot) | Dynamic Closest-Patient Acquisition and Dual Optical Arrival Trigger in Godot | human-directed | accepted |
+| [D-061](#decision-d-061-2000-episode-fine-tuning-execution-on-real-world-sim-to-real-rules) | 2,000-Episode Fine-Tuning Execution on Real-World Sim-to-Real Rules | human-directed | accepted |
+| [D-062](#decision-d-062-interactive-non-headless-visual-renderer-and-mock-training-pipeline) | Interactive Non-Headless Visual Renderer and Mock-Training Pipeline | human-directed | accepted |
+| [D-063](#decision-d-063-continuous-multi-patient-pure-vision-shift-architecture-and-anti-farming-contract) | Continuous Multi-Patient Pure-Vision Shift Architecture and Anti-Farming Contract | human-aligned via /grill-me | accepted |
 
 ---
 
@@ -979,6 +983,42 @@ av_remaining frozen after dialogue engagement.
   - Best checkpoint saved to [`experiments/runs/20261102_204414_PPOHospital-PureVision/checkpoints/PPOHospital-PureVision_best.pt`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/experiments/runs/20261102_204414_PPOHospital-PureVision/checkpoints/PPOHospital-PureVision_best.pt).
 - **Touches:** [`src/training/train_pure_vision_rl.py`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/src/training/train_pure_vision_rl.py), [`src/training/hospital_env_pure_vision.py`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/src/training/hospital_env_pure_vision.py), [`experiments/runs/20261102_204414_PPOHospital-PureVision/`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/experiments/runs/20261102_204414_PPOHospital-PureVision/).
 - **Evidence:** All 2,000 episodes completed; verified with `test_disconnection_pure_vision.py` (3/3 passed) and Godot GUT tests (164/164 passed). Telemetry plot saved to `training_curves.png`.
+
+### Decision D-062: Interactive Non-Headless Visual Renderer and Mock-Training Pipeline
+- **Status:** accepted
+- **When:** 2026-11-03T07:55:00+07:00
+- **Decided by:** human-directed, agent-executed
+- **Trigger:** User request: "make me a script to see the traninig env in place, non headless, a command to mock train (doesnt save the checkpoint, but other than that, everything is identical to the normal training + visual)".
+- **Architecture & Implementation:**
+  1. **Non-Headless GUI Renderer (`src/ui/visual_env_renderer.py`):**
+     - Left Panel ($740 \times 740$): Top-down hospital floorplan rendering structural walls, doorways, robot chassis with heading arrow, translucent $75^\circ$ FOV camera cone, 5 radial optical clearance sectors, patient (with companion waypoint and elastic tether color-coded by tension), and patrolling doctor.
+     - Top-Right Panel ($640 \times 360$): Simulated robot front camera view with perspective projection, YOLO bounding boxes (color-coded for Patient/Doctor/Doors), and 5-sector visual clearance HUD.
+     - Bottom-Right Panel ($640 \times 380$): Live telemetry and PPO training HUD displaying episode/step counters, linear and angular velocities, reward breakdown, and PPO loss metrics (policy loss, value loss, entropy, BC loss, learning rate).
+     - Hotkey Controls: `[SPACE]` pause/resume, `[+] / [-]` speed up/slow down, `[F]` toggle active floor (Floor 1/2/3/Auto), `[Q / ESC]` clean exit.
+  2. **Mock-Train Safety Contract (`scripts/visual_mock_train.py` & `src/training/train_pure_vision_rl.py`):**
+     - Normal full training pipeline is executed identically (environment stepping, observation gathering, actor-critic forward pass, GAE advantage computation, and PPO gradient updates).
+     - Checkpoint saving is strictly suppressed (`mock_train=True`), guaranteeing existing `.pt` models are completely untouched.
+     - Auto-selects latest trained checkpoint as initial weights (`PPOHospital-PureVision_best.pt`) so the user can immediately observe the trained policy navigating and learning in real-time.
+- **Touches:** [`src/ui/visual_env_renderer.py`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/src/ui/visual_env_renderer.py), [`scripts/visual_mock_train.py`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/scripts/visual_mock_train.py), [`src/training/train_pure_vision_rl.py`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/src/training/train_pure_vision_rl.py), [`docs/AI-Human-logs/Vuong.md`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/docs/AI-Human-logs/Vuong.md).
+- **Evidence:** Verified execution with `scripts/visual_mock_train.py --smoke --fps 60` (exit code 0); confirmed GUI rendering, PPO loss updates, and verified `experiments/runs/.../checkpoints/` remained completely empty.
+
+### Decision D-063: Continuous Multi-Patient Pure-Vision Shift Architecture and Anti-Farming Contract
+- **Status:** accepted
+- **When:** 2026-11-03T08:50:00+07:00
+- **Decided by:** human-aligned via /grill-me
+- **Trigger:** Observation of training vs inference divergence:
+  1. Patients previously spawned right next to the robot 70% of the time (`spawn_escort_curriculum()`), preventing the robot from learning full-shift search, approach, and retrieval from the entrance.
+  2. Single-patient environment allowed reward farming on already-escorted patients.
+  3. No mechanism existed for returning to Floor 1 after delivering patients to Floor 2 or Floor 3.
+- **Architectural Implementation:**
+  1. **Strict Entrance Spawn**: Robot always starts every shift at Floor 1 Main Entrance / Dock (`ROBOT_DOCK` $X = -10.6\text{m}, Z = 0.0\text{m}$) facing inward. Artificial close-range teleports are completely disabled.
+  2. **Multi-Patient Population**: Floor 1 is populated with 6 patients matching `HOSPITAL_NPCS` from `hospital_layout.json` (seated in lobby chairs and standing near rooms) with $\pm 0.3\text{m}$ randomization.
+  3. **Multi-Patient Visual Lock**: In `SEARCH_PATIENT`, YOLO scans all unserved patients on current floor and dynamically acquires whichever one enters camera FOV with highest bounding box height (`h`), locking them as active patient.
+  4. **Strict Anti-Reward-Farming Contract**: Delivered patients are marked `SERVED = True`. They remain in place as non-responsive characters, but YOLO filters them out during search and no dialogue or reward can ever be triggered on them again.
+  5. **Topological Return to Floor 1**: After delivery on Floor 2 or 3, mission goal sets to `thang_may_t{floor}` (Elevator). When reaching the elevator, the robot transitions down to Floor 1 with $+10.0$ return elevator reward and resumes visual patrol for remaining unserved patients in the lobby.
+  6. **Telemetry & Visual HUD**: Floorplan distinguishes unserved (Amber), active locked (Bright Amber `*`), and served patients (Muted Green `[SERVED]`), with live count `Patients Escorted: X / 6` and `RETURN_ELEVATOR` phase badge.
+- **Touches:** [`src/training/hospital_env_pure_vision.py`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/src/training/hospital_env_pure_vision.py), [`src/training/train_pure_vision_rl.py`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/src/training/train_pure_vision_rl.py), [`src/ui/visual_env_renderer.py`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/src/ui/visual_env_renderer.py), [`tests/test_multi_patient_shift.py`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/tests/test_multi_patient_shift.py), [`docs/AI-Human-logs/Vuong.md`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/docs/AI-Human-logs/Vuong.md).
+- **Evidence:** 4/4 tests passed in `tests/test_multi_patient_shift.py`; 3/3 passed in `tests/test_disconnection_pure_vision.py`; smoke test executed cleanly via `scripts/visual_mock_train.py --smoke --fps 60`.
 
 
 

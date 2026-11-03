@@ -12,6 +12,11 @@ const LIDAR_HEIGHT_Y: float = 0.35
 var _v: float = 0.0
 var _omega: float = 0.0
 var _lidar_rays: Array[RayCast3D] = []
+var _stuck_time_s: float = 0.0
+var _escape_pulse_s: float = 0.0
+var _escape_turn_dir: float = 1.0
+const STUCK_TRIGGER_S: float = 0.8
+const ESCAPE_DURATION_S: float = 0.35
 
 var v: float:
 	get:
@@ -105,6 +110,26 @@ func front_obstacle_distance() -> float:
 
 
 func _physics_process(delta: float) -> void:
+	if _escape_pulse_s > 0.0:
+		_escape_pulse_s -= delta
+		rotation.y += _escape_turn_dir * Config.OMEGA_MAX * 0.75 * delta
+		var bwd: Vector3 = global_transform.basis.z  # +Z is backward
+		velocity = Vector3(bwd.x, 0.0, bwd.z).normalized() * 0.22
+		move_and_slide()
+		return
+
+	# Phát hiện kẹt vật lý khi có lệnh tiến nhưng robot đứng yên
+	var real_v: float = get_real_velocity().length()
+	if _v >= 0.15 and real_v < 0.04:
+		_stuck_time_s += delta
+		if _stuck_time_s >= STUCK_TRIGGER_S:
+			_stuck_time_s = 0.0
+			_escape_pulse_s = ESCAPE_DURATION_S
+			_escape_turn_dir = -1.0 if _omega >= 0.0 else 1.0
+			return
+	else:
+		_stuck_time_s = maxf(0.0, _stuck_time_s - delta * 2.0)
+
 	rotation.y += _omega * delta
 	var forward: Vector3 = -global_transform.basis.z
 	velocity = Vector3(forward.x, 0.0, forward.z).normalized() * _v

@@ -208,13 +208,24 @@ class PolicyRunner:
                     obs[17] = float(np.clip(env.nav_remaining / 25.0, 0.0, 1.0))
                     obs[18] = math.sin(angle_goal)
                     obs[19] = math.cos(angle_goal)
+            else:
+                # Active navigation toward goal (GUIDE_ESCORT or CALL_STAFF / solo transit)
+                env.set_nav_target(final_x, final_z)
+                to_gx = env.goal_x - x
+                to_gz = env.goal_z - z
+                fwd_x = -math.sin(yaw)
+                fwd_z = -math.cos(yaw)
+                angle_goal = signed_angle_rad(fwd_x, fwd_z, to_gx, to_gz)
+                obs[17] = float(np.clip(env.nav_remaining / 25.0, 0.0, 1.0))
+                obs[18] = math.sin(angle_goal)
+                obs[19] = math.cos(angle_goal)
 
             # Robot kinematics [20..21]
             obs[20] = float(np.clip(v / V_MAX, 0.0, 1.0))
             obs[21] = float(np.clip(omega / OMEGA_MAX, -1.0, 1.0))
 
-            # Patient tether [22..24] (Strictly from peripheral camera lock, zero oracle coords)
-            if env.task_phase in (TaskPhase.GUIDE_ESCORT, TaskPhase.CALL_STAFF):
+            # Patient tether [22..24] (Strictly for GUIDE_ESCORT with escorted patient)
+            if env.task_phase == TaskPhase.GUIDE_ESCORT:
                 if patient_box is not None:
                     h_pat = float(patient_box.get("h", float(patient_box.get("y2", 0.0)) - float(patient_box.get("y1", 0.0))))
                     d_vis_tether = float(np.clip(1.20 / max(h_pat, 0.05), 0.5, 5.0))
@@ -227,6 +238,7 @@ class PolicyRunner:
                     obs[23] = 1.0
                     obs[24] = 1.0
             else:
+                # In CALL_STAFF (solo return/transit), SEARCH, APPROACH: tether disabled
                 obs[22:25] = 0.0
 
             # Doorway geometry [25..28] (Strictly from YOLO 'door' detection, zero oracle _DOORS)

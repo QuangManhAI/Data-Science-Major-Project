@@ -1059,27 +1059,23 @@ av_remaining frozen after dialogue engagement.
 - **Touches:** [`src/training/hospital_env_pure_vision.py`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/src/training/hospital_env_pure_vision.py), [`tests/test_multi_patient_shift.py`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/tests/test_multi_patient_shift.py), [`docs/bugs/20261103_pure_vision_multi_patient_reward_and_standup_bugs.md`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/docs/bugs/20261103_pure_vision_multi_patient_reward_and_standup_bugs.md), [`docs/AI-Human-logs/Vuong.md`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/docs/AI-Human-logs/Vuong.md).
 - **Evidence:** 10/10 unit tests pass in `tests/test_multi_patient_shift.py` and `tests/test_disconnection_pure_vision.py`; end-to-end simulation verified Patient 0 rides elevator to Floor 2, is delivered inside Room 205, and robot returns to Floor 1 lobby.
 
-### Decision D-066: Completion of 2,000-Episode Multi-Patient Pure-Vision Production Training
+### Decision D-067: Resolution of 3D Godot Simulation Issues (Small Obstacle Depth Scaling, Solo Return Speed, and NPC Speech Movement Freeze)
 - **Status:** accepted
-- **When:** 2026-11-03T19:00:00+07:00
-- **Decided by:** human-directed production training run with 10k steps-per-epoch / max-steps
-- **Configuration & Hyperparameters:**
-  - `run_id`: `20261103_100811_PPOHospital-PureVision`
-  - Episodes: 2,000 continuous multi-patient shifts starting at Floor 1 entrance (`ROBOT_DOCK`)
-  - Max steps per shift: 10,000 steps ($2{,}000.0\,\text{s}$)
-  - Steps per PPO update epoch: 10,000 rollout steps
-  - Device: CUDA (NVIDIA GeForce RTX 4060 Laptop GPU)
-  - Observations: 29-D Pure-Vision (Zero LiDAR, Zero Map raycasts, 5 optical depth sectors)
-- **Key Outcomes:**
-  - **Total Patients Delivered:** **2,656 patients** escorted across 2,000 shifts (vs 1,503 previously, $+76.7\%$).
-  - **Per-Shift Delivery Rate:** **$1.33 \pm 1.26$** patients per shift (frequently delivering 2, 3, 4, and up to 5 patients per shift).
-  - **Peak Episode Reward:** **$+860.3$** (Ep 1065, vs $+328.6$ previously, $+161.8\%$).
-  - **Mean Episode Reward:** **$+145.2$** (Last 20 avg: **$+191.5$**).
-  - **Visual Spotting Rate:** **100.0%** maintained across all 2,000 shifts.
-  - **Collision Safety:** **$2.26$ collisions/shift** ($\approx 0.001$ per step), demonstrating high safety without LiDAR.
-  - **Evaluation Score (@ Ep 2000):** **$+427.3$** (vs $+238.1$ previously, $+79.5\%$).
-- **Touches:** [`src/training/train_pure_vision_rl.py`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/src/training/train_pure_vision_rl.py), [`src/training/hospital_env_pure_vision.py`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/src/training/hospital_env_pure_vision.py), [`docs/AI-Human-logs/Vuong.md`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/docs/AI-Human-logs/Vuong.md), [`training_curves_2000ep_multi_patient_pure_vision_report.md`](file:///C:/Users/TDV/.gemini/antigravity-cli/brain/8475757e-ecce-49d3-a890-6903da5e772d/training_curves_2000ep_multi_patient_pure_vision_report.md).
-- **Evidence:** Clean zero-exit code execution log; saved best model `PPOHospital-PureVision_best.pt`; all 10/10 automated test suite passes.
+- **When:** 2026-11-03T20:25:00+07:00
+- **Decided by:** human-agent interactive interview via `/grill-me`
+- **Root Causes & Fixes:**
+  1. **Problem 1 (Small Obstacle Collisions with Chairs & Waste Bins):**
+     - *Root Cause:* In `compute_5_sector_depth()`, obstacle proximity was set to normalized bounding box height $h$. For low-height furniture like chairs ($H \approx 0.5\text{m}$) and trash bins ($H \approx 0.4\text{m}$), $h$ is only $0.15 - 0.25$ even at close range ($1.0\text{m}$), misleading the policy into believing obstacles were distant ($>5\text{m}$). Furthermore, when collision occurred, the chassis got caught on corners at $v > 0.0$ but $vel_{\text{actual}} = 0.0$.
+     - *Fix:* Added `OBSTACLE_NOMINAL_HEIGHTS` and class-aware height scaling factor $\min(4.0, 1.70 / H_{\text{class}})$ combined with ground contact proximity $y_2$ and multi-sector span in `compute_5_sector_depth()`. In Godot `robot.gd`, added a stuck-detection escape pulse: when $v \ge 0.15\,\text{m/s}$ but $vel_{\text{real}} < 0.04\,\text{m/s}$ for $>0.8\,\text{s}$, robot executes a $0.35\,\text{s}$ reverse pulse ($v = -0.22\,\text{m/s}$) with turn rotation to cleanly unstick from furniture edges.
+  2. **Problem 2 (Slow Robot Speed When Returning to Floor 1):**
+     - *Root Cause:* In `rl_policy_server.py`, lines 172-211 only updated `obs[17..19]` (navigation goal vector) for `SEARCH_PATIENT` and `APPROACH_PATIENT`. For `CALL_STAFF` (used to route the robot back down to the Floor 1 lobby), `obs[17..19]` was left at $(0, 0, 0)$ ($d_{\text{goal}} = 0$). Furthermore, `obs[22..24]` checked for `patient_box`, which is `None` during solo transit, erroneously setting tether broken ($[1, 1, 1]$) and commanding minimum crawling speed.
+     - *Fix:* Added `else:` navigation branch in `rl_policy_server.py` to route towards `(final_x, final_z)` during `CALL_STAFF`, explicitly zeroed out tether penalties (`obs[22..24] = 0.0`) when travelling solo without an escorted patient, and maintained full cruising speed `V_MAX` ($0.65\,\text{m/s}$).
+  3. **Problem 3 (Patient Continuing to Walk While Speaking):**
+     - *Root Cause:* In `hospital_npc.gd`, patient patrol was driven by `current_state == State.WALKING`. When `_npc` initiated dialogue (`NOTICE`, `TALK`, `WAIT_REPLY`), it only modified `human.set("walks", false)`, which had no effect on `HospitalNpc`'s state machine. The patient continued executing `_move_step_towards()` along their waypoints while talking.
+     - *Fix:* Added an immediate speech guard in `HospitalNpc._physics_process()`: whenever `_npc.state in [NOTICE, TALK, WAIT_REPLY]`, movement velocity is zeroed, `_state_timer` countdown is frozen, idle/talk animation is maintained, and the patient smoothly rotates to face the robot until dialogue completes.
+- **Touches:** [`sim_vision/godot/scripts/hospital_npc.gd`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/sim_vision/godot/scripts/hospital_npc.gd), [`sim_vision/godot/scripts/robot.gd`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/sim_vision/godot/scripts/robot.gd), [`sim_vision/python/rl_policy_server.py`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/sim_vision/python/rl_policy_server.py), [`src/training/hospital_env_pure_vision.py`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/src/training/hospital_env_pure_vision.py), [`tests/test_hospital_env_vision.py`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/tests/test_hospital_env_vision.py), [`tests/test_3d_simulation_improvements.py`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/tests/test_3d_simulation_improvements.py), [`docs/AI-Human-logs/Vuong.md`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/docs/AI-Human-logs/Vuong.md).
+- **Evidence:** 3/3 new unit tests pass in `tests/test_3d_simulation_improvements.py`; all 6/6 tests pass in `tests/test_hospital_env_vision.py`; 10/10 tests pass in multi-patient suite.
+
 
 
 

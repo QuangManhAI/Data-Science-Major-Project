@@ -82,6 +82,24 @@ SECTOR_ANGLES_RAD = np.array(
 )
 
 
+# Nominal physical heights (in meters) for hospital object classes to normalize visual proximity
+OBSTACLE_NOMINAL_HEIGHTS: dict[str, float] = {
+    "medical_waste_bin": 0.40,
+    "hospital_chair": 0.50,
+    "pccc_station": 0.60,
+    "wheelchair": 0.85,
+    "medical_trolley": 0.85,
+    "stretcher_cart": 0.85,
+    "hospital_bed": 0.85,
+    "water_dispenser": 1.00,
+    "sanitizer_stand": 1.10,
+    "vital_monitor": 1.20,
+    "queue_kiosk": 1.40,
+    "reception_counter": 1.10,
+}
+HUMAN_REFERENCE_HEIGHT: float = 1.70
+
+
 def compute_5_sector_depth(
     robot_x: float,
     robot_z: float,
@@ -95,19 +113,41 @@ def compute_5_sector_depth(
     Strict Sim-to-Real:
     Zero LiDAR, Zero map wall raycasting.
     Populated EXCLUSIVELY by mapping 2D obstacle bounding boxes into the 5 camera sectors.
+    Uses class-aware height scaling, ground contact y2, and box width coverage across sectors.
     If no obstacles are detected (or YOLO is disconnected), all sectors are 0.0.
     """
     sectors = np.zeros(5, dtype=np.float32)
 
     if obstacle_boxes:
         for b in obstacle_boxes:
-            cx_val = b.get("cx", (float(b.get("x1", 0.0)) + float(b.get("x2", 0.0))) / 2.0 - 0.5)
-            h_val = b.get("h", float(b.get("y2", 0.0)) - float(b.get("y1", 0.0)))
+            x1 = float(b.get("x1", 0.0))
+            x2 = float(b.get("x2", 1.0))
+            y1 = float(b.get("y1", 0.0))
+            y2 = float(b.get("y2", 1.0))
+            cx_val = b.get("cx", (x1 + x2) / 2.0 - 0.5)
+            h_val = b.get("h", y2 - y1)
             cx = float(cx_val) if math.isfinite(cx_val) else 0.0
             h = float(h_val) if math.isfinite(h_val) else 0.0
-            offset = cx if abs(cx) <= 0.5 else cx * 0.5
-            sec_idx = int(np.clip(math.floor((offset + 0.5) * 5.0), 0, 4))
-            sectors[sec_idx] = max(sectors[sec_idx], float(np.clip(h, 0.0, 1.0)))
+
+            cname = str(b.get("class_name", "")).lower()
+            nom_h = OBSTACLE_NOMINAL_HEIGHTS.get(cname, 0.60)
+            scale = min(4.0, max(1.0, HUMAN_REFERENCE_HEIGHT / nom_h))
+
+            # Ground contact proximity: for an object on the floor, y2 approaching 1.0 means it is directly ahead
+            prox_floor = (y2 - 0.5) / 0.45 if y2 > 0.5 else 0.0
+            prox = max(h * scale, prox_floor)
+
+            # Determine sector span
+            if "x1" in b and "x2" in b and x2 > x1:
+                sec_start = int(np.clip(math.floor(x1 * 5.0), 0, 4))
+                sec_end = int(np.clip(math.floor(x2 * 5.0), 0, 4))
+            else:
+                offset = cx if abs(cx) <= 0.5 else cx * 0.5
+                sec_start = int(np.clip(math.floor((offset + 0.5) * 5.0), 0, 4))
+                sec_end = sec_start
+
+            for s_idx in range(sec_start, sec_end + 1):
+                sectors[s_idx] = max(sectors[s_idx], float(np.clip(prox, 0.0, 1.0)))
 
     return np.nan_to_num(np.clip(sectors, 0.0, 1.0), nan=0.0)
 

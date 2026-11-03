@@ -55,9 +55,9 @@ def test_vision_derived_perception_vector_when_patient_visible():
     env.robot_x = 0.0
     env.robot_z = 0.0
     env.robot_yaw = 0.0
-    # Place patient at (0.5, -2.5) -> visible in camera FOV
+    # Place patient at (0.5, -3.5) -> visible in camera FOV, in APPROACH phase (not yet engaged)
     env.patient_x = 0.5
-    env.patient_z = -2.5
+    env.patient_z = -3.5
 
     obs, reward, done, info = env.step((0.0, 0.0))
 

@@ -280,6 +280,18 @@ func _physics_process(delta: float) -> void:
 	if current_state == State.ESCORTED:
 		return
 
+	# Đang tương tác hội thoại với robot (NOTICE, TALK, WAIT_REPLY) -> lập tức dừng bước, ngưng timer, hướng về robot
+	if _npc != null and ("state" in _npc) and (_npc.state in [NpcScript.NOTICE, NpcScript.TALK, NpcScript.WAIT_REPLY]):
+		velocity = Vector3.ZERO
+		if current_state != State.SITTING and _anim_player != null and not _anim_player.is_playing():
+			_play_anim(&"npc/idle")
+		if robot_ref != null and is_instance_valid(robot_ref):
+			var to_r := robot_ref.global_position - global_position
+			if to_r.length() > 0.05:
+				var target_yaw: float = atan2(to_r.x, to_r.z)
+				rotation.y = lerp_angle(rotation.y, target_yaw, minf(1.0, 10.0 * delta))
+		return
+
 	# Xử lý nhường đường (Pardon) khi robot lại gần
 	if pardon_enabled and robot_ref != null and is_instance_valid(robot_ref) and current_state != State.SITTING:
 		var dist_robot: float = Human.flat_distance(global_position, robot_ref.global_position)

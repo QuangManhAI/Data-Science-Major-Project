@@ -1018,11 +1018,22 @@ av_remaining frozen after dialogue engagement.
   5. **Topological Return to Floor 1**: After delivery on Floor 2 or 3, mission goal sets to `thang_may_t{floor}` (Elevator). When reaching the elevator, the robot transitions down to Floor 1 with $+10.0$ return elevator reward and resumes visual patrol for remaining unserved patients in the lobby.
   6. **Telemetry & Visual HUD**: Floorplan distinguishes unserved (Amber), active locked (Bright Amber `*`), and served patients (Muted Green `[SERVED]`), with live count `Patients Escorted: X / 6` and `RETURN_ELEVATOR` phase badge.
 - **Touches:** [`src/training/hospital_env_pure_vision.py`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/src/training/hospital_env_pure_vision.py), [`src/training/train_pure_vision_rl.py`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/src/training/train_pure_vision_rl.py), [`src/ui/visual_env_renderer.py`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/src/ui/visual_env_renderer.py), [`tests/test_multi_patient_shift.py`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/tests/test_multi_patient_shift.py), [`docs/AI-Human-logs/Vuong.md`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/docs/AI-Human-logs/Vuong.md).
-- **Evidence:** 4/4 tests passed in `tests/test_multi_patient_shift.py`; 3/3 passed in `tests/test_disconnection_pure_vision.py`; smoke test executed cleanly via `scripts/visual_mock_train.py --smoke --fps 60`.
-
-
-
-
+- **Evidence:** 4/4 tests passed in `tests/test_multi_patient_shift.py`; 3/3 passed in `tests/test_disconnection_pure_vision.py`; smoke test executed cleanly via `scripts/visual_mock_train.py --smoke --fps 60`.### Decision D-064: Fix Phantom Reward Spike on Visual Acquisition and Seated Patient Obstruction Snap
+- **Status:** accepted
+- **When:** 2026-11-03T09:45:00+07:00
+- **Decided by:** human-directed bug identification, agent root-cause diagnosis & fix
+- **Trigger:** User identified anomaly during 2,000-episode run: "check the trainig env for bugs, the reward so high while it doesnt helped any patient" (`R_team: +1875.3` to `+1944.3` on shifts with `Helped: 0/6` terminating with `STAGNATION_TIMEOUT`).
+- **Root Cause & Architectural Fixes:**
+  1. **Ground-Truth Euclidean Distance Leak (+3,485 Jump):**
+     - *Cause:* In `SEARCH_PATIENT`, `self.patient_x = -999.0`. When `_compute_yolo_det()` spotted a patient and assigned `self.patient_x = 3.0m`, `HospitalVisualShiftEnv.step()` evaluated $2.5 \times (d_{\text{prev}} - d_{\text{curr}}) = 2.5 \times (1400m - 6m) = +3,485$ reward in a single step!
+     - *Fix:* Gated in `HospitalVisualShiftEnv.step()`: disabled ground-truth distance shaping when `getattr(self, "pure_vision", False)` is True, relying strictly on pinhole bounding box expansion ($\Delta H$). Gated single-patient engagement, single-patient arrival, and single-patient respawn so they do not conflict with multi-patient shifts.
+  2. **Seated Patient Furniture Trapping (`is_blocked == True`):**
+     - *Cause:* All 6 patients in `HOSPITAL_NPCS` are seated in lobby chairs (`(-4.55, 4.20)`, `(3.05, 4.20)`, etc.) inside obstacle bounding boxes. When dialogue engaged, candidate steps of size $0.11\,\text{m}$ in `_step_escorted_patient()` were rejected because the entire neighborhood was inside the chair. The patient was trapped in the chair, the robot walked away alone, tether broke ($d > 4.0\,\text{m}$), $-3.0$ penalties accumulated, and stagnation timeout triggered.
+     - *Fix:* Upon engagement, patient automatically stands up (`p["seated"] = False`) and snaps out of the chair onto the nearest legal, navigable floor space using `nav_grid(floor).snap()`, enabling free companion formation walking. Added candidate angle fallbacks ($\pm 45^\circ, \pm 90^\circ$) and visual tether occlusion memory (15 steps / 3.0s).
+  3. **Strict Reward Mathematical Synchronization:**
+     - Synced `self.cumulative_team_reward` to the exact running sum of clipped step rewards (`self.cumulative_pure_vision_reward += reward`), guaranteeing telemetry matches actual PPO advantage buffers.
+- **Touches:** [`src/training/hospital_env_vision.py`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/src/training/hospital_env_vision.py), [`src/training/hospital_env_pure_vision.py`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/src/training/hospital_env_pure_vision.py), [`tests/test_multi_patient_shift.py`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/tests/test_multi_patient_shift.py), [`docs/bugs/20261103_pure_vision_multi_patient_reward_and_standup_bugs.md`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/docs/bugs/20261103_pure_vision_multi_patient_reward_and_standup_bugs.md), [`docs/AI-Human-logs/Vuong.md`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/docs/AI-Human-logs/Vuong.md).
+- **Evidence:** 9/9 unit tests pass in `tests/test_multi_patient_shift.py` and `tests/test_disconnection_pure_vision.py`; single-episode simulation verified 2 real patients delivered in shift (`Helped=2/6`, Step 365 Patient 2 arrived +80, Step 861 Patient 1 arrived +80, Total reward = +239.20 with zero phantom spikes).
 
 
 

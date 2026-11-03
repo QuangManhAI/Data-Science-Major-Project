@@ -343,7 +343,7 @@ class HospitalVisualShiftEnv(HospitalShiftEnv):
                     else:
                         self.best_vision_h = det["h"]
 
-            if self.task_phase == TaskPhase.APPROACH_PATIENT:
+            if not getattr(self, "pure_vision", False) and self.task_phase == TaskPhase.APPROACH_PATIENT and prev_dist_pat < 50.0 and self.patient_x > -100.0:
                 curr_dist_pat = math.hypot(self.patient_x - self.robot_x, self.patient_z - self.robot_z)
                 r_visual += 2.5 * (prev_dist_pat - curr_dist_pat)
 
@@ -351,22 +351,23 @@ class HospitalVisualShiftEnv(HospitalShiftEnv):
             self.prev_vision_h = det["h"]
 
             # 3. Check dialogue engagement: bounding box height >= 0.50 or physical dist <= 1.85m
-            dist_to_pat = math.hypot(self.patient_x - self.robot_x, self.patient_z - self.robot_z)
-            if (det["seen"] > 0.5 and det["h"] >= TARGET_BOX_H) or (dist_to_pat <= PATIENT_TALK_DIST_M_VIS and det["seen"] > 0.5):
-                resolved = resolve_destination_key(
-                    self.scenario_action, self.scenario_slot, self.scenario_floor,
-                    current_floor=floor_of(self.patient_x),
-                )
-                event = "engaged"
-                self.task_phase = TaskPhase.GUIDE_ESCORT if self.scenario_action == "guide" else TaskPhase.CALL_STAFF
-                self.goal_key = resolved if self.scenario_action == "guide" else "staff"
-                if self.scenario_action in ("call_staff", "emergency"):
-                    self.staff_goal = self._nearest_staff_position()
-                self.steps_since_task = 0
-                self.best_goal_dist = None
-                self.best_vision_h = 0.0
+            if not getattr(self, "pure_vision", False):
+                dist_to_pat = math.hypot(self.patient_x - self.robot_x, self.patient_z - self.robot_z)
+                if (det["seen"] > 0.5 and det["h"] >= TARGET_BOX_H) or (dist_to_pat <= PATIENT_TALK_DIST_M_VIS and det["seen"] > 0.5):
+                    resolved = resolve_destination_key(
+                        self.scenario_action, self.scenario_slot, self.scenario_floor,
+                        current_floor=floor_of(self.patient_x),
+                    )
+                    event = "engaged"
+                    self.task_phase = TaskPhase.GUIDE_ESCORT if self.scenario_action == "guide" else TaskPhase.CALL_STAFF
+                    self.goal_key = resolved if self.scenario_action == "guide" else "staff"
+                    if self.scenario_action in ("call_staff", "emergency"):
+                        self.staff_goal = self._nearest_staff_position()
+                    self.steps_since_task = 0
+                    self.best_goal_dist = None
+                    self.best_vision_h = 0.0
 
-        elif self.task_phase == TaskPhase.GUIDE_ESCORT:
+        elif self.task_phase == TaskPhase.GUIDE_ESCORT and not getattr(self, "pure_vision", False):
             dest_x, dest_z = DESTINATION_POSITIONS.get(self.goal_key, (0.0, 4.5))
             d_robot_dest = math.hypot(dest_x - self.robot_x, dest_z - self.robot_z)
             d_patient_dest = math.hypot(dest_x - self.patient_x, dest_z - self.patient_z)
@@ -391,7 +392,7 @@ class HospitalVisualShiftEnv(HospitalShiftEnv):
                     self.best_vision_h = 0.0
                     self._spawn_next_patient()
 
-        elif self.task_phase == TaskPhase.CALL_STAFF:
+        elif self.task_phase == TaskPhase.CALL_STAFF and not getattr(self, "pure_vision", False):
             dest_x, dest_z = self.staff_goal
             if math.hypot(dest_x - self.robot_x, dest_z - self.robot_z) <= GOAL_ARRIVE_ROBOT_M:
                 event = "call_staff"

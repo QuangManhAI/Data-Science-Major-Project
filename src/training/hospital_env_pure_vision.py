@@ -47,6 +47,7 @@ from src.training.hospital_env import (
     cast_rays,
     floor_of,
     is_blocked,
+    nav_grid,
     resolve_destination_key,
     signed_angle_rad,
 )
@@ -213,6 +214,7 @@ class HospitalPureVisionEnv(HospitalVisualShiftEnv):
         self.step_count = 0
         self.steps_since_task = 0
         self.cumulative_team_reward = 0.0
+        self.cumulative_pure_vision_reward = 0.0
         self.escort_trail.clear()
         self.last_doctor_det = {"seen": 0.0, "cx": 0.0, "cy": 0.0, "w": 0.0, "h": 0.0}
         self.last_det = {"seen": 0.0, "cx": 0.0, "cy": 0.0, "w": 0.0, "h": 0.0}
@@ -407,6 +409,14 @@ class HospitalPureVisionEnv(HospitalVisualShiftEnv):
         p = self.patients[self.active_patient_idx]
         cur_px, cur_pz = p["x"], p["z"]
 
+        # If patient starts or is currently inside furniture/wall (e.g. seated), snap out to free floor
+        if is_blocked(cur_px, cur_pz, 0.28):
+            fl_g = nav_grid(floor_of(cur_px))
+            si, sj = fl_g.snap(cur_px, cur_pz)
+            cur_px, cur_pz = float(fl_g.xs[si]), float(fl_g.zs[sj])
+            p["x"], p["z"] = cur_px, cur_pz
+            self.patient_x, self.patient_z = cur_px, cur_pz
+
         fwd_x = -math.sin(self.robot_yaw)
         fwd_z = -math.cos(self.robot_yaw)
         right_x = math.cos(self.robot_yaw)
@@ -438,6 +448,11 @@ class HospitalPureVisionEnv(HospitalVisualShiftEnv):
             candidates.append((math.copysign(step, sx), 0.0))
         if abs(sz) > 1e-3:
             candidates.append((0.0, math.copysign(step, sz)))
+
+        # Fallback candidate angles if straight and axis-aligned moves are obstructed by a corner
+        for ang in [-math.pi / 4, math.pi / 4, -math.pi / 2, math.pi / 2]:
+            cs, sn = math.cos(ang), math.sin(ang)
+            candidates.append((sx * cs - sz * sn, sx * sn + sz * cs))
 
         for cx, cz in candidates:
             px_new, pz_new = cur_px + cx, cur_pz + cz
@@ -545,15 +560,25 @@ class HospitalPureVisionEnv(HospitalVisualShiftEnv):
         if self.task_phase in (TaskPhase.GUIDE_ESCORT, TaskPhase.CALL_STAFF):
             if pat_seen > 0.5:
                 d_vis_tether = float(np.clip(1.20 / max(pat_h, 0.05), 0.5, 5.0))
+                self.last_known_tether = d_vis_tether
+                self.lost_sight_steps = 0
                 obs[22] = float(np.clip(d_vis_tether / 5.0, 0.0, 1.0))
                 obs[23] = 1.0 if d_vis_tether > 2.0 else 0.0
                 obs[24] = 1.0 if d_vis_tether > 3.5 else 0.0
             else:
-                # Lost sight of escorted patient in camera FOV!
-                obs[22] = 1.0
-                obs[23] = 1.0
-                obs[24] = 1.0
+                # Occlusion / turn persistence buffer: decay last known tether distance rather than instant panic
+                self.lost_sight_steps = getattr(self, "lost_sight_steps", 0) + 1
+                prev_tether = getattr(self, "last_known_tether", 1.2)
+                if self.lost_sight_steps > 15:  # 3.0 seconds continuous occlusion
+                    obs[22] = 1.0
+                    obs[23] = 1.0
+                    obs[24] = 1.0
+                else:
+                    obs[22] = float(np.clip(prev_tether / 5.0, 0.0, 1.0))
+                    obs[23] = 1.0 if prev_tether > 2.0 else 0.0
+                    obs[24] = 0.0
         else:
+            self.lost_sight_steps = 0
             obs[22] = 0.0
             obs[23] = 0.0
             obs[24] = 0.0
@@ -620,6 +645,17 @@ class HospitalPureVisionEnv(HospitalVisualShiftEnv):
                 self.steps_since_task = 0
                 reward += REWARD_PATIENT_ENGAGED_VIS
                 info["patient_engaged"] = True
+
+                # Stand up patient from chair and snap onto legal, navigable floor
+                p = self.patients[self.active_patient_idx]
+                p["seated"] = False
+                fl_grid = nav_grid(floor_of(p["x"]))
+                si, sj = fl_grid.snap(p["x"], p["z"])
+                p["x"], p["z"] = float(fl_grid.xs[si]), float(fl_grid.zs[sj])
+                self.patient_x, self.patient_z = p["x"], p["z"]
+                self.escort_trail.clear()
+                self.last_known_tether = 1.0
+                self.lost_sight_steps = 0
 
         # 1c. GUIDE_ESCORT Elevator Transit (Cross-Floor Escort)
         if self.task_phase == TaskPhase.GUIDE_ESCORT and self.active_patient_idx is not None:
@@ -689,8 +725,9 @@ class HospitalPureVisionEnv(HospitalVisualShiftEnv):
             reward = 0.0
         reward = float(np.clip(reward, -50.0, 100.0))
 
-        if not math.isfinite(self.cumulative_team_reward):
-            self.cumulative_team_reward = 0.0
+        # Synchronize cumulative reward strictly to sum of step rewards (zero phantom superclass spikes)
+        self.cumulative_pure_vision_reward = getattr(self, "cumulative_pure_vision_reward", 0.0) + reward
+        self.cumulative_team_reward = self.cumulative_pure_vision_reward
 
         info["cumulative_team_reward"] = self.cumulative_team_reward
         info["visual_sectors"] = obs_sectors.tolist()
@@ -738,10 +775,10 @@ class HospitalPureVisionEnv(HospitalVisualShiftEnv):
 
         # In GUIDE_ESCORT: adapt forward speed according to visual patient tether
         if self.task_phase == TaskPhase.GUIDE_ESCORT:
-            if obs[24] > 0.5:  # Tether broken or lost from camera
-                v_base = 0.0  # Pause and wait for patient to catch up
+            if obs[24] > 0.5:  # Tether broken or prolonged occlusion
+                v_base = 0.08  # Creep forward gently to maintain steering / turning authority while patient catches up
             elif obs[23] > 0.5:  # Tether stretched (> 2.0m)
-                v_base = 0.15  # Slow down to allow patient to close distance
+                v_base = 0.20  # Slow down to allow patient to close distance
 
         # Repulsion from side sectors:
         # Left sectors (0, 1) push clockwise (+yaw rate / right turn)

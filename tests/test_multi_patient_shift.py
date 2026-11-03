@@ -4,7 +4,7 @@ import math
 import numpy as np
 import pytest
 
-from src.training.hospital_env import TaskPhase, floor_of
+from src.training.hospital_env import TaskPhase, floor_of, is_blocked
 from src.training.hospital_env_pure_vision import HospitalPureVisionEnv
 
 
@@ -96,6 +96,57 @@ def test_elevator_return_transit():
     assert env.returning_to_lobby is False
     assert info.get("return_transit", False) is True
     assert reward >= 4.0  # Got elevator return transit bonus
+
+
+def test_no_phantom_reward_spike_on_acquisition():
+    """Verify that acquiring a patient from search does NOT leak Euclidean distance (+3500 reward spike)."""
+    env = HospitalPureVisionEnv(seed=42)
+    obs = env.reset()
+    assert env.task_phase == TaskPhase.SEARCH_PATIENT
+    assert env.patient_x == -999.0
+
+    # Step forward towards patient 0
+    p0 = env.patients[0]
+    env.robot_x = p0["x"] + 2.5
+    env.robot_z = p0["z"]
+    env.robot_yaw = math.pi / 2  # Facing -X towards patient
+
+    obs, r, done, info = env.step(np.array([0.0, 0.0]))
+    # Reward should be bounded normal step reward, NEVER > +20.0
+    assert r < 20.0, f"Detected phantom reward spike on acquisition: r = {r}"
+    assert env.cumulative_team_reward < 20.0, f"Cumulative reward inflated on acquisition: {env.cumulative_team_reward}"
+
+
+def test_seated_patient_standup_and_escort_movement():
+    """Verify that seated patients properly snap to legal floor on engagement and escort smoothly."""
+    env = HospitalPureVisionEnv(seed=42)
+    env.reset()
+
+    # Patient 2 is seated in lobby chair (is_blocked was initially True)
+    p2 = env.patients[2]
+    assert p2["seated"] is True
+
+    # Place robot close to trigger dialogue engagement
+    env.active_patient_idx = 2
+    env.task_phase = TaskPhase.APPROACH_PATIENT
+    env.patient_x = p2["x"]
+    env.patient_z = p2["z"]
+    env.robot_x = p2["x"] - 0.5
+    env.robot_z = 2.5  # In open corridor
+    env.robot_yaw = 0.0
+
+    obs, r, done, info = env.step(np.array([0.0, 0.0]))
+    assert env.task_phase == TaskPhase.GUIDE_ESCORT, f"Expected GUIDE_ESCORT but got {env.task_phase}"
+    assert p2["seated"] is False, "Patient should stand up when engaged"
+    assert not is_blocked(p2["x"], p2["z"], 0.28), f"Patient must be on legal unblocked floor, got ({p2['x']}, {p2['z']})"
+
+    # Robot moves forward, patient must step along companion formation
+    prev_x, prev_z = p2["x"], p2["z"]
+    for _ in range(5):
+        env.step(np.array([0.5, 0.0]))
+    # Patient position must have moved
+    moved_dist = math.hypot(p2["x"] - prev_x, p2["z"] - prev_z)
+    assert moved_dist > 0.05, f"Patient failed to move in escort formation: moved only {moved_dist}m"
 
 
 if __name__ == "__main__":

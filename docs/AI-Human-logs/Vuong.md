@@ -1059,6 +1059,28 @@ av_remaining frozen after dialogue engagement.
 - **Touches:** [`src/training/hospital_env_pure_vision.py`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/src/training/hospital_env_pure_vision.py), [`tests/test_multi_patient_shift.py`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/tests/test_multi_patient_shift.py), [`docs/bugs/20261103_pure_vision_multi_patient_reward_and_standup_bugs.md`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/docs/bugs/20261103_pure_vision_multi_patient_reward_and_standup_bugs.md), [`docs/AI-Human-logs/Vuong.md`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/docs/AI-Human-logs/Vuong.md).
 - **Evidence:** 10/10 unit tests pass in `tests/test_multi_patient_shift.py` and `tests/test_disconnection_pure_vision.py`; end-to-end simulation verified Patient 0 rides elevator to Floor 2, is delivered inside Room 205, and robot returns to Floor 1 lobby.
 
+### Decision D-066: Completion of 2,000-Episode Multi-Patient Pure-Vision Production Training
+- **Status:** accepted
+- **When:** 2026-11-03T19:00:00+07:00
+- **Decided by:** human-directed production training run with 10k steps-per-epoch / max-steps
+- **Configuration & Hyperparameters:**
+  - `run_id`: `20261103_100811_PPOHospital-PureVision`
+  - Episodes: 2,000 continuous multi-patient shifts starting at Floor 1 entrance (`ROBOT_DOCK`)
+  - Max steps per shift: 10,000 steps ($2{,}000.0\,\text{s}$)
+  - Steps per PPO update epoch: 10,000 rollout steps
+  - Device: CUDA (NVIDIA GeForce RTX 4060 Laptop GPU)
+  - Observations: 29-D Pure-Vision (Zero LiDAR, Zero Map raycasts, 5 optical depth sectors)
+- **Key Outcomes:**
+  - **Total Patients Delivered:** **2,656 patients** escorted across 2,000 shifts (vs 1,503 previously, $+76.7\%$).
+  - **Per-Shift Delivery Rate:** **$1.33 \pm 1.26$** patients per shift (frequently delivering 2, 3, 4, and up to 5 patients per shift).
+  - **Peak Episode Reward:** **$+860.3$** (Ep 1065, vs $+328.6$ previously, $+161.8\%$).
+  - **Mean Episode Reward:** **$+145.2$** (Last 20 avg: **$+191.5$**).
+  - **Visual Spotting Rate:** **100.0%** maintained across all 2,000 shifts.
+  - **Collision Safety:** **$2.26$ collisions/shift** ($\approx 0.001$ per step), demonstrating high safety without LiDAR.
+  - **Evaluation Score (@ Ep 2000):** **$+427.3$** (vs $+238.1$ previously, $+79.5\%$).
+- **Touches:** [`src/training/train_pure_vision_rl.py`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/src/training/train_pure_vision_rl.py), [`src/training/hospital_env_pure_vision.py`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/src/training/hospital_env_pure_vision.py), [`docs/AI-Human-logs/Vuong.md`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/docs/AI-Human-logs/Vuong.md), [`training_curves_2000ep_multi_patient_pure_vision_report.md`](file:///C:/Users/TDV/.gemini/antigravity-cli/brain/8475757e-ecce-49d3-a890-6903da5e772d/training_curves_2000ep_multi_patient_pure_vision_report.md).
+- **Evidence:** Clean zero-exit code execution log; saved best model `PPOHospital-PureVision_best.pt`; all 10/10 automated test suite passes.
+
 
 
 

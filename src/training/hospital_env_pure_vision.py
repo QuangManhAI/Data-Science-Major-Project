@@ -62,12 +62,13 @@ from src.training.hospital_env_vision import (
 )
 
 OBS_DIM = OBS_DIM_PURE_VISION  # 29
-PENALTY_DOCTOR_PROXIMITY = -5.0
+PENALTY_DOCTOR_PROXIMITY = -0.30     # Rebalanced: gentle evasion pressure, eliminates -1300 reward cliff
 PENALTY_FREE_SEARCH_TIME = -0.04
 REWARD_VISUAL_SPOTTED = 5.0
 REWARD_PATIENT_ENGAGED_VIS = 50.0
-REWARD_GUIDE_ARRIVED_VIS = 80.0
+REWARD_GUIDE_ARRIVED_VIS = 150.0     # Emphasized completion reward (was 80.0)
 WEIGHT_VISUAL_OBSTACLE = 0.50
+WEIGHT_PATROL_PROGRESS = 0.25        # Active incentive for corridor exploration in SEARCH phase
 
 # 5 Sector center angles in camera coordinate frame (radians) across 75 deg FOV
 SECTOR_ANGLES_RAD = np.array(
@@ -645,10 +646,19 @@ class HospitalPureVisionEnv(HospitalVisualShiftEnv):
         free_search_penalty = (
             PENALTY_FREE_SEARCH_TIME if self.task_phase == TaskPhase.SEARCH_PATIENT else 0.0
         )
-
+        prev_nav = getattr(self, "nav_remaining", 0.0)
         prev_fl = floor_of(self.robot_x)
         obs, reward, done, info = super().step(action)
         reward += free_search_penalty
+
+        # Active corridor patrol waypoint progress incentive during SEARCH_PATIENT
+        if self.task_phase == TaskPhase.SEARCH_PATIENT:
+            curr_nav = getattr(self, "nav_remaining", 0.0)
+            if prev_nav > 0.0 and curr_nav > 0.0:
+                patrol_prog = float(np.clip(prev_nav - curr_nav, -0.5, 0.5))
+                reward += WEIGHT_PATROL_PROGRESS * patrol_prog
+                if patrol_prog > 0.02:
+                    self.steps_since_task = max(0, self.steps_since_task - 1)
 
         # 1. Multi-Patient Phase Management & Transitions
         cur_fl = floor_of(self.robot_x)

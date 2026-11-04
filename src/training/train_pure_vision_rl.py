@@ -287,10 +287,11 @@ def run_train_pure_vision(
             domain_randomization=True,
         )
 
-        # Behavioral Cloning Teacher Warmup (Decays from 0.20 to 0.0 over warmup_span episodes)
-        warmup_span = 100 if resume_from else 200
+        # Behavioral Cloning Teacher Warmup (Decays from 0.20 to teacher floor 0.06 over warmup_span episodes)
+        warmup_span = 200
         progress_in_warmup = max(0.0, min(1.0, (ep - start_ep) / float(warmup_span)))
-        prior_weight = 0.20 * (1.0 - progress_in_warmup) if bc_enabled else 0.0
+        teacher_floor = 0.06 if bc_enabled else 0.0
+        prior_weight = ((0.20 - teacher_floor) * (1.0 - progress_in_warmup) + teacher_floor) if bc_enabled else 0.0
 
         obs = env.reset()
         done = False
@@ -636,6 +637,7 @@ def main() -> None:
     parser.add_argument("--steps-per-epoch", type=int, default=10000, help="Rollout environment steps gathered per PPO update epoch (default: 10000)")
     parser.add_argument("--eval-every", type=int, default=200)
     parser.add_argument("--eval-episodes", type=int, default=15)
+    parser.add_argument("--lr", "--learning-rate", dest="lr", type=float, default=None, help="Initial learning rate for AdamW optimizer (default: 3e-5 when resuming, 1e-4 when training from scratch)")
     parser.add_argument("--visual", "--render", dest="visual", action="store_true", help="Launch interactive non-headless visual GUI")
     parser.add_argument("--mock-train", "--no-save", dest="mock_train", action="store_true", help="Execute complete training pipeline without saving checkpoints")
     parser.add_argument("--fps", type=int, default=30, help="Target FPS for visual rendering")
@@ -645,10 +647,17 @@ def main() -> None:
     if args.max_steps is not None:
         shift_duration = float(args.max_steps) * 0.2
 
+    lr_init = args.lr
+    if lr_init is None:
+        lr_init = 3e-5 if args.resume else 1e-4
+    lr_min = min(lr_init * 0.25, 1e-5)
+
     run_train_pure_vision(
         episodes=args.episodes,
         start_episode=args.start_episode,
         resume_from=args.resume,
+        lr_init=lr_init,
+        lr_min=lr_min,
         device_name=args.device,
         seed=args.seed,
         smoke=args.smoke,

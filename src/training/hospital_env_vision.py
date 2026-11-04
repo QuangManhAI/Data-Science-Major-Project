@@ -432,11 +432,11 @@ class HospitalVisualShiftEnv(HospitalShiftEnv):
         if self.task_phase == TaskPhase.GUIDE_ESCORT:
             if d_tether > 4.0:
                 r_progress = 0.0
-                r_tether = -3.0
+                r_tether = -0.50
             elif d_tether > 3.0:
                 if d_tether > TETHER_MAX_M:
                     r_progress = 0.0
-                r_tether = -1.0
+                r_tether = -0.25
             elif 0.9 <= d_tether <= 2.5:
                 r_tether = 0.15
 

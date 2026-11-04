@@ -1093,6 +1093,18 @@ av_remaining frozen after dialogue engagement.
 - **Touches:** [`src/training/hospital_env_pure_vision.py`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/src/training/hospital_env_pure_vision.py), [`src/training/train_pure_vision_rl.py`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/src/training/train_pure_vision_rl.py), [`docs/AI-Human-logs/Vuong.md`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/docs/AI-Human-logs/Vuong.md).
 - **Evidence:** 16/16 unit tests passed in `test_multi_patient_shift.py`, `test_3d_simulation_improvements.py`, and `test_hospital_env_vision.py`; smoke test passed cleanly.
 
+### Decision D-070: Expand Shift Duration to 3,500 Steps (700.0s) to Accommodate 6 Patients and Soften Tether Penalty Cliff
+- **Status:** accepted
+- **When:** 2026-11-04T19:55:00+07:00
+- **Decided by:** human request ("incraese the step size to accomadte for 6 patient helped") & agent analysis
+- **Trigger:** Observation that shifts capped uniformly at 1,500 steps (300.0s) because each full round-trip escort to Floor 2 takes ~100s (~500 steps), capping maximum throughput at 2–3 patients. Additionally, broken tether penalties (-3.0/step) created occasional negative reward spikes (-2500) during failed engagements.
+- **Modifications Applied:**
+  1. **Shift Step Budget Expansion (3,500 Steps / 700.0s):** Increased default `shift_duration_s` from `300.0` to `700.0` (3,500 environment steps at $dt=0.2\,\text{s}$) in [`src/training/hospital_env_pure_vision.py`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/src/training/hospital_env_pure_vision.py) and [`src/training/train_pure_vision_rl.py`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/src/training/train_pure_vision_rl.py). Early termination still triggers as soon as all 6 patients are delivered (`ALL_PATIENTS_SERVED` with $+250.0$ bonus).
+  2. **Softened Tether Penalty:** In [`src/training/hospital_env_vision.py`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/src/training/hospital_env_vision.py), softened `r_tether` when $d_{\text{tether}} > 4.0\,\text{m}$ from `-3.0` to `-0.50` and $d_{\text{tether}} > 3.0\,\text{m}$ from `-1.0` to `-0.25`, eliminating the multi-thousand reward cliff on broken tethers.
+  3. **Launch Continuation Run:** Restarted 1,000-episode fine-tuning from `20261104_103458_PPOHospital-PureVision_best.pt` (Peak +1137.9) with 3,500 max steps per shift on CUDA RTX 4060 GPU.
+- **Touches:** [`src/training/hospital_env_vision.py`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/src/training/hospital_env_vision.py), [`src/training/hospital_env_pure_vision.py`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/src/training/hospital_env_pure_vision.py), [`src/training/train_pure_vision_rl.py`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/src/training/train_pure_vision_rl.py), [`docs/AI-Human-logs/Vuong.md`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/docs/AI-Human-logs/Vuong.md).
+- **Evidence:** 16/16 unit tests passed cleanly.
+
 
 
 

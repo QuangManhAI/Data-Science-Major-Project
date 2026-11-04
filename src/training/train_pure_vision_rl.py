@@ -146,7 +146,7 @@ def run_train_pure_vision(
     resume_from: str | Path | None = None,
     stagnation_timeout_s: float = 90.0,
     stagnation_penalty: float = -10.0,
-    shift_duration_s: float = 300.0,
+    shift_duration_s: float = 700.0,
     steps_per_epoch: int = 10000,
     update_freq_episodes: int = 5,
     ppo_epochs: int = 4,
@@ -632,7 +632,7 @@ def main() -> None:
     parser.add_argument("--escort-curriculum", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--stagnation-timeout", type=float, default=90.0)
     parser.add_argument("--stagnation-penalty", type=float, default=-10.0)
-    parser.add_argument("--shift-duration", type=float, default=300.0)
+    parser.add_argument("--shift-duration", type=float, default=700.0)
     parser.add_argument("--max-steps", "--steps-per-episode", dest="max_steps", type=int, default=None, help="Maximum environment steps per episode / shift (e.g. 10000 steps = 2000s)")
     parser.add_argument("--steps-per-epoch", type=int, default=10000, help="Rollout environment steps gathered per PPO update epoch (default: 10000)")
     parser.add_argument("--eval-every", type=int, default=200)

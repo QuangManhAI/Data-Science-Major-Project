@@ -176,7 +176,7 @@ class HospitalPureVisionEnv(HospitalVisualShiftEnv):
     def __init__(
         self,
         curriculum_stage: int = 1,
-        shift_duration_s: float = 300.0,
+        shift_duration_s: float = 700.0,
         dt: float = 0.2,
         seed: int = 42,
         env_mode: str = "full",

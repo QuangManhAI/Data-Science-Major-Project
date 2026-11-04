@@ -1071,7 +1071,13 @@ av_remaining frozen after dialogue engagement.
   4. **Teacher Assistance Floor:** Updated BC warmup in [`src/training/train_pure_vision_rl.py`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/src/training/train_pure_vision_rl.py) to decay from `0.20` down to a persistent `0.06` (6%) teacher floor, providing minimal directional guidance during difficult multi-floor search states.
   5. **Gentle Fine-Tuning Learning Rate:** Resumed training from the proven peak checkpoint (`experiments/runs/20261103_100811_PPOHospital-PureVision/checkpoints/PPOHospital-PureVision_best.pt`, Peak +860.3) using a gentle initial learning rate of `3e-5` (min `1e-5`) with 10,000 steps per PPO update epoch across 1,000 continuous multi-patient episodes.
 - **Touches:** [`src/training/hospital_env_pure_vision.py`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/src/training/hospital_env_pure_vision.py), [`src/training/train_pure_vision_rl.py`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/src/training/train_pure_vision_rl.py), [`docs/AI-Human-logs/Vuong.md`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/docs/AI-Human-logs/Vuong.md).
-- **Evidence:** 16/16 test suite passes; production training run `20261104_103458_PPOHospital-PureVision` running stably on CUDA RTX 4060 GPU.
+- **Evidence:** 16/16 test suite passes; production training run `20261104_103458_PPOHospital-PureVision` completed all 1,000 episodes (Ep 2001–3000) on CUDA RTX 4060 GPU:
+  - **All-Time Peak Episode Reward:** **$+1137.9$** (Ep 2012, all-time record, up from $+860.3$).
+  - **Mean Episode Reward:** **$+256.1$** (final 20-episode average $+257.2$, non-degrading across all quartiles).
+  - **Total Patients Delivered:** **1,443 patients** ($1.44 \pm 1.11$ per shift, $+56.2\%$ throughput boost).
+  - **Mean Collisions Per Shift:** **1.93** collisions (reduced from 2.26).
+  - **Best Checkpoint:** [`experiments/runs/20261104_103458_PPOHospital-PureVision/checkpoints/PPOHospital-PureVision_best.pt`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/experiments/runs/20261104_103458_PPOHospital-PureVision/checkpoints/PPOHospital-PureVision_best.pt).
+
 
 
 

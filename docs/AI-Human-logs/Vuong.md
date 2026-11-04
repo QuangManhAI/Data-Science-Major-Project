@@ -1078,6 +1078,21 @@ av_remaining frozen after dialogue engagement.
   - **Mean Collisions Per Shift:** **1.93** collisions (reduced from 2.26).
   - **Best Checkpoint:** [`experiments/runs/20261104_103458_PPOHospital-PureVision/checkpoints/PPOHospital-PureVision_best.pt`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/experiments/runs/20261104_103458_PPOHospital-PureVision/checkpoints/PPOHospital-PureVision_best.pt).
 
+### Decision D-069: Expand Stagnation Timeout Window to 90s, Implement Search Visited Cells Reset, and Linear Progressive Multi-Patient Reward Escalation
+- **Status:** accepted
+- **When:** 2026-11-04T19:30:00+07:00
+- **Decided by:** human-agent interactive interview via `/grill-me`
+- **Trigger:** Diagnosis of shift terminations showed that 100% of episodes ended in `STAGNATION_TIMEOUT` after 1–2 patients due to a tight 60.0s (300 step) window and a design bug where `self.visited_cells` was never refreshed after returning from upper-floor deliveries.
+- **Modifications Applied:**
+  1. **Expanded Stagnation Window (90.0s / 450 Steps):** Increased default `stagnation_timeout_s` from `60.0` to `90.0` in [`src/training/hospital_env_pure_vision.py`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/src/training/hospital_env_pure_vision.py) and [`src/training/train_pure_vision_rl.py`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/src/training/train_pure_vision_rl.py), allowing sufficient physical transit time (~65s) to navigate from upper floors back to the Floor 1 lobby and pan the 70° FOV camera across waiting benches.
+  2. **Inter-Patient Exploration Refresh:** In `HospitalPureVisionEnv.step()`, when exiting the elevator back on Floor 1 (`returning_to_lobby` transition) or completing a Floor 1 delivery, cleared `self.visited_cells` and reset `self.steps_since_task = 0`. This guarantees active walking through previously seen corridors earns exploration credit and resets the stagnation timer.
+  3. **Linear Progressive Reward Escalation:** Replaced flat $+150.0$ escort reward with an escalating formula:
+     $$\text{Reward}_{\text{delivery}} = 150.0 \times (1.0 + 0.20 \times \text{patients\_helped})$$
+     earning $+150, +180, +210, +240, +270, +300$ for patients 1 through 6, and increased full shift completion bonus from $+100.0$ to $+250.0$.
+  4. **Fine-Tuning Execution:** Launch 1,000-episode continuation run from the record-breaking checkpoint (`20261104_103458_PPOHospital-PureVision/checkpoints/PPOHospital-PureVision_best.pt`, Peak +1137.9) with $\text{lr} = 3\times 10^{-5}$ and 6% teacher guidance floor.
+- **Touches:** [`src/training/hospital_env_pure_vision.py`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/src/training/hospital_env_pure_vision.py), [`src/training/train_pure_vision_rl.py`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/src/training/train_pure_vision_rl.py), [`docs/AI-Human-logs/Vuong.md`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/docs/AI-Human-logs/Vuong.md).
+- **Evidence:** 16/16 unit tests passed in `test_multi_patient_shift.py`, `test_3d_simulation_improvements.py`, and `test_hospital_env_vision.py`; smoke test passed cleanly.
+
 
 
 

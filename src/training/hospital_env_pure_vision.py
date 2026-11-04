@@ -180,7 +180,7 @@ class HospitalPureVisionEnv(HospitalVisualShiftEnv):
         dt: float = 0.2,
         seed: int = 42,
         env_mode: str = "full",
-        stagnation_timeout_s: float = 60.0,
+        stagnation_timeout_s: float = 90.0,
         stagnation_penalty: float = -10.0,
         escort_only: bool = True,
         domain_randomization: bool = True,
@@ -672,6 +672,8 @@ class HospitalPureVisionEnv(HospitalVisualShiftEnv):
                 self.returning_to_lobby = False
                 self.goal_key = "patient"
                 self.steps_since_task = 0
+                self.visited_cells.clear()
+                self.visited_cells.add((int(math.floor(self.robot_x)), int(math.floor(self.robot_z)), 1))
                 reward += REWARD_ELEVATOR_TRANSIT
                 self.cumulative_team_reward += REWARD_ELEVATOR_TRANSIT
                 info["return_transit"] = True
@@ -731,16 +733,18 @@ class HospitalPureVisionEnv(HospitalVisualShiftEnv):
                 else:
                     # Successfully arrived at final destination room! Mark SERVED
                     self.patients[self.active_patient_idx]["served"] = True
+                    # Progressive reward escalation: +150 * (1.0 + 0.20 * k)
+                    reward_delivery = float(REWARD_GUIDE_ARRIVED_VIS * (1.0 + 0.20 * self.patients_helped))
                     self.patients_helped += 1
                     self.steps_since_task = 0
-                    reward += REWARD_GUIDE_ARRIVED_VIS
+                    reward += reward_delivery
                     info["guide_completed"] = True
 
                     # Check if all 6 patients on Floor 1 are served
                     if all(p.get("served", False) for p in self.patients):
                         done = True
                         info["exit_reason"] = "ALL_PATIENTS_SERVED"
-                        reward += 100.0  # Full shift bonus!
+                        reward += 250.0  # Full shift bonus!
                     else:
                         new_fl = floor_of(self.robot_x)
                         if new_fl > 1:
@@ -757,6 +761,8 @@ class HospitalPureVisionEnv(HospitalVisualShiftEnv):
                             self.active_patient_idx = None
                             self.patient_x = -999.0
                             self.patient_z = -999.0
+                            self.visited_cells.clear()
+                            self.visited_cells.add((int(math.floor(self.robot_x)), int(math.floor(self.robot_z)), 1))
 
         # 2. Continuous Visual Obstacle Proximity Repulsion
         obs_sectors = obs[0:5]

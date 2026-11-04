@@ -144,7 +144,7 @@ def run_train_pure_vision(
     episodes: int = 2000,
     start_episode: int = 1,
     resume_from: str | Path | None = None,
-    stagnation_timeout_s: float = 60.0,
+    stagnation_timeout_s: float = 90.0,
     stagnation_penalty: float = -10.0,
     shift_duration_s: float = 300.0,
     steps_per_epoch: int = 10000,
@@ -630,7 +630,7 @@ def main() -> None:
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--smoke", action="store_true")
     parser.add_argument("--escort-curriculum", action=argparse.BooleanOptionalAction, default=True)
-    parser.add_argument("--stagnation-timeout", type=float, default=60.0)
+    parser.add_argument("--stagnation-timeout", type=float, default=90.0)
     parser.add_argument("--stagnation-penalty", type=float, default=-10.0)
     parser.add_argument("--shift-duration", type=float, default=300.0)
     parser.add_argument("--max-steps", "--steps-per-episode", dest="max_steps", type=int, default=None, help="Maximum environment steps per episode / shift (e.g. 10000 steps = 2000s)")

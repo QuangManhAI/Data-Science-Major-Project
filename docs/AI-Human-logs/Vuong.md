@@ -1103,7 +1103,13 @@ av_remaining frozen after dialogue engagement.
   2. **Softened Tether Penalty:** In [`src/training/hospital_env_vision.py`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/src/training/hospital_env_vision.py), softened `r_tether` when $d_{\text{tether}} > 4.0\,\text{m}$ from `-3.0` to `-0.50` and $d_{\text{tether}} > 3.0\,\text{m}$ from `-1.0` to `-0.25`, eliminating the multi-thousand reward cliff on broken tethers.
   3. **Launch Continuation Run:** Restarted 1,000-episode fine-tuning from `20261104_103458_PPOHospital-PureVision_best.pt` (Peak +1137.9) with 3,500 max steps per shift on CUDA RTX 4060 GPU.
 - **Touches:** [`src/training/hospital_env_vision.py`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/src/training/hospital_env_vision.py), [`src/training/hospital_env_pure_vision.py`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/src/training/hospital_env_pure_vision.py), [`src/training/train_pure_vision_rl.py`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/src/training/train_pure_vision_rl.py), [`docs/AI-Human-logs/Vuong.md`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/docs/AI-Human-logs/Vuong.md).
-- **Evidence:** 16/16 unit tests passed cleanly.
+- **Evidence:** 16/16 unit tests passed cleanly; production run `20261104_195749_PPOHospital-PureVision` completed 609 episodes (Ep 3001–3609) before laptop reboot:
+  - **All-Time Peak Episode Reward:** **$+1237.2** (Ep 3014, highest in project history).
+  - **Mean Episode Reward:** **$+703.0** (up from $+256.1$, a $+174.5\%$ increase).
+  - **Average Patients Helped / Shift:** **$3.74 \pm 1.69$** (up from $1.44$).
+  - **High-Volume Shifts ($\ge 4$ Patients):** **78.0%** (475 / 609 shifts delivered 4, 5, or 6 patients).
+  - **Full Shift Clear:** 1 shift achieved `ALL_PATIENTS_SERVED` (all 6 patients escorted).
+  - **Checkpoints:** [`PPOHospital-PureVision_best.pt`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/experiments/runs/20261104_195749_PPOHospital-PureVision/checkpoints/PPOHospital-PureVision_best.pt) and [`PPOHospital-PureVision_ep3600.pt`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/experiments/runs/20261104_195749_PPOHospital-PureVision/checkpoints/PPOHospital-PureVision_ep3600.pt).
 
 
 

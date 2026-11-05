@@ -63,6 +63,28 @@ func setup(robot_node: Node3D, state_fn: Callable) -> void:
 	robot_state_fn = state_fn
 
 
+func has_line_of_sight_to_robot() -> bool:
+	if robot == null or human == null or not human.is_inside_tree():
+		return false
+	var world_3d := human.get_world_3d()
+	if world_3d == null:
+		return true
+	var space_state := world_3d.direct_space_state
+	if space_state == null:
+		return true
+	var from_pos := human.global_position + Vector3(0.0, 0.8, 0.0)
+	var to_pos := robot.global_position + Vector3(0.0, 0.8, 0.0)
+	var query := PhysicsRayQueryParameters3D.create(from_pos, to_pos)
+	var exclude: Array[RID] = []
+	if human is CollisionObject3D:
+		exclude.append((human as CollisionObject3D).get_rid())
+	if robot is CollisionObject3D:
+		exclude.append((robot as CollisionObject3D).get_rid())
+	query.exclude = exclude
+	var hit := space_state.intersect_ray(query)
+	return hit.is_empty()
+
+
 func _process(delta: float) -> void:
 	cooldown_left = maxf(cooldown_left - delta, 0.0)
 	if robot == null or not robot_state_fn.is_valid():
@@ -74,7 +96,8 @@ func _process(delta: float) -> void:
 		r_state = Config.RobotState.ARRIVED
 	var next: String = Npc.next_state(state, r_state, dist, cooldown_left, turns_done)
 	if state == IDLE and next == NOTICE:
-		_notice()
+		if has_line_of_sight_to_robot():
+			_notice()
 	elif state == TALK and next == IDLE:
 		_abort_talk()
 

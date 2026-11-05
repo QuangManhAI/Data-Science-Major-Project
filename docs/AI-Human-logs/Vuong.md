@@ -1111,6 +1111,23 @@ av_remaining frozen after dialogue engagement.
   - **Full Shift Clear:** 1 shift achieved `ALL_PATIENTS_SERVED` (all 6 patients escorted).
   - **Checkpoints:** [`PPOHospital-PureVision_best.pt`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/experiments/runs/20261104_195749_PPOHospital-PureVision/checkpoints/PPOHospital-PureVision_best.pt) and [`PPOHospital-PureVision_ep3600.pt`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/experiments/runs/20261104_195749_PPOHospital-PureVision/checkpoints/PPOHospital-PureVision_ep3600.pt).
 
+### Decision D-071: Fix Speak-Through-Wall via 3D Physics Line-of-Sight Raycasts and Resolve Trash Bin Snag via Authoritative Unstick Maneuver & Ground-Contact Depth Scaling
+- **Status:** accepted
+- **When:** 2026-11-05T12:35:00+07:00
+- **Decided by:** human observation of 3D simulation bugs & agent diagnosis via `/grill-me`
+- **Trigger:** Observation in 3D inference:
+  1. Robot and seated patients initiated conversation through solid partition walls when Euclidean distance $d \le 1.85\,\text{m}$.
+  2. Robot became snagged against medical waste bins at `(6.13, 1.65)` because a weak escape pulse ($0.35\,\text{s}$ at $0.22\,\text{m/s}$ reversing only $7.7\,\text{cm}$) kept it inside the bin's collision volume, while waste bin visual depth was only $0.45$ (below the $0.50$ avoidance threshold).
+- **Modifications Applied:**
+  1. **3D Physics Line-of-Sight Enforcement (`main.gd` & `npc.gd`):** Implemented `has_line_of_sight(from, to)` using Godot's `PhysicsRayQueryParameters3D` direct raycast. In both `main.gd` (`_step_policy()`) and `npc.gd` (`_process()`), dialogue engagement (`Config.RobotState.ARRIVED`, `Npc.NOTICE`) is strictly forbidden unless raycast between robot camera and patient torso is completely clear of walls and doors.
+  2. **Authoritative Unstick Maneuver (`robot.gd`):** Upgraded physical stuck escape in `robot.gd`:
+     - Faster detection threshold: `STUCK_TRIGGER_S = 0.6` (was $0.8\,\text{s}$).
+     - Extended escape pulse: `ESCAPE_DURATION_S = 0.85` (was $0.35\,\text{s}$) at $0.28\,\text{m/s}$ backward speed, delivering $\approx 24\,\text{cm}$ of clean reverse displacement.
+     - Stronger yaw rotation: turn rate increased to $1.25 \times \omega_{\max}$ ($\approx 58^\circ$ heading shift away from the obstacle).
+  3. **Small Obstacle Ground-Contact Proximity Boost (`hospital_env_pure_vision.py`):** In `compute_5_sector_depth()`, for obstacles with nominal height $\le 0.55\,\text{m}$ (trash bins, chair legs) with ground contact $y_2 > 0.55$, boosted pseudo-depth to $\ge 0.70$, guaranteeing the RL policy server immediately registers strong repulsive forces before physical contact occurs.
+- **Touches:** [`sim_vision/godot/scripts/main.gd`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/sim_vision/godot/scripts/main.gd), [`sim_vision/godot/scripts/npc.gd`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/sim_vision/godot/scripts/npc.gd), [`sim_vision/godot/scripts/robot.gd`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/sim_vision/godot/scripts/robot.gd), [`src/training/hospital_env_pure_vision.py`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/src/training/hospital_env_pure_vision.py), [`tests/test_3d_simulation_improvements.py`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/tests/test_3d_simulation_improvements.py), [`docs/AI-Human-logs/Vuong.md`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/docs/AI-Human-logs/Vuong.md).
+- **Evidence:** 17/17 pytest suite passed; Godot 4.7.2 headless project check exited cleanly with code 0.
+
 
 
 

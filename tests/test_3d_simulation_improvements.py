@@ -37,6 +37,26 @@ def test_small_obstacle_visual_depth_scaling():
     assert sectors[2] >= 0.70, f"Expected center sector >= 0.70, got {sectors[2]}"
 
 
+def test_waste_bin_ground_contact_boost():
+    """Medical waste bin with ground contact y2=0.65 directly ahead must produce strong repulsion depth >= 0.70."""
+    trash_box = {
+        "x1": 0.45,
+        "x2": 0.55,
+        "y1": 0.50,
+        "y2": 0.65,
+        "class_name": "medical_waste_bin",
+    }
+    sectors = compute_5_sector_depth(
+        robot_x=0.0,
+        robot_z=0.0,
+        robot_yaw=0.0,
+        fl=1,
+        structure_walls=None,
+        obstacle_boxes=[trash_box],
+    )
+    assert sectors[2] >= 0.70, f"Expected center sector >= 0.70, got {sectors[2]}"
+
+
 def test_wide_chair_covers_multiple_sectors():
     """A wide bench or chair spanning across sectors should populate all spanned sectors."""
     chair_box = {

@@ -448,6 +448,25 @@ func _is_search_phase() -> bool:
 	return _rl_bridge.task_phase in [RLEnvBridgeScript.TaskPhase.SEARCH_PATIENT, RLEnvBridgeScript.TaskPhase.APPROACH_PATIENT]
 
 
+func has_line_of_sight(from_node: Node3D, to_node: Node3D) -> bool:
+	if from_node == null or to_node == null:
+		return false
+	var space_state := get_world_3d().direct_space_state
+	if space_state == null:
+		return true
+	var from_pos := from_node.global_position + Vector3(0.0, 0.8, 0.0)
+	var to_pos := to_node.global_position + Vector3(0.0, 0.8, 0.0)
+	var query := PhysicsRayQueryParameters3D.create(from_pos, to_pos)
+	var exclude: Array[RID] = []
+	if from_node is CollisionObject3D:
+		exclude.append((from_node as CollisionObject3D).get_rid())
+	if to_node is CollisionObject3D:
+		exclude.append((to_node as CollisionObject3D).get_rid())
+	query.exclude = exclude
+	var hit := space_state.intersect_ray(query)
+	return hit.is_empty()
+
+
 ## PPO lái robot ở mọi pha ngoài hội thoại; gửi trạng thái mỗi STEP_DT_S như dt lúc train.
 ## Pha tìm bệnh nhân: tới ≤ PATIENT_ENGAGE_DIST_M ➔ ARRIVED, dừng chờ NPC bắt đầu hội thoại.
 func _step_policy(delta: float) -> void:
@@ -476,14 +495,15 @@ func _step_policy(delta: float) -> void:
 		var closest_info: Dictionary = get_closest_available_patient()
 		var candidate_pat: CharacterBody3D = closest_info.get("patient") as CharacterBody3D
 		var d_human: float = float(closest_info.get("dist", 999.0))
+		var has_los: bool = (candidate_pat != null and has_line_of_sight(robot, candidate_pat))
 
-		# Bind candidate patient if within visual/physical approach radius
-		if candidate_pat != null and d_human <= Config.TALK_TRIGGER_DIST + 1.5:
+		# Bind candidate patient if within visual/physical approach radius AND line of sight is clear
+		if candidate_pat != null and has_los and d_human <= Config.TALK_TRIGGER_DIST + 1.5:
 			if current_target_patient != candidate_pat:
 				current_target_patient = candidate_pat
 			current_target_patient.set("pardon_enabled", false)
 
-		var yolo_patient_close: bool = (not best_patient_det.is_empty() and yolo_h >= 0.40 and absf(yolo_cx) < 0.35 and d_human <= PATIENT_ENGAGE_DIST_M)
+		var yolo_patient_close: bool = (not best_patient_det.is_empty() and yolo_h >= 0.38 and absf(yolo_cx) < 0.35 and d_human <= PATIENT_ENGAGE_DIST_M and has_los)
 
 		if state == Config.RobotState.ARRIVED:
 			_arrived_wait_s += delta
@@ -495,13 +515,13 @@ func _step_policy(delta: float) -> void:
 				robot.set_command(0.0, 0.0)
 				return
 			state = Config.RobotState.SEARCH  # bệnh nhân đi xa trước khi nói ➔ tìm lại
-		elif d_human <= PATIENT_ENGAGE_DIST_M or yolo_patient_close:
+		elif has_los and (d_human <= PATIENT_ENGAGE_DIST_M or yolo_patient_close):
 			if candidate_pat != null:
 				current_target_patient = candidate_pat
 				current_target_patient.set("pardon_enabled", false)
 				if current_target_patient.get("walks") == true:
 					current_target_patient.set("walks", false)
-			print("[ESCORT_DEBUG] >>> Reached patient engage dist (d=%.2fm <= %.2fm, yolo_close=%s), waiting for speech..." % [d_human, PATIENT_ENGAGE_DIST_M, str(yolo_patient_close)])
+			print("[ESCORT_DEBUG] >>> Reached patient engage dist (d=%.2fm <= %.2fm, yolo_close=%s, has_los=true), waiting for speech..." % [d_human, PATIENT_ENGAGE_DIST_M, str(yolo_patient_close)])
 			_arrived_wait_s = 0.0
 			robot.set_command(0.0, 0.0)
 			state = Config.RobotState.ARRIVED

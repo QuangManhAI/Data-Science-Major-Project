@@ -135,7 +135,10 @@ def compute_5_sector_depth(
             scale = min(4.0, max(1.0, HUMAN_REFERENCE_HEIGHT / nom_h))
 
             # Ground contact proximity: for an object on the floor, y2 approaching 1.0 means it is directly ahead
-            prox_floor = (y2 - 0.5) / 0.45 if y2 > 0.5 else 0.0
+            prox_floor = (y2 - 0.45) / 0.45 if y2 > 0.45 else 0.0
+            if nom_h <= 0.55 and y2 > 0.55:
+                # Small low obstacle (medical waste bin, chair) directly on ground ahead: boost proximity
+                prox_floor = max(prox_floor, min(0.95, (y2 - 0.50) / 0.35 + 0.35))
             prox = max(h * scale, prox_floor)
 
             # Determine sector span

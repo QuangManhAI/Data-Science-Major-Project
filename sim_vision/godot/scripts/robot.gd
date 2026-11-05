@@ -15,8 +15,8 @@ var _lidar_rays: Array[RayCast3D] = []
 var _stuck_time_s: float = 0.0
 var _escape_pulse_s: float = 0.0
 var _escape_turn_dir: float = 1.0
-const STUCK_TRIGGER_S: float = 0.8
-const ESCAPE_DURATION_S: float = 0.35
+const STUCK_TRIGGER_S: float = 0.6
+const ESCAPE_DURATION_S: float = 0.85
 
 var v: float:
 	get:
@@ -112,9 +112,9 @@ func front_obstacle_distance() -> float:
 func _physics_process(delta: float) -> void:
 	if _escape_pulse_s > 0.0:
 		_escape_pulse_s -= delta
-		rotation.y += _escape_turn_dir * Config.OMEGA_MAX * 0.75 * delta
+		rotation.y += _escape_turn_dir * Config.OMEGA_MAX * 1.25 * delta
 		var bwd: Vector3 = global_transform.basis.z  # +Z is backward
-		velocity = Vector3(bwd.x, 0.0, bwd.z).normalized() * 0.22
+		velocity = Vector3(bwd.x, 0.0, bwd.z).normalized() * 0.28
 		move_and_slide()
 		return
 

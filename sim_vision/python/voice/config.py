@@ -7,7 +7,7 @@ from pathlib import Path
 
 REPO_ROOT: Path = Path(__file__).resolve().parents[3]
 
-DATA_DIR: Path = Path(os.environ.get("DATA_DIR", "/Users/quangmanh/Project/Data-Science-Major-Project/data"))
+DATA_DIR: Path = Path(os.environ.get("DATA_DIR", str(REPO_ROOT / "data")))
 # Dữ liệu thật nằm ở data/raw/real_voice (người dùng chọn 2026-10-21, khác Mục 2.4).
 RAW_SUBDIR: str = "raw/real_voice"
 SCRIPT_MD: Path = REPO_ROOT / "docs" / "kich_ban_thu_am.md"

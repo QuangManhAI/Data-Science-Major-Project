@@ -1,0 +1,12 @@
+{
+  "subject": {
+    "id": "B",
+    "realAge": 20,
+    "gender": "Nữ",
+    "region": "Trung",
+    "province": "Quảng Ngãi"
+  },
+  "exportDate": "2026-10-28T09:43:22.829Z",
+  "recordedFilesCount": 80,
+  "totalPrompts": 80
+}

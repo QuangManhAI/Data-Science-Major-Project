@@ -20,6 +20,9 @@ const IDLE_ANIM: StringName = &"human/idle"
 @export var clip_id: String = ""     # rỗng = chọn ngẫu nhiên trong các clip của speaker
 @warning_ignore("shadowed_global_identifier")
 @export var seed: int = -1
+@export var escort_only: bool = false  # true = chỉ chọn clip hỏi đường / dẫn đường (hoi_phong, hoi_khoa, dan_duong)
+
+const ESCORT_INTENTS: Array[String] = ["hoi_phong", "hoi_khoa", "dan_duong"]
 
 var state: String = IDLE
 var cooldown_left: float = 0.0
@@ -36,8 +39,8 @@ var _rng := RandomNumberGenerator.new()
 var _was_walking: bool = false
 var _tween: Tween = null
 
-@onready var human: Human = get_parent() as Human
-@onready var player: AudioStreamPlayer3D = get_node(^"../Head/Voice")
+@onready var human: Node3D = get_parent() as Node3D
+var player: AudioStreamPlayer3D = null
 
 
 func _ready() -> void:
@@ -45,7 +48,14 @@ func _ready() -> void:
 		_rng.seed = seed
 	else:
 		_rng.randomize()
-	player.finished.connect(_on_audio_finished)
+	if player == null:
+		player = get_node_or_null(^"../Head/Voice") as AudioStreamPlayer3D
+	if player == null and human != null:
+		player = human.get_node_or_null(^"Head/Voice") as AudioStreamPlayer3D
+	if player == null and human != null:
+		player = human.get_node_or_null(^"Voice") as AudioStreamPlayer3D
+	if player != null and not player.finished.is_connected(_on_audio_finished):
+		player.finished.connect(_on_audio_finished)
 
 
 func setup(robot_node: Node3D, state_fn: Callable) -> void:
@@ -57,8 +67,12 @@ func _process(delta: float) -> void:
 	cooldown_left = maxf(cooldown_left - delta, 0.0)
 	if robot == null or not robot_state_fn.is_valid():
 		return
-	var dist: float = Human.flat_distance(human.global_position, robot.global_position)
-	var next: String = Npc.next_state(state, robot_state_fn.call(), dist, cooldown_left, turns_done)
+	var h_pos: Vector3 = human.get_interaction_position() if (human != null and human.has_method("get_interaction_position")) else (human.global_position if human != null else Vector3.ZERO)
+	var dist: float = Human.flat_distance(h_pos, robot.global_position)
+	var r_state: int = robot_state_fn.call()
+	if r_state == Config.RobotState.APPROACH and dist <= Config.SAFE_DIST_HUMAN + 0.35 and robot.get("v") != null and absf(robot.v) < 0.05:
+		r_state = Config.RobotState.ARRIVED
+	var next: String = Npc.next_state(state, r_state, dist, cooldown_left, turns_done)
 	if state == IDLE and next == NOTICE:
 		_notice()
 	elif state == TALK and next == IDLE:
@@ -87,10 +101,15 @@ static func yaw_towards(from: Vector3, to: Vector3) -> float:
 
 ## Chọn clip của `speaker`, ưu tiên intent chưa dùng; dùng hết thì dùng lại từ đầu. Không có clip ➔ "".
 static func pick_clip(clips: Dictionary, spk: String, used_intents: Array[String],
-		rng: RandomNumberGenerator) -> String:
+		rng: RandomNumberGenerator, escort_filter: bool = false) -> String:
 	var mine: Array[String] = []
 	for id: String in clips:
 		if str(clips[id].get("speaker", "")) == spk:
+			if escort_filter:
+				var it: String = str(clips[id].get("intent", ""))
+				var sid: String = str(clips[id].get("sentence_id", ""))
+				if not ESCORT_INTENTS.has(it) or sid == "05":
+					continue
 			mine.append(id)
 	if mine.is_empty():
 		return ""
@@ -143,7 +162,8 @@ static func load_voice(id: String, dir: String = VOICES_DIR) -> AudioStream:
 func reset() -> void:
 	if _tween != null:
 		_tween.kill()
-	player.stop()
+	if player != null:
+		player.stop()
 	if state != IDLE:
 		_resume_walking()
 	state = IDLE
@@ -187,15 +207,21 @@ func on_reply_shown() -> void:
 
 func _notice() -> void:
 	state = NOTICE
-	_was_walking = human.walks
-	human.walks = false
-	human.velocity = Vector3.ZERO
-	var target: float = Npc.yaw_towards(human.global_position, robot.global_position)
-	var end_yaw: float = human.rotation.y + Npc.shortest_turn(human.rotation.y, target)
-	_tween = create_tween()
-	_tween.tween_property(human, ^"rotation:y", end_yaw, Config.TURN_DURATION_S) \
-			.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-	_tween.finished.connect(_start_talk)
+	_was_walking = bool(human.get("walks")) if human != null and human.get("walks") != null else false
+	if human != null:
+		human.set("walks", false)
+		if human.get("velocity") != null:
+			human.set("velocity", Vector3.ZERO)
+	var is_seated_val: bool = bool(human.get("is_seated")) if human != null and human.get("is_seated") != null else false
+	if is_seated_val:
+		_start_talk()
+	else:
+		var target: float = Npc.yaw_towards(human.global_position, robot.global_position)
+		var end_yaw: float = human.rotation.y + Npc.shortest_turn(human.rotation.y, target)
+		_tween = create_tween()
+		_tween.tween_property(human, ^"rotation:y", end_yaw, Config.TURN_DURATION_S) \
+				.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+		_tween.finished.connect(_start_talk)
 
 
 func _start_talk() -> void:
@@ -203,7 +229,9 @@ func _start_talk() -> void:
 		return
 	if _clips.is_empty() and clip_id == "":
 		_clips = Npc.load_clips(voices_dir.path_join("clips.json"))
-	var id: String = clip_id if clip_id != "" else Npc.pick_clip(_clips, speaker, _used_intents, _rng)
+	var id: String = clip_id if clip_id != "" else Npc.pick_clip(_clips, speaker, _used_intents, _rng, escort_only)
+	if id == "" and speaker != "A":
+		id = Npc.pick_clip(_clips, "A", _used_intents, _rng, escort_only)
 	var stream: AudioStream = Npc.load_voice(id, voices_dir) if id != "" else null
 	if stream == null:
 		push_error("Npc: cannot load voice clip '%s' (speaker %s)" % [id, speaker])
@@ -218,10 +246,16 @@ func _start_talk() -> void:
 	if _used_intents.size() >= _distinct_intents():
 		_used_intents.clear()
 	state = TALK
-	var anim: AnimationPlayer = human.get_node(^"AnimationPlayer")
-	anim.play(TALK_ANIM if anim.has_animation(TALK_ANIM) else IDLE_ANIM, 0.3)
-	player.stream = stream
-	player.play()
+	var anim: AnimationPlayer = human.get_node_or_null(^"AnimationPlayer") as AnimationPlayer if human != null else null
+	if anim == null and human != null:
+		var model_node: Node3D = human.get_node_or_null(^"Model") as Node3D
+		if model_node != null:
+			anim = model_node.get_node_or_null(^"AnimationPlayer") as AnimationPlayer
+	if anim != null and anim.has_animation(TALK_ANIM):
+		anim.play(TALK_ANIM, 0.3)
+	if player != null:
+		player.stream = stream
+		player.play()
 	talk_started.emit(id)
 
 
@@ -240,12 +274,18 @@ func _on_audio_finished() -> void:
 
 
 func _resume_walking() -> void:
-	human.walks = _was_walking
+	if human != null and human.get("walks") != null:
+		human.set("walks", _was_walking)
 
 
 func _distinct_intents() -> int:
+	if escort_only:
+		return ESCORT_INTENTS.size()
 	var seen: Dictionary = {}
 	for id: String in _clips:
 		if str(_clips[id].get("speaker", "")) == speaker:
+			seen[str(_clips[id].get("intent", ""))] = true
+	if seen.is_empty():
+		for id: String in _clips:
 			seen[str(_clips[id].get("intent", ""))] = true
 	return seen.size()

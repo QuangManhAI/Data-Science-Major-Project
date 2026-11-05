@@ -1,19 +1,30 @@
 extends SceneTree
-## Tách animation Rocketbox (FBX) thành file .res dùng cho human.tscn.
+## Tách animation Rocketbox (FBX) thành file .res dùng cho human.tscn và các NPC bệnh viện.
 ## Chạy: godot --headless -s res://tools/extract_human_anims.gd
 
-const AVATAR: String = "res://assets/models/human_m06/Male_Adult_06.fbx"
+const AVATAR_M: String = "res://assets/models/human_m06/Male_Adult_06.fbx"
+const AVATAR_F: String = "res://assets/models/medical_f01/Medical_Female_01.fbx"
 const SOURCES: Dictionary = {
-	"idle": "res://assets/models/human_m06/anims/m_idle_neutral_01.fbx",
-	"walk": "res://assets/models/human_m06/anims/m_walk_neutral.fbx",
+	"idle": ["res://assets/models/human_m06/anims/m_idle_neutral_01.fbx", AVATAR_M],
+	"walk": ["res://assets/models/human_m06/anims/m_walk_neutral.fbx", AVATAR_M],
+	"m_idle_waiting": ["res://assets/models/human_m06/anims/m_idle_waiting_01.fbx", AVATAR_M],
+	"m_sit_waiting": ["res://assets/models/human_m06/anims/m_sit_chair_idle_waiting_01.fbx", AVATAR_M],
+	"m_sit_cough": ["res://assets/models/human_m06/anims/m_sit_chair_idle_cough.fbx", AVATAR_M],
+	"f_idle": ["res://assets/models/human_m06/anims/f_idle_neutral_01.fbx", AVATAR_F],
+	"f_documents_check": ["res://assets/models/human_m06/anims/f_documents_check.fbx", AVATAR_F],
+	"f_sit_waiting": ["res://assets/models/human_m06/anims/f_sit_chair_idle_waiting_01.fbx", AVATAR_F],
+	"f_sit_idle": ["res://assets/models/human_m06/anims/f_sit_chair_idle_neutral_01.fbx", AVATAR_F],
 }
 
 
 func _init() -> void:
-	var avatar: Node = (load(AVATAR) as PackedScene).instantiate()
-	var skeleton := avatar.get_node("Skeleton3D") as Skeleton3D
 	for anim_name: String in SOURCES:
-		var src: Node = (load(SOURCES[anim_name]) as PackedScene).instantiate()
+		var entry: Array = SOURCES[anim_name]
+		var fbx_path: String = entry[0]
+		var avatar_path: String = entry[1]
+		var avatar: Node = (load(avatar_path) as PackedScene).instantiate()
+		var skeleton := avatar.get_node("Skeleton3D") as Skeleton3D
+		var src: Node = (load(fbx_path) as PackedScene).instantiate()
 		var player := src.get_node("AnimationPlayer") as AnimationPlayer
 		var anim: Animation = player.get_animation("Take 001").duplicate(true)
 		# Bỏ track của xương không có trong avatar (file animation có 122 xương, avatar 81).
@@ -27,5 +38,5 @@ func _init() -> void:
 		var err: Error = ResourceSaver.save(anim, out)
 		print("%s: %d tracks, %.2f s ➔ %s (%s)" % [anim_name, anim.get_track_count(), anim.length, out, error_string(err)])
 		src.free()
-	avatar.free()
+		avatar.free()
 	quit()

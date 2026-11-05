@@ -169,9 +169,61 @@ python scripts/download_phoasr.py
 ```
 *Saves all 14 model files directly to `models/PhoASR-whisper-small/` (~927 MB).*
 
+### 3. VieNeu-TTS v3 Turbo & MOSS Audio Tokenizer (Speech Synthesis)
+Download the offline ONNX speech synthesis models and voice embeddings:
+```bash
+python scripts/download_tts.py
+```
+*Saves ONNX weights and audio codec directly to `models/Vie-neu-v3-turbo/` and `models/MOSS-Audio-Tokenizer-Nano-ONNX/` (~500 MB download).*
+
 ---
 
 ## 🎮 Running the Simulation & Vision Pipeline
+
+### 🚀 One-Command Launch (Recommended)
+
+Launch all backend servers (YOLO on port `8765`, STT + NLU on port `8766`, and TTS on port `8767`) and Godot with a single command:
+
+```bash
+# Linux / macOS:
+./run.sh
+
+# Windows (PowerShell):
+.\run.ps1
+
+# Windows (Command Prompt):
+run.bat
+
+# Cross-Platform via Python:
+python run_simulation.py
+
+# Optional flags (supported across all platforms):
+# ./run.sh --nlu rule             # Rule-based NLU (default)
+# ./run.sh --nlu phobert          # PhoBERT finetuned NLU
+# ./run.sh --with-tts             # Also launch TTS server (port 8767, requires VieNeu)
+# ./run.sh --no-godot             # Launch backend servers only (headless)
+# ./run.sh --godot <path>         # Specify custom Godot executable path
+```
+*The launcher verifies that all required WebSocket servers are listening and healthy before starting Godot. When Godot is closed (or `Ctrl+C` is pressed), all background server processes are cleanly terminated.*
+
+---
+
+### 📊 Interactive RL Training & Telemetry Web Dashboard
+
+Launch the real-time Gradio web dashboard to configure, train, monitor, and inspect RL policies:
+```bash
+python run_dashboard.py
+```
+- **Real-Time Live Telemetry**: Live updating multi-line graphs for Shared Team Reward ($R_{\text{team}}$), PPO/Imitation Loss, Shift Productivity (Patients Helped), and Safety/Collisions.
+- **Run Resumption & Inspection**: Select any previous run from a dropdown to immediately load historical curves and continue training with `--resume` or `--force-resume`.
+- **Configurable Flags**: Adjust epochs, steps, early-stopping patience, curriculum stage, CUDA GPU acceleration, and TensorBoard via checkboxes and sliders.
+- **Godot 3D Shortcut**: Instantly launch the visual 3D simulation with the selected run's best checkpoint.
+
+---
+
+### Manual Launch (Separate Terminals)
+
+If you prefer running components individually in separate terminals:
 
 ### Step 1: Initialize Godot Project (First Time Only)
 On a fresh clone, run Godot in headless editor mode once so it compiles `.godot/global_script_class_cache.cfg` and imports 3D textures/models:

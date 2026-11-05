@@ -119,6 +119,16 @@
  ],
  "rooms": [
   {
+   "number": "101",
+   "name": "Cấp cứu",
+   "aliases": [
+    "phòng cấp cứu",
+    "cấp cứu",
+    "phòng 101"
+   ],
+   "floor": 1
+  },
+  {
    "number": "112",
    "name": "Phòng khám nội",
    "aliases": [],

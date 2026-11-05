@@ -1,0 +1,12 @@
+{
+  "subject": {
+    "id": "F30",
+    "realAge": 30,
+    "gender": "Nữ",
+    "region": "Trung",
+    "province": "Bình Thuận"
+  },
+  "exportDate": "2026-10-28T17:31:26.961Z",
+  "recordedFilesCount": 70,
+  "totalPrompts": 70
+}

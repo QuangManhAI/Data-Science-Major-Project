@@ -33,6 +33,7 @@ docs/
 ├── progress/                          # Active session status trackers (*_STATUS.md)
 ├── experiments/                       # Comparative benchmarks & global experiment writeups
 ├── bugs/                              # Repository-wide or system bug post-mortems
+├── AI-Human-logs/                     # Attributable decision logs per team member (Tuan.md, Vuong.md, etc.)
 └── references/                        # Tool guides, API recipes, & Git/CI SOPs
     ├── GIT_AND_RELEASE_BEST_PRACTICES.md # Git commits, human approval gate, & releases
     └── OPTUNA_DB_GUIDE.md             # Optuna SQLite persistence & analysis guide

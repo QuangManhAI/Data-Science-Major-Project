@@ -67,6 +67,9 @@ func _try_connect(now: int) -> void:
 
 
 func _send_frame(now: int) -> void:
+	if not _connected or _ws == null or _ws.get_ready_state() != WebSocketPeer.STATE_OPEN:
+		_set_connected(false)
+		return
 	var img: Image = _viewport.get_texture().get_image()
 	if img == null or img.is_empty():
 		return
@@ -76,7 +79,7 @@ func _send_frame(now: int) -> void:
 	}
 	var err: Error = _ws.send_text(JSON.stringify(msg))
 	if err != OK:
-		push_warning("VisionClient: send failed: %s" % error_string(err))
+		_set_connected(false)
 		return
 	record_sent(_next_id, now)
 	_next_id += 1

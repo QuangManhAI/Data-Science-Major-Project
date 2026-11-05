@@ -262,6 +262,13 @@ def main() -> None:
         help="Patients strictly request escort to hospital clinic rooms across Floors 1, 2, and 3",
     )
     parser.add_argument(
+        "--no-yolo",
+        "--disconnect-yolo",
+        dest="no_yolo",
+        action="store_true",
+        help="Skip starting the YOLO server to test robot behavior under complete camera/vision disconnection",
+    )
+    parser.add_argument(
         "--terminal-logs",
         action="store_true",
         help="Print server and Godot stdout/stderr to terminal instead of logging to .log files in logs/",
@@ -314,20 +321,25 @@ def main() -> None:
         log(f"[Launcher] Logging to files in: {log_dir}")
 
     # 1. Start YOLO server (Port 8765)
-    yolo_f, yolo_log_path = get_log_handle("yolo", enable_file_logging, log_dir)
-    log_info = f" (logging to {yolo_log_path.name})" if yolo_log_path else ""
-    yolo_model_path = REPO_ROOT / "models" / "yolo26n_hospital_robot_v6_best" / "yolo26n_hospital_robot_best_map92.6.pt"
-    if not yolo_model_path.is_file():
-        yolo_model_path = PYTHON_DIR / "yolo26n_hospital_robot_best_map92.6.pt"
-    log(f"[Launcher] Starting YOLO server on port 8765 (model: {yolo_model_path.name}){log_info}...")
-    yolo_proc = subprocess.Popen(
-        [str(py_exe), "yolo_server.py", "--model", str(yolo_model_path)],
-        cwd=PYTHON_DIR,
-        env=sub_env,
-        stdout=yolo_f if yolo_f else None,
-        stderr=subprocess.STDOUT if yolo_f else None,
-    )
-    CHILD_PROCESSES.append(yolo_proc)
+    yolo_proc = None
+    yolo_f, yolo_log_path = None, None
+    if not args.no_yolo:
+        yolo_f, yolo_log_path = get_log_handle("yolo", enable_file_logging, log_dir)
+        log_info = f" (logging to {yolo_log_path.name})" if yolo_log_path else ""
+        yolo_model_path = REPO_ROOT / "models" / "yolo26n_hospital_robot_v6_best" / "yolo26n_hospital_robot_best_map92.6.pt"
+        if not yolo_model_path.is_file():
+            yolo_model_path = PYTHON_DIR / "yolo26n_hospital_robot_best_map92.6.pt"
+        log(f"[Launcher] Starting YOLO server on port 8765 (model: {yolo_model_path.name}){log_info}...")
+        yolo_proc = subprocess.Popen(
+            [str(py_exe), "yolo_server.py", "--model", str(yolo_model_path)],
+            cwd=PYTHON_DIR,
+            env=sub_env,
+            stdout=yolo_f if yolo_f else None,
+            stderr=subprocess.STDOUT if yolo_f else None,
+        )
+        CHILD_PROCESSES.append(yolo_proc)
+    else:
+        log("[Launcher] [NO-YOLO MODE] Skipping YOLO server launch (camera vision disconnected).")
 
     # 2. Start STT + NLU server (Port 8766)
     stt_f, stt_log_path = get_log_handle("stt", enable_file_logging, log_dir)
@@ -384,7 +396,7 @@ def main() -> None:
         CHILD_PROCESSES.append(rl_proc)
 
     # Wait for WebSocket servers to be healthy
-    ok_yolo = wait_for_ws(8765, desc="YOLO Server", proc=yolo_proc, log_path=yolo_log_path)
+    ok_yolo = True if args.no_yolo else wait_for_ws(8765, desc="YOLO Server", proc=yolo_proc, log_path=yolo_log_path)
     ok_stt = wait_for_ws(8766, desc="STT Server", proc=stt_proc, log_path=stt_log_path)
     if should_run_tts and tts_proc is not None:
         wait_for_ws(8767, desc="TTS Server", proc=tts_proc, log_path=tts_log_path)

@@ -1,0 +1,12 @@
+{
+  "subject": {
+    "id": "B",
+    "realAge": 20,
+    "gender": "Nữ",
+    "region": "Nam",
+    "province": "Đắk Nông"
+  },
+  "exportDate": "2026-11-01T16:19:54.876Z",
+  "recordedFilesCount": 79,
+  "totalPrompts": 80
+}

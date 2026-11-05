@@ -1,0 +1,12 @@
+{
+  "subject": {
+    "id": "B",
+    "realAge": 19,
+    "gender": "Nữ",
+    "region": "Nam",
+    "province": "Tây Ninh"
+  },
+  "exportDate": "2026-10-28T14:34:40.980Z",
+  "recordedFilesCount": 80,
+  "totalPrompts": 80
+}

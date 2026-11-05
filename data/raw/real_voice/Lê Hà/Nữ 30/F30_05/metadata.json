@@ -1,0 +1,12 @@
+{
+  "subject": {
+    "id": "F30",
+    "realAge": 34,
+    "gender": "Nữ",
+    "region": "Nam",
+    "province": "Hà nam"
+  },
+  "exportDate": "2026-10-28T14:57:56.842Z",
+  "recordedFilesCount": 70,
+  "totalPrompts": 70
+}

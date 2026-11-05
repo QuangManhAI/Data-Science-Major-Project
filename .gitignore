@@ -12,6 +12,7 @@ build/
 # Data — raw/processed/external data stays local
 /data/raw/
 /data/processed/
+/src/data/stt/processed/
 /data/external/
 /data/*.tar.gz
 /data/*.zip
@@ -24,6 +25,19 @@ build/
 !/data/nlu/seed.csv
 !/data/nlu/stats.md
 /data/tts_cache/
+
+# --- feat/data branch: the Ariadne dataset IS published on this branch ---
+# The ignores above keep data local on development branches; the negations
+# below re-include the published dataset paths on feat/data only.
+!/data/raw/
+!/data/processed/
+!/src/data/stt/
+!/src/data/stt/processed/
+# …but keep generated caches/metadata out even on feat/data
+__pycache__/
+*.py[cod]
+.DS_Store
+.pytest_cache/
 
 # Large model binaries stay local (keep configs, tokenizers, and docs tracked)
 /models/**/*.safetensors

@@ -1,0 +1,12 @@
+{
+  "subject": {
+    "id": "A",
+    "realAge": 20,
+    "gender": "Nam",
+    "region": "Nam",
+    "province": "TpHcM"
+  },
+  "exportDate": "2026-10-28T06:26:29.967Z",
+  "recordedFilesCount": 80,
+  "totalPrompts": 80
+}

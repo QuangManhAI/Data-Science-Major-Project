@@ -1128,6 +1128,19 @@ av_remaining frozen after dialogue engagement.
 - **Touches:** [`sim_vision/godot/scripts/main.gd`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/sim_vision/godot/scripts/main.gd), [`sim_vision/godot/scripts/npc.gd`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/sim_vision/godot/scripts/npc.gd), [`sim_vision/godot/scripts/robot.gd`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/sim_vision/godot/scripts/robot.gd), [`src/training/hospital_env_pure_vision.py`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/src/training/hospital_env_pure_vision.py), [`tests/test_3d_simulation_improvements.py`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/tests/test_3d_simulation_improvements.py), [`docs/AI-Human-logs/Vuong.md`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/docs/AI-Human-logs/Vuong.md).
 - **Evidence:** 17/17 pytest suite passed; Godot 4.7.2 headless project check exited cleanly with code 0.
 
+### Decision D-072: Launch 500-Episode Fine-Tuning Continuation (Ep 3610–4109) from All-Time Peak Checkpoint (+1237.2)
+- **Status:** accepted
+- **When:** 2026-11-05T13:45:00+07:00
+- **Decided by:** human-agent interactive interview via `/grill-me`
+- **Trigger:** Resuming training after laptop reboot and 3D simulation bug fixes (line-of-sight raycast & authoritative trash bin unstick) to further consolidate multi-patient escort throughput and test the enhanced low-obstacle depth representation over 500 additional episodes.
+- **Modifications Applied:**
+  1. **Base Model:** Loaded weights from `experiments/runs/20261104_195749_PPOHospital-PureVision/checkpoints/PPOHospital-PureVision_best.pt` (all-time peak reward $+1237.2$).
+  2. **Episode Span:** Ep 3610 to Ep 4109 (500 episodes).
+  3. **Shift Configuration:** 3,500 max steps ($700.0\,\text{s}$) per shift, 90.0s stagnation timeout with lobby refresh, and linear progressive reward escalation $+150 \times (1 + 0.2k)$ for patients 1–6.
+  4. **Optimization:** Gentle AdamW learning rate $\text{lr} = 3\times 10^{-5}$ (min $1\times 10^{-5}$) with persistent 6% teacher guidance floor.
+- **Touches:** [`src/training/train_pure_vision_rl.py`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/src/training/train_pure_vision_rl.py), [`docs/AI-Human-logs/Vuong.md`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/docs/AI-Human-logs/Vuong.md).
+- **Evidence:** In progress on CUDA RTX 4060 GPU.
+
 
 
 

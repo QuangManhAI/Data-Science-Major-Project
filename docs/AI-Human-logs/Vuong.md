@@ -1139,7 +1139,26 @@ av_remaining frozen after dialogue engagement.
   3. **Shift Configuration:** 3,500 max steps ($700.0\,\text{s}$) per shift, 90.0s stagnation timeout with lobby refresh, and linear progressive reward escalation $+150 \times (1 + 0.2k)$ for patients 1–6.
   4. **Optimization:** Gentle AdamW learning rate $\text{lr} = 3\times 10^{-5}$ (min $1\times 10^{-5}$) with persistent 6% teacher guidance floor.
 - **Touches:** [`src/training/train_pure_vision_rl.py`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/src/training/train_pure_vision_rl.py), [`docs/AI-Human-logs/Vuong.md`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/docs/AI-Human-logs/Vuong.md).
-- **Evidence:** In progress on CUDA RTX 4060 GPU.
+- **Evidence:** 17/17 pytest suite passed; production training run `20261105_134525_PPOHospital-PureVision` completed all 500 episodes (Ep 3610–4109) on CUDA RTX 4060 GPU:
+  - **Peak Episode Reward:** **$+1119.6$** (Ep 3649).
+  - **Mean Episode Reward:** **$+645.6$** (final 20-episode average **$+789.3$**, steady upward convergence).
+  - **Average Patients Helped / Shift:** **$3.48 \pm 1.81$** (final 20-episode average **$4.15$** patients/shift).
+  - **Mean Collisions Per Shift:** **$3.69$** collisions (reduced by 13.2% from 4.25).
+  - **Total Patients Escorted:** **1,742 patients** across 500 shifts.
+  - **Checkpoints:** [`PPOHospital-PureVision_best.pt`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/experiments/runs/20261105_134525_PPOHospital-PureVision/checkpoints/PPOHospital-PureVision_best.pt) and [`PPOHospital-PureVision_ep4109.pt`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/experiments/runs/20261105_134525_PPOHospital-PureVision/checkpoints/PPOHospital-PureVision_ep4109.pt).
+
+### Decision D-073: Launch 500-Episode High-Autonomy Continuation Run (Ep 4110–4609) with Annealed Teacher Floor (6% -> 2%)
+- **Status:** accepted
+- **When:** 2026-11-06T07:50:00+07:00
+- **Decided by:** human-agent interactive interview via `/grill-me`
+- **Trigger:** Building upon the success of Ep 3610–4109 (which achieved 4.15 patients/shift and +789.3 reward in the final 20 episodes), user approved another 500-episode run to target consistent 5–6 patients/shift convergence while transitioning the policy toward complete autonomy.
+- **Modifications Applied:**
+  1. **Base Model:** Loaded weights from `experiments/runs/20261105_134525_PPOHospital-PureVision/checkpoints/PPOHospital-PureVision_best.pt`.
+  2. **Episode Span:** Ep 4110 to Ep 4609 (500 episodes).
+  3. **High-Autonomy Annealing:** Added `--teacher-start 0.06` and `--teacher-floor 0.02` to [`src/training/train_pure_vision_rl.py`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/src/training/train_pure_vision_rl.py), smoothly reducing teacher guidance from 6% down to 2% across the 500 episodes so the policy relies almost exclusively on its own learned visual policy gradient.
+  4. **Shift & Optimizer Settings:** 3,500 max steps ($700.0\,\text{s}$) per shift, 10,000 steps per PPO epoch, AdamW $\text{lr} = 3\times 10^{-5}$ ($\text{lr}_{\min} = 1\times 10^{-5}$).
+- **Touches:** [`src/training/train_pure_vision_rl.py`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/src/training/train_pure_vision_rl.py), [`docs/AI-Human-logs/Vuong.md`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/docs/AI-Human-logs/Vuong.md).
+- **Evidence:** Smoke test verified; background production run active on CUDA RTX 4060 GPU.
 
 
 

@@ -24,6 +24,10 @@ import sys
 import time
 from typing import Any
 
+ROOT_DIR = Path(__file__).resolve().parent.parent.parent
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
+
 import numpy as np
 import torch
 import torch.nn as nn
@@ -164,6 +168,8 @@ def run_train_pure_vision(
     eval_every: int = 200,
     eval_episodes: int = 15,
     bc_enabled: bool = True,
+    teacher_start: float | None = None,
+    teacher_floor: float = 0.06,
     escort_curriculum: bool = True,
     env_mode: str = "full",
     smoke: bool = False,
@@ -234,6 +240,10 @@ def run_train_pure_vision(
     rollout_agent.load_state_dict(agent.state_dict())
     regular_save_interval = max(1, episodes // 5)
 
+    if teacher_start is None:
+        teacher_start = 0.06 if resume_from else 0.20
+    effective_warmup_span = episodes if resume_from else min(200, episodes)
+
     log_print("=" * 86)
     log_print(" PPO PURE-VISION HOSPITAL ROBOT TRAINING (YOLO Only, Zero LiDAR)")
     log_print("=" * 86)
@@ -246,6 +256,7 @@ def run_train_pure_vision(
         log_print(f" Steps per Epoch     : {steps_per_epoch:,d} steps (~{max(1, round(steps_per_epoch / (shift_duration_s / 0.2)))} shifts/epoch)")
     else:
         log_print(f" Update Frequency    : Every {update_freq_episodes} shifts")
+    log_print(f" Teacher Guidance    : {teacher_start*100:.1f}% -> {teacher_floor*100:.1f}% floor across {effective_warmup_span} episodes")
     log_print(f" Stagnation Timeout  : {stagnation_timeout_s:.1f}s (Penalty: {stagnation_penalty:.1f})")
     log_print(f" Periodic Checkpoint : Every {regular_save_interval} episodes (Target: 5 checkpoints)")
     if mock_train:
@@ -287,11 +298,9 @@ def run_train_pure_vision(
             domain_randomization=True,
         )
 
-        # Behavioral Cloning Teacher Warmup (Decays from 0.20 to teacher floor 0.06 over warmup_span episodes)
-        warmup_span = 200
-        progress_in_warmup = max(0.0, min(1.0, (ep - start_ep) / float(warmup_span)))
-        teacher_floor = 0.06 if bc_enabled else 0.0
-        prior_weight = ((0.20 - teacher_floor) * (1.0 - progress_in_warmup) + teacher_floor) if bc_enabled else 0.0
+        # Behavioral Cloning Teacher Warmup / Annealing
+        progress_in_warmup = max(0.0, min(1.0, (ep - start_ep) / float(max(1, effective_warmup_span))))
+        prior_weight = ((teacher_start - teacher_floor) * (1.0 - progress_in_warmup) + teacher_floor) if bc_enabled else 0.0
 
         obs = env.reset()
         done = False
@@ -637,6 +646,8 @@ def main() -> None:
     parser.add_argument("--steps-per-epoch", type=int, default=10000, help="Rollout environment steps gathered per PPO update epoch (default: 10000)")
     parser.add_argument("--eval-every", type=int, default=200)
     parser.add_argument("--eval-episodes", type=int, default=15)
+    parser.add_argument("--teacher-start", type=float, default=None, help="Initial teacher guidance weight (default: 0.06 if resuming, 0.20 from scratch)")
+    parser.add_argument("--teacher-floor", type=float, default=0.06, help="Floor teacher guidance weight (default: 0.06, e.g. 0.02)")
     parser.add_argument("--lr", "--learning-rate", dest="lr", type=float, default=None, help="Initial learning rate for AdamW optimizer (default: 3e-5 when resuming, 1e-4 when training from scratch)")
     parser.add_argument("--visual", "--render", dest="visual", action="store_true", help="Launch interactive non-headless visual GUI")
     parser.add_argument("--mock-train", "--no-save", dest="mock_train", action="store_true", help="Execute complete training pipeline without saving checkpoints")
@@ -666,6 +677,8 @@ def main() -> None:
         stagnation_penalty=args.stagnation_penalty,
         shift_duration_s=shift_duration,
         steps_per_epoch=args.steps_per_epoch,
+        teacher_start=args.teacher_start,
+        teacher_floor=args.teacher_floor,
         eval_every=args.eval_every,
         eval_episodes=args.eval_episodes,
         visual=args.visual,

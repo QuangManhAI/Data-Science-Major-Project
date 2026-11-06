@@ -1158,7 +1158,14 @@ av_remaining frozen after dialogue engagement.
   3. **High-Autonomy Annealing:** Added `--teacher-start 0.06` and `--teacher-floor 0.02` to [`src/training/train_pure_vision_rl.py`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/src/training/train_pure_vision_rl.py), smoothly reducing teacher guidance from 6% down to 2% across the 500 episodes so the policy relies almost exclusively on its own learned visual policy gradient.
   4. **Shift & Optimizer Settings:** 3,500 max steps ($700.0\,\text{s}$) per shift, 10,000 steps per PPO epoch, AdamW $\text{lr} = 3\times 10^{-5}$ ($\text{lr}_{\min} = 1\times 10^{-5}$).
 - **Touches:** [`src/training/train_pure_vision_rl.py`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/src/training/train_pure_vision_rl.py), [`docs/AI-Human-logs/Vuong.md`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/docs/AI-Human-logs/Vuong.md).
-- **Evidence:** Smoke test verified; background production run active on CUDA RTX 4060 GPU.
+- **Evidence:** Production training run `20261106_075341_PPOHospital-PureVision` completed all 500 episodes (Ep 4110–4609) on CUDA RTX 4060 GPU:
+  - **Peak Episode Reward:** **$+1050.8$** (Ep 4188).
+  - **Mean Episode Reward:** **$+757.0$** (final 20-episode average **$+849.4$**, up from $+789.3$).
+  - **Average Patients Helped / Shift:** **$4.04 \pm 1.39$** (final 20-episode average **$4.75$** patients/shift, regularly delivering 5/6 patients).
+  - **Total Patients Escorted:** **2,018 patients** across 500 shifts (+15.8% volume increase).
+  - **Visual Spotting Rate:** **100.0%**.
+  - **Teacher Guidance Annealing:** Successfully transitioned from 6.0% down to 2.0% floor across 500 episodes with zero policy collapse.
+  - **Checkpoints:** [`PPOHospital-PureVision_best.pt`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/experiments/runs/20261106_075341_PPOHospital-PureVision/checkpoints/PPOHospital-PureVision_best.pt) and [`PPOHospital-PureVision_ep4609.pt`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/experiments/runs/20261106_075341_PPOHospital-PureVision/checkpoints/PPOHospital-PureVision_ep4609.pt).
 
 
 

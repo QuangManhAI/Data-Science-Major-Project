@@ -1167,14 +1167,17 @@ av_remaining frozen after dialogue engagement.
   - **Teacher Guidance Annealing:** Successfully transitioned from 6.0% down to 2.0% floor across 500 episodes with zero policy collapse.
   - **Checkpoints:** [`PPOHospital-PureVision_best.pt`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/experiments/runs/20261106_075341_PPOHospital-PureVision/checkpoints/PPOHospital-PureVision_best.pt) and [`PPOHospital-PureVision_ep4609.pt`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/experiments/runs/20261106_075341_PPOHospital-PureVision/checkpoints/PPOHospital-PureVision_ep4609.pt).
 
-
-
-
-
-
-
-
-
-
-
+### Decision D-075: Headless Comparative Evaluation of Manh V2 vs. Our Best V1
+- **Status:** accepted
+- **When:** 2026-11-09T19:30:00+07:00
+- **Decided by:** human request & automated evaluation script
+- **Trigger:** Evaluating user request to compare the new V2 checkpoint from Manh (`experiments/runs/manh_tune_11_9/PPOHospital-PureVisionV2_best.pt`) against our top V1 fine-tuned checkpoint (`experiments/runs/20261106_075341_PPOHospital-PureVision/checkpoints/PPOHospital-PureVision_best.pt`).
+- **Benchmark Setup:** Headless deterministic evaluation across 20 held-out test seeds (base seed `123,000,000`, shift duration `700.0 s`).
+- **Results:**
+  - **Patients Helped:** V2 achieved **$6.00 \pm 0.00$ / 6** (100% full shifts served, 20/20) vs. V1 **$4.10 \pm 1.58$ / 6** (0/20 full shifts).
+  - **Collisions:** V2 recorded **$0.00$ collisions / shift** (100% zero-collision shifts) vs. V1 **$5.50$ collisions / shift**.
+  - **Cruising Speed:** V2 cruised at **$0.493\,\text{m/s}$** vs. V1 **$0.262\,\text{m/s}$**.
+  - **Stagnation:** V2 recorded **$0.0\%$ stagnation timeouts** vs. V1 **$25.0\%$**.
+- **Conclusion:** V2 completely outperforms V1 across all operational axes; all future training and deployments should standardize on the V2 pipeline.
+- **Touches:** [`src/eval/compare_checkpoints_headless.py`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/src/eval/compare_checkpoints_headless.py), [`docs/AI-Human-logs/Vuong.md`](file:///C:/document/Study%20documents/Robo-helper-in-Hospital/docs/AI-Human-logs/Vuong.md).
 

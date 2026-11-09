@@ -41,7 +41,7 @@ enum State { SITTING, STANDING, WALKING, ESCORTED }
 @export var current_state: State = State.SITTING
 @export var sit_duration_range: Vector2 = Vector2(15.0, 30.0)
 @export var stand_duration_range: Vector2 = Vector2(3.0, 6.0)
-@export var use_t_pose: bool = true
+@export var use_t_pose: bool = false
 
 var robot_ref: Node3D = null
 @export var can_speak: bool = true
@@ -62,6 +62,9 @@ var _pardon_elapsed_s: float = 0.0
 var _pardon_cooldown_s: float = 0.0
 var _blocked_s: float = 0.0
 var _state_timer: float = 0.0
+var _last_pos: Vector3 = Vector3.ZERO
+var _speed: float = 0.0       # vận tốc phẳng đã lọc (m/s), xem Human._update_locomotion
+var _moving: bool = false
 
 
 func _ready() -> void:
@@ -70,6 +73,7 @@ func _ready() -> void:
 	_anchor_pos = global_position
 	_home_yaw = rotation.y
 	_home_seat_yaw = rotation.y
+	_last_pos = global_position
 
 	if can_speak:
 		_setup_speech()
@@ -168,6 +172,8 @@ func set_state(new_state: State) -> void:
 	match current_state:
 		State.SITTING:
 			is_seated = true
+			_moving = false
+			_speed = 0.0
 			velocity = Vector3.ZERO
 			_state_timer = randf_range(sit_duration_range.x, sit_duration_range.y)
 			if model != null:
@@ -179,6 +185,7 @@ func set_state(new_state: State) -> void:
 			_play_anim(&"npc/sit")
 		State.STANDING:
 			is_seated = false
+			_moving = false
 			velocity = Vector3.ZERO
 			_state_timer = randf_range(stand_duration_range.x, stand_duration_range.y)
 			if model != null:
@@ -197,6 +204,8 @@ func set_state(new_state: State) -> void:
 			if head != null:
 				head.position.y = 1.6
 			_wp_index = 0
+			_moving = true
+			_speed = maxf(_speed, walk_speed)
 			_play_anim(&"npc/walk")
 		State.ESCORTED:
 			if is_seated:
@@ -214,7 +223,7 @@ func set_state(new_state: State) -> void:
 				badge.position.y = 1.84
 			if head != null:
 				head.position.y = 1.6
-			_play_anim(&"npc/walk")
+			_play_anim(&"npc/idle")
 
 
 ## Trả về vị trí thực tế của NPC (tọa độ vật lý chính xác của bệnh nhân).
@@ -239,7 +248,7 @@ func escort_step_towards(target: Vector3, max_step: float, delta: float) -> void
 		escort_stop()
 		return
 	var disp: Vector3 = to / d * minf(max_step, d)
-	rotation.y = atan2(disp.x, disp.z)
+	_face_yaw(atan2(disp.x, disp.z), delta)
 	if is_inside_tree() and get_world_3d() != null and get_world_3d().space != RID():
 		var pre_pos: Vector3 = global_position
 		velocity = disp / maxf(delta, 1e-4)
@@ -261,13 +270,11 @@ func escort_step_towards(target: Vector3, max_step: float, delta: float) -> void
 			_blocked_s = 0.0
 	else:
 		global_position += disp
-	_play_anim(&"npc/walk")
 
 
 func escort_stop() -> void:
 	current_state = State.ESCORTED
 	velocity = Vector3.ZERO
-	_play_anim(&"npc/idle")
 
 
 func end_escort() -> void:
@@ -277,14 +284,13 @@ func end_escort() -> void:
 
 
 func _physics_process(delta: float) -> void:
+	_update_locomotion(delta)
 	if current_state == State.ESCORTED:
 		return
 
 	# Đang tương tác hội thoại với robot (NOTICE, TALK, WAIT_REPLY) -> lập tức dừng bước, ngưng timer, hướng về robot
 	if _npc != null and ("state" in _npc) and (_npc.state in [NpcScript.NOTICE, NpcScript.TALK, NpcScript.WAIT_REPLY]):
 		velocity = Vector3.ZERO
-		if current_state != State.SITTING and _anim_player != null and not _anim_player.is_playing():
-			_play_anim(&"npc/idle")
 		if robot_ref != null and is_instance_valid(robot_ref):
 			var to_r := robot_ref.global_position - global_position
 			if to_r.length() > 0.05:
@@ -317,12 +323,11 @@ func _physics_process(delta: float) -> void:
 			_move_step_towards(_pardon_target, walk_speed * delta, delta)
 		else:
 			velocity = Vector3.ZERO
-			_play_anim(&"npc/idle")
 			if robot_ref != null and is_instance_valid(robot_ref):
-				rotation.y = atan2(
+				_face_yaw(atan2(
 					robot_ref.global_position.x - global_position.x,
 					robot_ref.global_position.z - global_position.z
-				)
+				), delta)
 		return
 
 	# Máy trạng thái cho bệnh nhân
@@ -382,9 +387,8 @@ func _physics_process(delta: float) -> void:
 			_move_step_towards(_home_pos, walk_speed * delta, delta)
 		else:
 			global_position = _home_pos
-			rotation.y = _home_yaw
+			_face_yaw(_home_yaw, delta)
 			velocity = Vector3.ZERO
-			_play_anim(&"npc/idle")
 
 
 func _can_walk() -> bool:
@@ -399,19 +403,41 @@ func _move_step_towards(target: Vector3, max_step: float, delta: float = 0.0) ->
 		if d_next < PERSONAL_SPACE_M and d_next < Human.flat_distance(global_position, robot_ref.global_position):
 			_blocked_s += delta
 			velocity = Vector3.ZERO
-			_play_anim(&"npc/idle")
 			return
 
 	_blocked_s = 0.0
 	var dir := Vector3(next_pos.x - global_position.x, 0.0, next_pos.z - global_position.z)
 	if dir.length() > 1e-5:
-		rotation.y = atan2(dir.x, dir.z)
+		_face_yaw(atan2(dir.x, dir.z), delta)
 	if is_inside_tree() and get_world_3d() != null and get_world_3d().space != RID():
 		velocity = dir / maxf(delta, 1e-4)
 		move_and_slide()
 		velocity = Vector3.ZERO
 	global_position = next_pos
-	_play_anim(&"npc/walk")
+
+
+func _face_yaw(yaw: float, delta: float) -> void:
+	if delta <= 0.0:
+		rotation.y = yaw
+		return
+	rotation.y = lerp_angle(rotation.y, yaw, Human.smooth_factor(Human.TURN_RATE, delta))
+
+
+## Walk/idle + nhịp bước theo vận tốc thật (cùng quy tắc với Human._update_locomotion).
+func _update_locomotion(delta: float) -> void:
+	var moved: float = Human.flat_distance(global_position, _last_pos)
+	_last_pos = global_position
+	if delta <= 0.0 or current_state == State.SITTING:
+		_speed = 0.0
+		if _anim_player != null:
+			_anim_player.speed_scale = 1.0
+		return
+	var inst_speed: float = 0.0 if moved > Human.TELEPORT_DIST else moved / delta
+	_speed = lerpf(_speed, inst_speed, Human.smooth_factor(Human.SPEED_SMOOTH_RATE, delta))
+	_moving = Human.next_moving(_moving, _speed)
+	_play_anim(&"npc/walk" if _moving else &"npc/idle")
+	if _anim_player != null:
+		_anim_player.speed_scale = Human.walk_anim_scale(_speed) if _moving else 1.0
 
 
 func _play_anim(anim_name: StringName) -> void:

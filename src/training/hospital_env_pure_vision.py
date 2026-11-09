@@ -484,7 +484,7 @@ class HospitalPureVisionEnv(HospitalVisualShiftEnv):
         if dist <= 0.20:
             return
 
-        step = min(ESCORT_WALK_SPEED * self.dt, dist)
+        step = min(getattr(self, "patient_escort_speed", ESCORT_WALK_SPEED) * self.dt, dist)
         sx = (dx / dist) * step
         sz = (dz / dist) * step
 

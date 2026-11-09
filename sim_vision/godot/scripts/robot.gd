@@ -12,11 +12,16 @@ const LIDAR_HEIGHT_Y: float = 0.35
 var _v: float = 0.0
 var _omega: float = 0.0
 var _lidar_rays: Array[RayCast3D] = []
-var _stuck_time_s: float = 0.0
-var _escape_pulse_s: float = 0.0
-var _escape_turn_dir: float = 1.0
-const STUCK_TRIGGER_S: float = 0.6
-const ESCAPE_DURATION_S: float = 0.85
+var _depth_rays: Array[RayCast3D] = []
+## Người đang được theo dõi (bệnh nhân mục tiêu / đang dẫn): pixel depth trong box YOLO của họ bị che,
+## vì họ là mục tiêu chứ không phải vật cản (khớp HospitalPureVisionV2Env.depth_rays).
+var depth_ignore: CollisionObject3D = null
+
+# Camera depth (RGB-D / depth ước lượng trên robot thật): 15 tia ngang trong HFOV camera, tầm 4 m.
+# Khớp DEPTH_* trong src/training/hospital_env_pure_vision_v2.py
+const DEPTH_NUM_RAYS: int = 15
+const DEPTH_HFOV_DEG: float = 86.4
+const DEPTH_MAX_RANGE: float = 4.0
 
 var v: float:
 	get:
@@ -38,6 +43,7 @@ var omega: float:
 func _ready() -> void:
 	_viewport.size = Vector2i(Config.IMG_W, Config.IMG_H)
 	_setup_lidar_fan()
+	_setup_depth_fan()
 
 
 func _setup_lidar_fan() -> void:
@@ -58,6 +64,42 @@ func _setup_lidar_fan() -> void:
 		ray.add_exception(self)
 		holder.add_child(ray)
 		_lidar_rays.append(ray)
+
+
+func _setup_depth_fan() -> void:
+	if not _depth_rays.is_empty():
+		return
+	var holder := Node3D.new()
+	holder.name = "DepthFan"
+	holder.position = Vector3(0.0, LIDAR_HEIGHT_Y, 0.0)
+	add_child(holder)
+	for i: int in DEPTH_NUM_RAYS:
+		var frac: float = float(i) / float(DEPTH_NUM_RAYS - 1) - 0.5  # trái -> phải
+		var angle_rad: float = deg_to_rad(frac * DEPTH_HFOV_DEG)
+		var ray := RayCast3D.new()
+		ray.name = "DepthRay_%02d" % i
+		ray.target_position = Vector3(sin(angle_rad) * DEPTH_MAX_RANGE, 0.0, -cos(angle_rad) * DEPTH_MAX_RANGE)
+		ray.enabled = true
+		ray.add_exception(self)
+		holder.add_child(ray)
+		_depth_rays.append(ray)
+
+
+## 15 khoảng cách depth (m, trái -> phải, tối đa 4.0 m), bỏ qua `depth_ignore`.
+func get_depth_readings() -> PackedFloat32Array:
+	if _depth_rays.is_empty():
+		_setup_depth_fan()
+	var out := PackedFloat32Array()
+	out.resize(DEPTH_NUM_RAYS)
+	for i: int in DEPTH_NUM_RAYS:
+		var ray: RayCast3D = _depth_rays[i]
+		ray.clear_exceptions()
+		ray.add_exception(self)
+		if depth_ignore != null and is_instance_valid(depth_ignore):
+			ray.add_exception(depth_ignore)
+		ray.force_raycast_update()
+		out[i] = ray.global_position.distance_to(ray.get_collision_point()) if ray.is_colliding() else DEPTH_MAX_RANGE
+	return out
 
 
 ## Trả mảng 17 giá trị khoảng cách LiDAR đã chuẩn hóa về [0.0, 1.0] (1.0 = không chạm trong tầm 6.0m).
@@ -110,26 +152,8 @@ func front_obstacle_distance() -> float:
 
 
 func _physics_process(delta: float) -> void:
-	if _escape_pulse_s > 0.0:
-		_escape_pulse_s -= delta
-		rotation.y += _escape_turn_dir * Config.OMEGA_MAX * 1.25 * delta
-		var bwd: Vector3 = global_transform.basis.z  # +Z is backward
-		velocity = Vector3(bwd.x, 0.0, bwd.z).normalized() * 0.28
-		move_and_slide()
-		return
-
-	# Phát hiện kẹt vật lý khi có lệnh tiến nhưng robot đứng yên
-	var real_v: float = get_real_velocity().length()
-	if _v >= 0.15 and real_v < 0.04:
-		_stuck_time_s += delta
-		if _stuck_time_s >= STUCK_TRIGGER_S:
-			_stuck_time_s = 0.0
-			_escape_pulse_s = ESCAPE_DURATION_S
-			_escape_turn_dir = -1.0 if _omega >= 0.0 else 1.0
-			return
-	else:
-		_stuck_time_s = maxf(0.0, _stuck_time_s - delta * 2.0)
-
+	# Không còn thao tác "lùi + xoay" hardcode khi kẹt (D-071): policy V2 thấy tường/vật cản qua depth
+	# và tự xoay tại chỗ (v = 0, omega != 0) giống hệt môi trường huấn luyện.
 	rotation.y += _omega * delta
 	var forward: Vector3 = -global_transform.basis.z
 	velocity = Vector3(forward.x, 0.0, forward.z).normalized() * _v

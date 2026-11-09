@@ -535,6 +535,9 @@ func _step_policy(delta: float) -> void:
 	var search: bool = _is_search_phase()
 	var target_p: CharacterBody3D = active_escorted_patient if active_escorted_patient != null else (current_target_patient if current_target_patient != null else human)
 	var pat_pos: Vector3 = target_p.global_position if active_escorted_patient != null else (robot.global_position if not search else target_p.global_position)
+	# Che bệnh nhân đang tiếp cận / đang dẫn khỏi depth (khớp mask trong HospitalPureVisionV2Env)
+	var tracked: Node = active_escorted_patient if active_escorted_patient != null else (current_target_patient if state == Config.RobotState.APPROACH else null)
+	robot.depth_ignore = tracked as CollisionObject3D
 	_policy.send_state(
 		robot.global_position, robot.rotation.y, robot.get_real_velocity().length(), robot.omega,
 		robot.get_lidar_readings(), pat_pos,
@@ -542,7 +545,8 @@ func _step_policy(delta: float) -> void:
 		pat_pos if search else _leg_target(_rl_bridge.goal_position),
 		_rl_bridge.patients_helped,
 		yolo_feat,
-		_latest_yolo_dets
+		_latest_yolo_dets,
+		robot.get_depth_readings()
 	)
 
 

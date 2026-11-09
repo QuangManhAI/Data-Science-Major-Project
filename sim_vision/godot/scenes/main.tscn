@@ -25,7 +25,6 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.5, 0, -1.35)
 walks = true
 pardon_enabled = true
 waypoints = Array[Vector3]([Vector3(4.5, 0, -1.35), Vector3(7.5, 0, -1.35), Vector3(4.5, 0, -1.35), Vector3(2.5, 0, -1.35)])
-use_t_pose = true
 
 [node name="Robot" parent="." unique_id=474572765 instance=ExtResource("4")]
 

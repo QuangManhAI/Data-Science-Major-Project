@@ -87,3 +87,5 @@ logs/
 .claude/
 notebooks/gen_synth_tts_colab.ipynb
 docs/Bao Cao Clone Voice (1).docx
+sim_vision/godot/assets/sounds/hospital_ambience.wav
+sim_vision/godot/assets/sounds/monitor_beep.wav

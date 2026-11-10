@@ -15,8 +15,12 @@ const LEAVE_MARGIN_M: float = 1.0    # robot rời xa hơn TALK_TRIGGER_DIST + 1
 const VOICES_DIR: String = "res://assets/voices"
 const TALK_ANIM: StringName = &"human/talk"
 const IDLE_ANIM: StringName = &"human/idle"
+const THANKS_TURN_S: float = 1.1     # quay lại chào robot sau khi được dẫn tới nơi: chậm, tự nhiên
 
 @export var speaker: String = "A"    # A nam, B nữ
+## Người nói cụ thể trong clips.json (B01, B02, … cho giọng nữ thu từ Major_BE_FE). Rỗng ➔ chọn ngẫu nhiên một
+## voice của `speaker` lần đầu cần, rồi giữ cố định (một NPC không đổi giọng giữa các lượt).
+@export var voice: String = ""
 @export var clip_id: String = ""     # rỗng = chọn ngẫu nhiên trong các clip của speaker
 @warning_ignore("shadowed_global_identifier")
 @export var seed: int = -1
@@ -34,10 +38,14 @@ var robot_state_fn: Callable = Callable()
 var voices_dir: String = VOICES_DIR
 
 var _clips: Dictionary = {}
+## voice ➔ số NPC đang giữ (dùng chung mọi Npc) ➔ mỗi NPC một giọng riêng.
+static var _voice_users: Dictionary = {}
+var _holds_voice: bool = false
 var _used_intents: Array[String] = []
 var _rng := RandomNumberGenerator.new()
 var _was_walking: bool = false
 var _tween: Tween = null
+var _turning: bool = false
 
 @onready var human: Node3D = get_parent() as Node3D
 var player: AudioStreamPlayer3D = null
@@ -124,15 +132,12 @@ static func yaw_towards(from: Vector3, to: Vector3) -> float:
 
 ## Chọn clip của `speaker`, ưu tiên intent chưa dùng; dùng hết thì dùng lại từ đầu. Không có clip ➔ "".
 static func pick_clip(clips: Dictionary, spk: String, used_intents: Array[String],
-		rng: RandomNumberGenerator, escort_filter: bool = false) -> String:
+		rng: RandomNumberGenerator, escort_filter: bool = false, voice_id: String = "") -> String:
 	var mine: Array[String] = []
 	for id: String in clips:
-		if str(clips[id].get("speaker", "")) == spk:
-			if escort_filter:
-				var it: String = str(clips[id].get("intent", ""))
-				var sid: String = str(clips[id].get("sentence_id", ""))
-				if not ESCORT_INTENTS.has(it) or sid == "05":
-					continue
+		if str(clips[id].get("speaker", "")) == spk and Npc.voice_matches(clips[id], voice_id):
+			if escort_filter and not Npc.is_escort_clip(clips[id]):
+				continue
 			mine.append(id)
 	if mine.is_empty():
 		return ""
@@ -141,6 +146,31 @@ static func pick_clip(clips: Dictionary, spk: String, used_intents: Array[String
 		return not used_intents.has(str(clips[id].get("intent", ""))))
 	var pool: Array[String] = fresh if not fresh.is_empty() else mine
 	return pool[rng.randi_range(0, pool.size() - 1)]
+
+
+## Clip thuộc voice `voice_id` (rỗng ➔ mọi voice). Clip cũ không có trường voice thì voice = speaker.
+static func voice_matches(clip: Dictionary, voice_id: String) -> bool:
+	return voice_id == "" or str(clip.get("voice", clip.get("speaker", ""))) == voice_id
+
+
+## Câu dẫn đường được (có đích): dùng cờ escort_ok từ voice.add_dataset_voices; clip cũ ➔ luật cũ (bỏ câu 05).
+static func is_escort_clip(clip: Dictionary) -> bool:
+	if clip.has("escort_ok"):
+		return bool(clip["escort_ok"])
+	return ESCORT_INTENTS.has(str(clip.get("intent", ""))) and str(clip.get("sentence_id", "")) != "05"
+
+
+## Các voice có clip của `spk`, đã sắp xếp. Clip cũ không có trường voice ➔ voice = speaker.
+static func voices_of(clips: Dictionary, spk: String) -> Array[String]:
+	var seen: Dictionary = {}
+	for id: String in clips:
+		if str(clips[id].get("speaker", "")) == spk:
+			seen[str(clips[id].get("voice", spk))] = true
+	var out: Array[String] = []
+	for v: String in seen:
+		out.append(v)
+	out.sort()
+	return out
 
 
 ## Clip để người bệnh nói lại (G22, nhánh clarify): cùng speaker và sentence_id, khác take, chưa dùng
@@ -154,6 +184,7 @@ static func alternate_clip(clips: Dictionary, id: String, used: Array[String] = 
 	for other: String in ids:
 		var c: Dictionary = clips[other]
 		if other != id and not used.has(other) and str(c.get("speaker", "")) == str(me.get("speaker", "")) \
+				and str(c.get("voice", "")) == str(me.get("voice", "")) \
 				and str(c.get("sentence_id", "")) == str(me.get("sentence_id", "")) \
 				and str(c.get("take", "")) != str(me.get("take", "")):
 			return other
@@ -185,6 +216,7 @@ static func load_voice(id: String, dir: String = VOICES_DIR) -> AudioStream:
 func reset() -> void:
 	if _tween != null:
 		_tween.kill()
+	_turning = false
 	if player != null:
 		player.stop()
 	if state != IDLE:
@@ -220,11 +252,13 @@ func say_again(id: String) -> bool:
 
 
 ## Clip có `intent` của `spk` (không có ➔ của speaker A); nhiều clip ➔ chọn ngẫu nhiên. Không có ➔ "".
-static func pick_intent_clip(clips: Dictionary, spk: String, intent: String, rng: RandomNumberGenerator) -> String:
+static func pick_intent_clip(clips: Dictionary, spk: String, intent: String, rng: RandomNumberGenerator,
+		voice_id: String = "") -> String:
 	for who: String in [spk, "A"]:
 		var ids: Array[String] = []
 		for id: String in clips:
-			if str(clips[id].get("speaker", "")) == who and str(clips[id].get("intent", "")) == intent:
+			if str(clips[id].get("speaker", "")) == who and str(clips[id].get("intent", "")) == intent \
+					and (who != spk or Npc.voice_matches(clips[id], voice_id)):
 				ids.append(id)
 		if not ids.is_empty():
 			ids.sort()
@@ -235,7 +269,8 @@ static func pick_intent_clip(clips: Dictionary, spk: String, intent: String, rng
 ## Người bệnh chủ động nói clip có `intent` (vd. cảm ơn khi được dẫn tới nơi), không chờ robot tới gần.
 ## Phát talk_started như lượt thường ➔ DialogueManager đưa qua STT / NLU / TTS. Lỗi ➔ "" (không đổi trạng thái).
 func say_intent(intent: String) -> String:
-	var id: String = Npc.pick_intent_clip(get_clips(), speaker, intent, _rng)
+	_ensure_voice()
+	var id: String = Npc.pick_intent_clip(get_clips(), speaker, intent, _rng, voice)
 	var stream: AudioStream = Npc.load_voice(id, voices_dir) if id != "" else null
 	if stream == null or player == null:
 		push_error("Npc: no playable '%s' clip for speaker %s" % [intent, speaker])
@@ -247,10 +282,80 @@ func say_intent(intent: String) -> String:
 		human.set("walks", false)
 	current_clip = id
 	state = TALK
+	talk_started.emit(id)   # robot nghe ngay; người bệnh quay lại từ từ rồi mới nói
+	_turn_then_play(stream)
+	return id
+
+
+## Quay từ từ về phía robot (góc ngắn nhất, THANKS_TURN_S), bật animation nói, quay xong mới phát clip.
+func _turn_then_play(stream: AudioStream) -> void:
+	_turning = true
+	var anim: AnimationPlayer = _find_anim_player()
+	if anim != null and anim.has_animation(TALK_ANIM):
+		anim.play(TALK_ANIM, 0.3)
+	if robot != null and human != null:
+		var from_yaw: float = human.rotation.y
+		var to_yaw: float = Npc.yaw_towards(human.global_position, robot.global_position)
+		_tween = create_tween()
+		_tween.tween_method(func(t: float) -> void: human.rotation.y = lerp_angle(from_yaw, to_yaw, t),
+				0.0, 1.0, THANKS_TURN_S).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+		await _tween.finished
+	_turning = false
+	if state != TALK or current_clip == "":
+		return  # lượt bị hủy trong lúc quay (reset / robot đi xa)
 	player.stream = stream
 	player.play()
-	talk_started.emit(id)
-	return id
+
+
+## Đang quay người chậm (HospitalNpc không tự xoay nhanh về robot lúc này).
+func is_turning() -> bool:
+	return _turning
+
+
+func _find_anim_player() -> AnimationPlayer:
+	if human == null:
+		return null
+	var anim: AnimationPlayer = human.get_node_or_null(^"AnimationPlayer") as AnimationPlayer
+	if anim == null:
+		var model_node: Node3D = human.get_node_or_null(^"Model") as Node3D
+		if model_node != null:
+			anim = model_node.get_node_or_null(^"AnimationPlayer") as AnimationPlayer
+	return anim
+
+
+## Gán voice cố định cho NPC (lần đầu cần): voice chưa NPC nào giữ, đúng giới (`speaker`); hết voice trống ➔ voice
+## đang ít NPC dùng nhất. Mỗi NPC một giọng riêng; trả lại khi NPC rời scene.
+func _ensure_voice() -> void:
+	if voice != "":
+		return
+	var vs: Array[String] = Npc.voices_of(get_clips(), speaker)
+	if vs.is_empty():
+		return
+	voice = Npc.pick_free_voice(vs, _voice_users, _rng)
+	_voice_users[voice] = int(_voice_users.get(voice, 0)) + 1
+	_holds_voice = true
+
+
+## Voice ít NPC đang dùng nhất (0 = còn trống); nhiều voice bằng nhau ➔ ngẫu nhiên.
+static func pick_free_voice(voices: Array[String], users: Dictionary, rng: RandomNumberGenerator) -> String:
+	var best: Array[String] = []
+	var best_n: int = 1 << 30
+	for v: String in voices:
+		var n: int = int(users.get(v, 0))
+		if n < best_n:
+			best_n = n
+			best = [v]
+		elif n == best_n:
+			best.append(v)
+	return best[rng.randi_range(0, best.size() - 1)]
+
+
+func _exit_tree() -> void:
+	if _holds_voice and _voice_users.has(voice):
+		_voice_users[voice] = int(_voice_users[voice]) - 1
+		if int(_voice_users[voice]) <= 0:
+			_voice_users.erase(voice)
+	_holds_voice = false
 
 
 func on_reply_shown() -> void:
@@ -286,7 +391,8 @@ func _start_talk() -> void:
 		return
 	if _clips.is_empty() and clip_id == "":
 		_clips = Npc.load_clips(voices_dir.path_join("clips.json"))
-	var id: String = clip_id if clip_id != "" else Npc.pick_clip(_clips, speaker, _used_intents, _rng, escort_only)
+	_ensure_voice()
+	var id: String = clip_id if clip_id != "" else Npc.pick_clip(_clips, speaker, _used_intents, _rng, escort_only, voice)
 	if id == "" and speaker != "A":
 		id = Npc.pick_clip(_clips, "A", _used_intents, _rng, escort_only)
 	var stream: AudioStream = Npc.load_voice(id, voices_dir) if id != "" else null
@@ -318,6 +424,7 @@ func _start_talk() -> void:
 
 func _abort_talk() -> void:
 	player.stop()
+	_turning = false
 	state = IDLE
 	_resume_walking()
 	talk_aborted.emit(current_clip)

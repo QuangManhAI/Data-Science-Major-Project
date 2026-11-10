@@ -2,7 +2,7 @@ class_name Main
 extends Node3D
 ## Scene chính (G8): vision_client ➔ controller.step ➔ apply_safety ➔ robot.set_command.
 ## Hội thoại (G16): ở LISTEN / THINK / RESPOND robot đứng yên (v = 0, omega = 0), không gọi controller.
-## Phím R đặt lại vị trí ngẫu nhiên, C đổi góc nhìn camera, Esc thoát.
+## Phím R đặt lại vị trí ngẫu nhiên, C đổi góc nhìn camera, M bật/tắt tiếng ồn bệnh viện, Esc thoát.
 
 ## Phát sau mỗi chu kỳ nhận diện (sau apply_safety); G9 ghi log từ đây.
 signal cycle_completed(info: Dictionary)
@@ -57,6 +57,13 @@ var current_target_patient: CharacterBody3D = null
 var _pending_turn_reset: bool = false
 ## Lượt bệnh nhân cảm ơn khi tới nơi: không tạo nhiệm vụ / không cộng thưởng; hết lượt (về ARRIVED) ➔ _after_thanks.
 var _thanks_pending: bool = false
+## Âm thanh nền bệnh viện (chỉ cho người xem; STT tự trộn nhiễu ở server). Tạo bằng gen_hospital_ambience.py.
+const AMBIENCE_PATH: String = "res://assets/sounds/hospital_ambience.wav"
+const MONITOR_BEEP_PATH: String = "res://assets/sounds/monitor_beep.wav"
+const AMBIENCE_DB: float = -8.0        # file đã chuẩn hóa đỉnh 0.89; giọng NPC / robot vẫn to hơn nền ~8 dB
+const MONITOR_BEEP_DB: float = -6.0
+var _ambience_on: bool = true
+var _ambience_players: Array[Node] = []
 ## Trạm thang máy camera FOLLOW đang nhìn vào trong lúc đi thang (null = bám robot như thường).
 var _elev_cam_station: ElevatorStation = null
 const ELEV_ROBOT_SPEED: float = 0.7      # m/s khi vào / ra thang máy
@@ -141,6 +148,7 @@ func _ready() -> void:
 		_apply_escort_only_mode()
 	reset_positions()
 	_update_viewer_camera()
+	_setup_hospital_ambience()
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -160,6 +168,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		_update_viewer_camera()
 	elif key.keycode == KEY_G and not key.echo:
 		trigger_test_escort()
+	elif key.keycode == KEY_M:
+		set_ambience_enabled(not _ambience_on)
 	elif key.keycode == KEY_ESCAPE:
 		get_tree().quit()
 
@@ -1337,3 +1347,57 @@ func _finish_escort(cur_floor: int) -> void:
 		overlay.set_status("Đã dẫn bệnh nhân tới %s. Đang tự di chuyển về Thang máy Tầng %d để xuống Sảnh..." % [_rl_bridge.goal_key, cur_floor])
 		return
 	reset_positions(true)
+
+
+## Nạp wav vòng lặp (đọc thẳng file: không cần Godot import trước). Không có file ➔ null.
+static func load_loop_wav(path: String) -> AudioStreamWAV:
+	var abs_path: String = ProjectSettings.globalize_path(path)
+	if not FileAccess.file_exists(abs_path):
+		return null
+	var stream: AudioStreamWAV = AudioStreamWAV.load_from_file(abs_path)
+	if stream == null:
+		return null
+	stream.loop_mode = AudioStreamWAV.LOOP_FORWARD
+	stream.loop_begin = 0
+	stream.loop_end = int(stream.get_length() * stream.mix_rate)
+	return stream
+
+
+## Tiếng ồn nền (máy lạnh, người nói xa, chuông loa, xe đẩy) + tiếng bíp 3D ở từng máy theo dõi (vital_monitor),
+## mỗi máy lệch nhịp / cao độ một chút để không kêu đồng loạt.
+func _setup_hospital_ambience() -> void:
+	var bed: AudioStreamWAV = Main.load_loop_wav(AMBIENCE_PATH)
+	if bed != null:
+		var p := AudioStreamPlayer.new()
+		p.name = "HospitalAmbience"
+		p.stream = bed
+		p.volume_db = AMBIENCE_DB
+		add_child(p)
+		p.play(randf() * bed.get_length())
+		_ambience_players.append(p)
+	var beep: AudioStreamWAV = Main.load_loop_wav(MONITOR_BEEP_PATH)
+	if beep == null or room == null:
+		return
+	for n: Node in room.find_children("*", "Node3D", true, false):
+		if not n.scene_file_path.ends_with("vital_monitor.tscn"):
+			continue
+		var b := AudioStreamPlayer3D.new()
+		b.name = "MonitorBeep"
+		b.stream = beep
+		b.volume_db = MONITOR_BEEP_DB
+		b.unit_size = 1.5
+		b.max_distance = 9.0
+		b.pitch_scale = randf_range(0.92, 1.08)
+		b.position = Vector3(0.0, 1.2, 0.0)
+		n.add_child(b)
+		b.play(randf() * beep.get_length())
+		_ambience_players.append(b)
+	print("[Ambience] nền=%s, máy theo dõi có tiếng bíp=%d" % [bed != null, _ambience_players.size() - (1 if bed != null else 0)])
+
+
+func set_ambience_enabled(on: bool) -> void:
+	_ambience_on = on
+	for p: Node in _ambience_players:
+		if is_instance_valid(p):
+			p.set("stream_paused", not on)
+	overlay.set_status("Tiếng ồn bệnh viện: %s (phím M)" % ("bật" if on else "tắt"))

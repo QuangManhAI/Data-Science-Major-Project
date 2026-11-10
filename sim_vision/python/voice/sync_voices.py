@@ -17,12 +17,21 @@ from voice import config
 
 DEFAULT_DEST: Path = Path(__file__).resolve().parents[2] / "godot" / "assets" / "voices"
 CLIP_FIELDS: tuple[str, ...] = ("speaker", "gender", "sentence_id", "take", "intent", "duration_s")
+# Cột tùy chọn (voice.add_dataset_voices): voice = người nói cụ thể (NPC giữ một voice), escort_ok = câu dẫn đường được.
+OPTIONAL_FIELDS: tuple[str, ...] = ("voice", "escort_ok")
+
+
+def _clip(r: dict[str, str]) -> dict:
+    c: dict = {k: float(r[k]) if k == "duration_s" else r[k] for k in CLIP_FIELDS}
+    for k in OPTIONAL_FIELDS:
+        if r.get(k):
+            c[k] = r[k] == "True" if k == "escort_ok" else r[k]
+    return c
 
 
 def build_clips(rows: list[dict[str, str]]) -> dict[str, dict]:
-    """Dòng manifest ➔ {clip_id: {speaker, gender, sentence_id, take, intent, duration_s}}."""
-    return {r["clip_id"]: {k: float(r[k]) if k == "duration_s" else r[k] for k in CLIP_FIELDS}
-            for r in sorted(rows, key=lambda r: r["clip_id"])}
+    """Dòng manifest ➔ {clip_id: {speaker, gender, sentence_id, take, intent, duration_s[, voice, escort_ok]}}."""
+    return {r["clip_id"]: _clip(r) for r in sorted(rows, key=lambda r: r["clip_id"])}
 
 
 def sync(data_dir: Path, dest: Path) -> dict[str, int]:

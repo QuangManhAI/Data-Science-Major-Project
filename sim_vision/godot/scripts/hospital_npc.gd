@@ -291,7 +291,7 @@ func _physics_process(delta: float) -> void:
 	# Đang tương tác hội thoại với robot (NOTICE, TALK, WAIT_REPLY) -> lập tức dừng bước, ngưng timer, hướng về robot
 	if _npc != null and ("state" in _npc) and (_npc.state in [NpcScript.NOTICE, NpcScript.TALK, NpcScript.WAIT_REPLY]):
 		velocity = Vector3.ZERO
-		if robot_ref != null and is_instance_valid(robot_ref):
+		if robot_ref != null and is_instance_valid(robot_ref) and not _npc.is_turning():
 			var to_r := robot_ref.global_position - global_position
 			if to_r.length() > 0.05:
 				var target_yaw: float = atan2(to_r.x, to_r.z)

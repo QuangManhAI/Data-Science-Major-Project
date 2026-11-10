@@ -87,7 +87,12 @@ def main() -> None:
     # ---------------------------------------------------------------- synthetic
     syn = pd.DataFrame([json.loads(l) for l in (tts / "manifest.jsonl").open(encoding="utf8")])
     qc = pd.read_csv(tts / "qc.csv")[["utt_id", "cer", "keep"]]
-    syn = syn.merge(qc, on="utt_id", how="inner")
+    # resumed TTS/QC runs can append the same utt_id twice; an inner merge would then multiply rows
+    # and the manifest would carry duplicate audio_path values (breaks MANIFEST.loc in the trainer)
+    print(f"dedupe: tts manifest -{syn.utt_id.duplicated().sum()}, qc -{qc.utt_id.duplicated().sum()}")
+    syn = syn.drop_duplicates("utt_id", keep="last")
+    qc = qc.drop_duplicates("utt_id", keep="last")
+    syn = syn.merge(qc, on="utt_id", how="inner", validate="one_to_one")
     print(f"synthetic: {len(syn)} QC'd, keep {int(syn.keep.sum())} (CER<=thr)")
     syn = syn[syn.keep]
     (OUT / "wav" / "synth").mkdir(parents=True)
@@ -143,6 +148,8 @@ def main() -> None:
         shutil.copy2(f, OUT / "noise" / f.name)
 
     man = pd.DataFrame(rows)
+    dup = man.audio_path.duplicated()
+    assert not dup.any(), f"duplicate audio_path in manifest: {man.audio_path[dup].head().tolist()}"
     man.to_csv(OUT / "manifest.csv", index=False)
     splits = {"train": man.split == "train", "val": man.split == "val", "test": man.split == "test",
               "test_newtext": (man.split == "test") & man.heldout_text.astype(bool)}

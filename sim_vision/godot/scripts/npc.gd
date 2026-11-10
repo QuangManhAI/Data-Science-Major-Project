@@ -219,6 +219,40 @@ func say_again(id: String) -> bool:
 	return true
 
 
+## Clip có `intent` của `spk` (không có ➔ của speaker A); nhiều clip ➔ chọn ngẫu nhiên. Không có ➔ "".
+static func pick_intent_clip(clips: Dictionary, spk: String, intent: String, rng: RandomNumberGenerator) -> String:
+	for who: String in [spk, "A"]:
+		var ids: Array[String] = []
+		for id: String in clips:
+			if str(clips[id].get("speaker", "")) == who and str(clips[id].get("intent", "")) == intent:
+				ids.append(id)
+		if not ids.is_empty():
+			ids.sort()
+			return ids[rng.randi_range(0, ids.size() - 1)]
+	return ""
+
+
+## Người bệnh chủ động nói clip có `intent` (vd. cảm ơn khi được dẫn tới nơi), không chờ robot tới gần.
+## Phát talk_started như lượt thường ➔ DialogueManager đưa qua STT / NLU / TTS. Lỗi ➔ "" (không đổi trạng thái).
+func say_intent(intent: String) -> String:
+	var id: String = Npc.pick_intent_clip(get_clips(), speaker, intent, _rng)
+	var stream: AudioStream = Npc.load_voice(id, voices_dir) if id != "" else null
+	if stream == null or player == null:
+		push_error("Npc: no playable '%s' clip for speaker %s" % [intent, speaker])
+		return ""
+	if _tween != null:
+		_tween.kill()
+	_was_walking = bool(human.get("walks")) if human != null and human.get("walks") != null else false
+	if human != null and human.get("walks") != null:
+		human.set("walks", false)
+	current_clip = id
+	state = TALK
+	player.stream = stream
+	player.play()
+	talk_started.emit(id)
+	return id
+
+
 func on_reply_shown() -> void:
 	if state == IDLE:
 		return

@@ -190,3 +190,21 @@ func test_not_arrived_no_talk() -> void:
 	robot_state = S.APPROACH
 	await wait_process_frames(3)
 	assert_eq(npc.state, Npc.IDLE)
+
+
+func test_pick_intent_clip_matches_speaker_and_intent() -> void:
+	var clips: Dictionary = {
+		"A_01_n": {"speaker": "A", "intent": "hoi_phong"},
+		"A_30_n": {"speaker": "A", "intent": "cam_on"},
+		"B_30_n": {"speaker": "B", "intent": "cam_on"},
+	}
+	var rng := RandomNumberGenerator.new()
+	assert_eq(Npc.pick_intent_clip(clips, "B", "cam_on", rng), "B_30_n")
+	assert_eq(Npc.pick_intent_clip(clips, "A", "cam_on", rng), "A_30_n")
+
+
+func test_pick_intent_clip_falls_back_to_speaker_a_or_empty() -> void:
+	var clips: Dictionary = {"A_30_r": {"speaker": "A", "intent": "cam_on"}}
+	var rng := RandomNumberGenerator.new()
+	assert_eq(Npc.pick_intent_clip(clips, "B", "cam_on", rng), "A_30_r")
+	assert_eq(Npc.pick_intent_clip(clips, "A", "cap_cuu", rng), "")

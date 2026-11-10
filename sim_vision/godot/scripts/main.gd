@@ -55,6 +55,9 @@ var _latest_yolo_dets: Array = []
 var active_escorted_patient: CharacterBody3D = null
 var current_target_patient: CharacterBody3D = null
 var _pending_turn_reset: bool = false
+## Lượt bệnh nhân cảm ơn khi tới nơi: không tạo nhiệm vụ / không cộng thưởng; hết lượt (về ARRIVED) ➔ _after_thanks.
+var _thanks_pending: bool = false
+var _after_thanks: Callable = Callable()
 @onready var robot: Robot = $Robot
 @onready var vision: VisionClient = $VisionClient
 @onready var overlay: ViewOverlay = $UI/ViewOverlay
@@ -292,25 +295,15 @@ func _physics_process(delta: float) -> void:
 				esc_p.end_escort()
 			if has_escort:
 				esc_p.set_meta("helped", true)
-			if dialogue != null:
-				if dialogue.has_method("show_subtitle"):
-					dialogue.show_subtitle("Bệnh nhân", "Cảm ơn robot, tôi đã tới nơi khám!", 4.0)
-				elif dialogue.get("subtitle") != null and dialogue.subtitle != null:
-					dialogue.subtitle.show_reply("", "Bệnh nhân: Cảm ơn robot, tôi đã tới nơi khám!", 4.0)
 			active_escorted_patient = null
-
 			var cur_floor: int = Room.get_floor(robot.global_position)
-			if cur_floor > 1:
-				print("[ESCORT_DEBUG] >>> Escort completed on Floor %d. Routing robot to return to Floor 1 via elevator..." % cur_floor)
-				_rl_bridge.goal_key = "tiep_don"
-				_rl_bridge.goal_position = room.get_room_waypoint("tiep_don") if room != null else Vector3.ZERO
-				_rl_bridge.final_target_key = "tiep_don"
-				_rl_bridge.task_phase = RLEnvBridgeScript.TaskPhase.CALL_STAFF
-				_task_elapsed_s = 0.0
-				_task_best_dist = -1.0
-				overlay.set_status("Đã dẫn bệnh nhân tới %s. Đang tự di chuyển về Thang máy Tầng %d để xuống Sảnh..." % [_rl_bridge.goal_key, cur_floor])
+			# Bệnh nhân nói lời cảm ơn bằng clip thật ➔ robot nghe (STT/NLU) và đáp (TTS); xong lượt mới về / reset.
+			if has_escort and _start_thanks_turn(esc_p):
+				_after_thanks = _finish_escort.bind(cur_floor)
 				return
-			reset_positions(true)
+			if dialogue != null and dialogue.has_method("show_subtitle"):
+				dialogue.show_subtitle("Bệnh nhân", "Cảm ơn robot, tôi đã tới nơi khám!", 4.0)
+			_finish_escort(cur_floor)
 			return
 		if not _policy_active():
 			robot.set_command(0.0, 0.0)
@@ -570,6 +563,11 @@ func _on_dialogue_turn_completed(row: Dictionary) -> void:
 	var fl: int = int(row.get("floor", 1))
 
 	var speaking_pat: CharacterBody3D = get_active_speaking_patient()
+	if _thanks_pending:
+		_thanks_pending = false
+		print("[ESCORT_DEBUG] >>> Thanks turn done: heard='%s', intent=%s, error='%s'" % [
+			row.get("hyp_text", ""), row.get("intent_pred", ""), row.get("error", "")])
+		return
 
 	if escort_only_mode and act != "guide":
 		act = "guide"
@@ -926,6 +924,8 @@ func reset_positions(is_task_transition: bool = false) -> void:
 		active_escorted_patient.end_escort()
 	active_escorted_patient = null
 	_pending_turn_reset = false
+	_thanks_pending = false
+	_after_thanks = Callable()
 	human.end_escort()
 	current_target_patient = pick_next_target_patient(prev_pat)
 	if is_task_transition:
@@ -1149,7 +1149,16 @@ func set_dialogue_state(s: int) -> void:
 	if Main.is_dialogue_state(s):
 		robot.set_command(0.0, 0.0)
 	elif s == Config.RobotState.ARRIVED:
-		if is_task_busy():
+		if _after_thanks.is_valid():
+			var after: Callable = _after_thanks
+			_after_thanks = Callable()
+			_thanks_pending = false
+			after.call()
+			if is_task_busy():               # tầng trên ➔ robot tự về thang máy
+				state = Config.RobotState.APPROACH
+				_task_elapsed_s = 0.0
+				_task_best_dist = -1.0
+		elif is_task_busy():
 			state = Config.RobotState.APPROACH
 			_task_elapsed_s = 0.0
 			_task_best_dist = -1.0
@@ -1244,3 +1253,38 @@ static func pick_solo_start_positions(r: Room, rng: RandomNumberGenerator) -> Di
 		"robot_yaw": face_yaw,
 		"human_yaw": rng.randf_range(-PI, PI)
 	}
+
+
+## Bệnh nhân vừa được dẫn tới nơi chủ động nói clip cảm ơn ➔ lượt hội thoại thật (STT / NLU / TTS). Không được ➔ false.
+func _start_thanks_turn(patient: CharacterBody3D) -> bool:
+	if dialogue == null or patient == null:
+		return false
+	# HospitalNpc tạo Npc qua get_npc(); Human chính có sẵn node con "Npc".
+	var p_npc: Npc = (patient.get_npc() if patient.has_method("get_npc") else patient.get_node_or_null(^"Npc")) as Npc
+	if p_npc == null:
+		return false
+	dialogue.register_npc(p_npc)
+	_thanks_pending = true
+	var clip: String = p_npc.say_intent("cam_on")
+	if clip != "" and Main.is_dialogue_state(state):
+		print("[ESCORT_DEBUG] >>> Patient thanks robot with clip '%s'" % clip)
+		return true
+	_thanks_pending = false
+	if clip != "":
+		p_npc.reset()
+	return false
+
+
+## Kết thúc nhiệm vụ dẫn đường: ở tầng trên ➔ tự về thang máy xuống sảnh; tầng 1 ➔ chọn bệnh nhân kế tiếp.
+func _finish_escort(cur_floor: int) -> void:
+	if cur_floor > 1:
+		print("[ESCORT_DEBUG] >>> Escort completed on Floor %d. Routing robot to return to Floor 1 via elevator..." % cur_floor)
+		_rl_bridge.goal_key = "tiep_don"
+		_rl_bridge.goal_position = room.get_room_waypoint("tiep_don") if room != null else Vector3.ZERO
+		_rl_bridge.final_target_key = "tiep_don"
+		_rl_bridge.task_phase = RLEnvBridgeScript.TaskPhase.CALL_STAFF
+		_task_elapsed_s = 0.0
+		_task_best_dist = -1.0
+		overlay.set_status("Đã dẫn bệnh nhân tới %s. Đang tự di chuyển về Thang máy Tầng %d để xuống Sảnh..." % [_rl_bridge.goal_key, cur_floor])
+		return
+	reset_positions(true)

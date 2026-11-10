@@ -1,0 +1,60 @@
+{
+  "sim_minutes": 24.9,
+  "escort": {
+    "started": 9,
+    "finished_or_abandoned": 9,
+    "arrived": 9,
+    "success_rate": 1.0,
+    "duration_s_median": 77.8,
+    "duration_s_max": 96.8,
+    "with_elevator": 6,
+    "elevator_transits": 12,
+    "stall_events_45s": 6,
+    "targets": [
+      "301✓",
+      "110✓",
+      "302✓",
+      "112✓",
+      "301✓",
+      "112✓",
+      "315✓",
+      "315✓",
+      "315✓"
+    ]
+  },
+  "safety": {
+    "seconds_logged": 1323,
+    "close_calls_s_lt_0.40m": 100,
+    "min_clearance_m": 0.25,
+    "wall_bump_s": 30,
+    "blocked_s_cmd_but_still": 1
+  },
+  "patient_follow": {
+    "tether_mean_m": 0.96,
+    "tether_p90_m": 1.24,
+    "tether_max_m": 1.84,
+    "pct_time_over_2m": 0.0,
+    "stuck_snaps": 0
+  },
+  "steering": {
+    "GUIDE_ESCORT": {
+      "n": 2336,
+      "mean_abs_dw": 0.448,
+      "flip_rate": 0.3
+    }
+  },
+  "voice": {
+    "turns": 18,
+    "errors": 0,
+    "wer": 0.0,
+    "wer_by_gender": {
+      "male": 0.0,
+      "female": 0.0
+    },
+    "intent_acc": 1.0,
+    "n_intent": 18,
+    "guide_correct": 1.0,
+    "n_guide": 9,
+    "wrong_guides": []
+  }
+}

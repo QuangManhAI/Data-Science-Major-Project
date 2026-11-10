@@ -92,7 +92,9 @@ def main() -> None:
 
     # ---- 2. minutes per speaker (coloured by split)
     sp = (d.groupby("speaker_id").agg(minutes=("duration_s", lambda s: s.sum() / 60),
-                                       n=("utt_id", "size"), split=("split", "first"),
+                                       n=("utt_id", "size"),
+                                       split=("split", lambda x: "test" if "test" in set(x)
+                                              else "val" if "val" in set(x) else "train"),
                                        gender=("gender", "first"), age=("age", "first"))
             .sort_values("minutes"))
     colors = sp.split.map({"train": S1, "val": S2, "test": S3})
@@ -100,10 +102,10 @@ def main() -> None:
     ax.barh(sp.index, sp.minutes, color=colors, height=0.72)
     for i, (m, n) in enumerate(zip(sp.minutes, sp.n)):
         ax.text(m + 0.08, i, f"{m:.1f}′ · {n}", va="center", fontsize=8, color=INK2)
-    ax.set(title="Thời lượng mỗi người nói (màu = split)", xlabel="phút")
+    ax.set(title="Thời lượng mỗi người nói (màu = nhóm người nói)", xlabel="phút")
     ax.grid(axis="y", visible=False)
     ax.legend(handles=[plt.Rectangle((0, 0), 1, 1, color=c) for c in (S1, S2, S3)],
-              labels=["train", "val", "test"], loc="lower right")
+              labels=["người nói train", "người nói val", "người nói test"], loc="lower right")
     save(fig, "02_minutes_per_speaker.png")
     stats["speakers"] = sp.round(2).reset_index().to_dict("records")
     top = sp.minutes.sort_values(ascending=False)

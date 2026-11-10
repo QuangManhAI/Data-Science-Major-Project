@@ -63,7 +63,7 @@ log = logging.getLogger("rl_policy_server")
 
 RL_WS_HOST = "127.0.0.1"
 RL_WS_PORT = 8768
-DEFAULT_CHECKPOINT = "experiments/checkpoints/PPOHospital-full_strongest.pt"
+DEFAULT_CHECKPOINT = "experiments/checkpoints/PPOHospital-PureVisionV2_best.pt"
 
 
 class PolicyRunner:
@@ -431,6 +431,8 @@ def main() -> int:
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     ckpt_path = Path(args.checkpoint)
+    if not ckpt_path.is_absolute() and not ckpt_path.is_file():
+        ckpt_path = REPO_ROOT / ckpt_path  # launcher chạy với cwd=sim_vision/python
     if not ckpt_path.is_file():
         log.error("Checkpoint not found: %s", ckpt_path)
         return 1

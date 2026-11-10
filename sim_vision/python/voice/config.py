@@ -15,8 +15,14 @@ SCRIPT_MD: Path = REPO_ROOT / "docs" / "kich_ban_thu_am.md"
 STT_WS_HOST: str = "127.0.0.1"
 STT_WS_PORT: int = 8766
 STT_WS_URL: str = f"ws://{STT_WS_HOST}:{STT_WS_PORT}"
-# Model local Qualcomm PhoASR-whisper-small (người dùng chọn thay vinai/PhoWhisper-small).
-STT_MODEL_ID: str = os.environ.get("STT_MODEL_ID", str(REPO_ROOT / "models" / "PhoASR-whisper-small"))
+# Mặc định: PhoASR-whisper-small đã fine-tune hospital (models_finetuned/phoasr_small_hospital_best).
+# Thiếu bản fine-tune ➔ lùi về bản gốc models/PhoASR-whisper-small.
+_STT_FT_DIR: Path = REPO_ROOT / "models_finetuned" / "phoasr_small_hospital_best"
+_STT_BASE_DIR: Path = REPO_ROOT / "models" / "PhoASR-whisper-small"
+STT_MODEL_ID: str = os.environ.get(
+    "STT_MODEL_ID",
+    str(_STT_FT_DIR if (_STT_FT_DIR / "model.safetensors").is_file() else _STT_BASE_DIR),
+)
 SAMPLE_RATE: int = 16000
 
 TALK_TRIGGER_DIST: float = 2.0

@@ -19,13 +19,14 @@ python3 scripts/eda_voice_dataset.py       # biểu đồ + docs/figures/voice_e
 |---|---|
 | Tổng số bản ghi đã xử lý | 1.839 |
 | Dùng được để train | **1.726 file, 1,96 giờ, 29 người nói** |
-| Train / val / test | 1.266 file (86,5 phút, 23 người) / 230 (16,9 phút, 3 người) / 230 (14,1 phút, 3 người) |
+| Train / val / test / test_newtext | 924 file (64,6 phút, 20 người) / 230 (15,2 phút, 3 người) / **405 (26,2 phút, 6 người)** / 167 (11,5 phút). Chi tiết ở §11 |
+| **Baseline PhoASR-whisper-small trên test** | **WER 19,1%**, CER 12,9%; `_r` 13,3%, `_n` 25,5% (§12) |
 | Độ dài file | trung vị 4,0 s, khoảng 1,1–10,9 s |
 | Câu kịch bản khác nhau | 110 câu, 283 từ vựng, 19 intent |
 
 **Năm điều ảnh hưởng mô hình nhiều nhất**, xếp theo mức độ:
 
-1. **Test không đo được khả năng tổng quát hóa sang câu mới.** 100% câu trong test và val đều đã có trong train, vì mọi người đọc cùng 110 câu. WER trên test chỉ đo khả năng nghe được *giọng người mới*, không đo được khả năng nghe *câu mới*. Mô hình có thể học thuộc câu và WER vẫn thấp (§9).
+1. **Có nguy cơ học thuộc câu.** Mọi người đọc cùng 110 câu, nên mô hình có thể học thuộc mà WER vẫn thấp (§9). Đã xử lý bằng cách giữ riêng 16 câu không bao giờ xuất hiện trong train (§11).
 2. **Nhãn của file `_n` chỉ là gần đúng.** 823 file `_n` (48%) dùng câu kịch bản làm nhãn, trong khi người nói được phép thêm "ờ, dạ" và đổi chữ. Đây là nhiễu nhãn có hệ thống: mô hình sẽ học cách "sửa" lời nói tự nhiên về đúng câu kịch bản (§7).
 3. **Dữ liệu rất ít (1,44 giờ train) và lệch.** Nữ 20 tuổi chiếm 45% thời lượng. Trẻ em chỉ có 3,5 phút, nam 30 tuổi 4,6 phút, giọng miền Bắc 5,6 phút. Mô hình sẽ yếu ở các nhóm thiếu dữ liệu (§3).
 4. **Âm lượng gốc chênh nhau 35 dB giữa các người nói.** Đã chuẩn hóa về −23 dBFS. LH_B phải tăng tới +30 dB nên nhiễu nền cũng bị khuếch đại theo (§4).
@@ -44,12 +45,12 @@ python3 scripts/eda_voice_dataset.py       # biểu đồ + docs/figures/voice_e
 | Đo chất lượng | đo **trước** khi chỉnh âm lượng: RMS, peak, clipping, SNR, khoảng lặng đầu/cuối, F0, băng thông |
 | Chuẩn hóa âm lượng | đưa RMS phần có tiếng về **−23 dBFS**, peak không vượt **−1 dBFS**. Cột `gain_db` ghi mức đã chỉnh |
 | Ghép nhãn | lấy từ kịch bản của app thu âm (`configs/voice_scripts.json`, xuất từ `Major_BE_FE/backend/src/voice/voice.scripts.ts`) |
-| Chia tập | **mỗi người nói chỉ nằm trong một tập**. Test: LH_A3 (nam 20, Bình Định), LH_B2 (nữ 20, Hải Phòng), LH_F30_04 (nữ 30, Bình Thuận). Val: LH_A2, LH_B7, LH_F30_03 |
+| Chia tập | giữ riêng **cả người nói lẫn câu**: 6 người nói test, 3 người nói val, 16 câu không có trong train. Xem §11 |
 
 **File đầu ra** (trong `data/processed/voice_dataset/`):
 - `wav/<speaker_id>/<utt_id>.wav`
 - `manifest.csv`: đủ metadata và chỉ số chất lượng, có cột `usable`, `exclude_reason`, `split`
-- `train.jsonl`, `val.jsonl`, `test.jsonl`: mỗi dòng là `{"audio_filepath", "text", "duration", "speaker_id", "mode", "intent"}`
+- `train.jsonl`, `val.jsonl`, `test.jsonl`, `test_newtext.jsonl`: mỗi dòng là `{"audio_filepath", "text", "duration", "speaker_id", "mode", "intent", "heldout_text"}`
 
 **Các file bị loại (113 file):**
 
@@ -78,7 +79,7 @@ python3 scripts/eda_voice_dataset.py       # biểu đồ + docs/figures/voice_e
 - Robot dùng trong bệnh viện, nơi có nhiều **người già** (kịch bản N và G cho nhóm 50 và 80 tuổi). Nhưng dữ liệu hiện **chưa có người nào trên 34 tuổi**.
 
 **Ảnh hưởng tới mô hình:**
-- **Train không có giọng Bắc** vì người Bắc duy nhất (LH_B2) nằm trong test. WER của LH_B2 sẽ cho biết mô hình gốc xử lý giọng Bắc tốt tới đâu, nhưng fine-tune không cải thiện được phần này.
+- **Train không có giọng Bắc** vì người Bắc duy nhất (LH_B2) nằm trong test (§11). WER của LH_B2 sẽ cho biết mô hình gốc xử lý giọng Bắc tốt tới đâu, nhưng fine-tune không cải thiện được phần này.
 - Với trẻ em và người già, cao độ và cách phát âm khác hẳn người lớn (§8). Mô hình sẽ gần như không học được gì cho các nhóm này. Đúng ra cần báo WER riêng cho từng nhóm, nhưng hiện chưa đủ dữ liệu để đánh giá.
 
 **Nên làm:**
@@ -201,7 +202,7 @@ python3 scripts/eda_voice_dataset.py       # biểu đồ + docs/figures/voice_e
 - Toàn bộ dữ liệu chỉ có **110 câu khác nhau** (C có 10 câu chung, A 30, B 30, T 25, K 15), **283 từ vựng**, 14.204 token. Không có từ nào chỉ xuất hiện đúng một lần.
 - Mỗi câu có trung bình 15,7 bản ghi. Câu chung C được đọc tới 46 lần, trong khi câu K của trẻ em chỉ có 2 bản ghi mỗi câu.
 - Intent lệch: `hoi_phong` có 296 file, `hoi_khoa` 225, còn `ho_tro_di_chuyen` chỉ 26 và `dieu_chinh_am_luong` 28.
-- **100% câu trong test và val đều có trong train.**
+- Nếu chỉ chia theo người nói thì 100% câu trong test và val đều có trong train. Sau khi giữ riêng 16 câu (§11), con số này giảm còn 85,5%. Phần 14,5% còn lại là câu mô hình chưa từng thấy khi train.
 
 **Ảnh hưởng tới mô hình:**
 - Đây là vấn đề lớn nhất khi đánh giá. Với từ vựng chỉ 283 từ và 110 câu lặp đi lặp lại, Whisper sẽ **học thuộc câu**. WER trên test sẽ thấp (có thể dưới 5%), nhưng không nói lên khả năng nhận dạng câu bệnh nhân tự nói ngoài kịch bản. Đồng thời mô hình dễ bị **quên những gì đã học từ trước**: nhận dạng tiếng Việt tổng quát kém đi, và hay "ép" câu lạ về câu kịch bản gần nhất.
@@ -220,13 +221,109 @@ python3 scripts/eda_voice_dataset.py       # biểu đồ + docs/figures/voice_e
 | Ưu tiên | Việc | Lý do (mục) |
 |---|---|---|
 | **P0** | Quyết định về dữ liệu của LH_F30_05 trong MinIO (`major-be-fe/voice_finetune/Lê Hà/Nữ 30/F30_05`) | Người nói đã rút dữ liệu (§2) |
-| **P0** | Tạo split chia theo câu và tập đánh giá tiếng Việt tổng quát | Test hiện không đo được câu mới (§9) |
+| ~~P0~~ ✅ | ~~Tạo split chia theo câu~~: đã làm (§11). **Vẫn còn thiếu:** tập đánh giá tiếng Việt tổng quát | §9 |
 | **P0** | Lần train đầu chỉ dùng `_r`, hoặc ghi transcript thật cho `_n` | 823 file nhãn gần đúng (§7) |
 | P1 | Nghe kiểm tra 305 file bị cắt cuối (ưu tiên LH_F30_04 trong test) và khoảng 36 file có tốc độ nói bất thường | Nhãn không khớp audio (§6, §7) |
 | P1 | Thêm augmentation: nhiễu 5–20 dB, đổi tốc độ, giới hạn băng thông, đổi âm lượng ±6 dB, SpecAugment | Dữ liệu sạch hơn môi trường thật, ít dữ liệu (§4, §5, §7) |
 | P1 | Xác nhận APP_ba76d1 (giới tính) và PU_F20_A/B (một hay hai người) | §8 |
 | P2 | Thu thêm: giọng Bắc cho train, nam 30, trẻ em, người 50 và 80 tuổi, và một tập bằng microphone của robot | §3, §5 |
 | P2 | Ghi transcript cho X_M30 (25 file) | §2 |
+
+---
+
+## 11. Chia tập test
+
+Mục tiêu: tập test phải **cân bằng** (mỗi nhóm người dùng đều có mặt) và **sạch** (không rò rỉ người nói, đo được cả câu mới). Cách chia được viết cố định trong `scripts/prepare_voice_dataset.py` (`TEST_SPEAKERS`, `VAL_SPEAKERS`, `HELDOUT_CODES`), nên chạy lại luôn ra cùng một kết quả.
+
+**Bước 1: giữ riêng người nói.** Chọn 6 người, mỗi người có đủ bộ câu:
+
+| Người nói | Giới | Tuổi | Vùng | Nguồn | Codec | SNR | File (`_r`/`_n`) | Phút |
+|---|---|---|---|---|---|---|---|---|
+| PU_M10 | Nam | 10 | không rõ | Phương Uyên | AAC | 85 | 25 (25/0) | 1,8 |
+| LH_A3 | Nam | 20 | Trung (Bình Định) | Lê Hà | Opus | **23 (ồn)** | 80 (40/40) | 3,6 |
+| LH_B2 | Nữ | 20 | **Bắc** (Hải Phòng) | Lê Hà | AAC | 47 | 80 (40/40) | 5,6 |
+| APP_1603b1 | Nữ | 20 | không rõ | **web app** | Opus | 50 | 80 (40/40) | 5,0 |
+| LH_M30 | Nam | 30 | Nam (TP.HCM) | Lê Hà | Opus | 76 | 70 (35/35) | 4,6 |
+| LH_F30_01 | Nữ | 30 | Nam | Lê Hà | Opus | 64 | 70 (35/35) | 5,7 |
+| **Tổng** | 3 nam / 3 nữ | 10 / 20 / 30 | Bắc, Trung, Nam | 3 nguồn | 2 codec | 23–85 | **405 (215/190)** | **26,2** (22%) |
+
+Lý do chọn như vậy:
+- **Mỗi ô tuổi × giới có một người** (trẻ em, nam/nữ 20, nam/nữ 30). Nữ 20 có 2 người vì đây là nhóm đông nhất, và để có thêm một người thu qua web app, đúng là kênh mà robot sẽ dùng.
+- **Không chọn** LH_F30_04 và PU_F20_A, vì 81% và 68% file của hai người này bị cắt cuối (§6). Nhãn sai sẽ làm WER cao giả tạo.
+- **Đánh đổi chấp nhận được:** LH_M30 là người nam 30 duy nhất có transcript, LH_B2 là người giọng Bắc duy nhất. Đưa họ vào test nghĩa là train không còn ai thuộc hai nhóm này, cho tới khi ghi transcript cho X_M30 và thu thêm (§3, §10). Nếu không làm vậy thì sẽ không đo được hai nhóm đó.
+- Val có 3 người, mỗi ô người lớn chính một người: LH_A (nam 20), LH_B7 (nữ 20), LH_F30_03 (nữ 30). Dùng để chọn checkpoint.
+
+**Bước 2: giữ riêng câu.** Có 16/110 câu (khoảng 15% mỗi kịch bản) **không bao giờ xuất hiện trong train**:
+
+| Kịch bản | Câu giữ riêng | Intent |
+|---|---|---|
+| C (chung) | C02, C04 | hoi_khoa, hoi_phong |
+| A | A_06, A_08, A_14, A_18 | hoi_khoa, hoi_phong, thanh_toan, tien_ich |
+| B | B_02, B_07, B_15, B_29 | dang_ky_kham, hoi_phong, tien_ich, nhac_lai |
+| T | T08, T10, T11, T17 | dang_ky_kham, hoi_phong, hoi_khoa, tien_ich |
+| K | K05, K06 | gap_nhan_vien, tien_ich |
+
+Mỗi câu được chọn từ một intent còn ít nhất một câu khác trong train, nên cả 19 intent vẫn được train.
+
+**Kết quả chia:**
+
+| Split | File | Phút | Người nói | Dùng để |
+|---|---|---|---|---|
+| `train` | 924 | 64,6 | 20 | huấn luyện |
+| `val` | 230 | 15,2 | 3 | chọn checkpoint, dừng sớm |
+| **`test`** | **405** | **26,2** | **6** | **người nói mới**. Trong đó 64 file (cột `heldout_text`) vừa là người mới vừa là câu mới |
+| `test_newtext` | 167 | 11,5 | 17 | người nói đã thấy, **câu mới**. Dùng để đo mô hình có học thuộc câu không |
+
+Đã kiểm tra: không câu giữ riêng nào lọt vào train, train đủ 19/19 intent, test đủ 19/19 intent, tỉ lệ `_r`/`_n` trong test là 215/190.
+
+---
+
+## 12. Kết quả baseline: PhoASR-whisper-small chưa fine-tune trên tập test
+
+Chạy bằng `sim_vision/python/.venv/bin/python scripts/eval_asr_testset.py`, giải mã greedy, trên MPS. Kết quả nằm trong `experiments/results/baseline_phoasr_small_test/` (`predictions.csv` và `summary.json`).
+
+**Cách tính điểm:** nhãn và kết quả đều được chuẩn hóa như nhau: Unicode NFC, chữ thường, bỏ dấu câu, **đổi số sang chữ** (410 thành "bốn trăm mười"), coi "lẻ" với "linh" là một. Nếu không đổi số thì "phòng 410" và "phòng bốn trăm mười" bị tính là sai dù model nghe đúng: 21 câu có số lúc đó có WER 59%, kéo WER tổng lên 20,5%.
+
+| Chỉ số | Giá trị |
+|---|---|
+| **WER (toàn bộ test)** | **19,1%** |
+| WER trung bình theo người nói | 17,9% |
+| CER | 12,9% |
+| Tỉ lệ câu đúng hoàn toàn | 41,2% |
+| RTF (thời gian xử lý / thời lượng audio) | 0,054 (MPS, batch 16) |
+
+**Theo người nói và nhóm:**
+
+| Người nói | Nhóm | WER | CER | WER chỉ `_r` | Câu đúng |
+|---|---|---|---|---|---|
+| LH_B2 | nữ 20, Bắc | **5,2%** | 3,7% | 5,9% | 64% |
+| LH_F30_01 | nữ 30 | 11,0% | 6,4% | 10,1% | 49% |
+| PU_M10 | trẻ em | 12,2% | 6,9% | 12,2% | 48% |
+| LH_M30 | nam 30 | 12,3% | 7,2% | 7,8% | 51% |
+| APP_1603b1 | nữ 20, web app | 19,1% | 14,1% | **5,7%** | 32% |
+| LH_A3 | nam 20, ồn | **47,4%** | 32,2% | 36,9% | 10% |
+
+| Phân nhóm | WER |
+|---|---|
+| `_r` (đọc rõ, nhãn đúng) / `_n` (tự nhiên, nhãn gần đúng) | **13,3%** / 25,5% |
+| Câu đã có trong train / câu giữ riêng | 18,6% / 21,5% |
+| SNR dưới 30 dB / 30–45 / 45–60 / trên 60 | **47,4%** / 11,8% / 12,3% / 11,7% |
+| Câu có số / không có số | 24,8% / 18,7% |
+| Intent khó nhất: `dung_lai` / `cap_cuu` / `bao_hiem` | 34,8% / 31,7% / 24,3% |
+
+**Đọc kết quả:**
+1. **Nhiễu là yếu tố ảnh hưởng mạnh nhất.** Khi SNR từ 30 dB trở lên, WER ổn định khoảng 12%. Dưới 30 dB (LH_A3) thì WER tăng gấp 4 lần, và model bắt đầu sinh ra câu hoàn toàn khác, ví dụ "khoa cấp cứu ở đâu" thành "từ đó họ sẽ nho lắng được nha". Hành lang bệnh viện thường ồn, nên đây là ưu tiên số 1 khi fine-tune: **augmentation nhiễu** (§5).
+2. **Khoảng một nửa WER của `_n` là do nhãn, không phải do model.** APP_1603b1: `_r` 5,7%, `_n` 32,6%. Ví dụ model nghe "đi từ từ thôi" trong khi nhãn là "đi chậm lại giúp tôi", hay "khoa trẻ con ở đâu ấy" so với "khoa nhi ở tầng mấy". Model nghe **đúng**, người nói đã đổi câu. Vì vậy **số chính để so sánh nên là WER của `_r`** (13,3%), cho tới khi `_n` có transcript thật (§7).
+3. **Lỗi thật trên `_r` chủ yếu là từ chuyên ngành bệnh viện:** "khoa" thành "khoai / pha", "robot" thành "ngô bốt / ru bố / gỗ bố", "X-quang" thành "ít quạt", "siêu âm" thành "siêm", "khoa sản" thành "pha sẵn", "nhân viên" thành "yên biên". Đây chính là loại lỗi fine-tune sửa tốt nhất, và nó ảnh hưởng trực tiếp tới việc nhận ra intent (`hoi_khoa`, `dan_duong`).
+4. **Giọng Bắc (LH_B2) tốt nhất (5,2%)**. Vì chỉ có một người giọng Bắc nên chưa thể kết luận là do vùng giọng; người này cũng thu rõ và có SNR tốt. **Trẻ em (12,2%) không tệ như dự đoán**, nhưng chỉ có 25 câu và 1 em nên chưa đủ để kết luận.
+5. Câu giữ riêng chỉ khó hơn một chút (21,5% so với 18,6%). Model gốc chưa từng thấy câu nào trong số này, nên chênh lệch chỉ do câu khó dễ khác nhau. **Sau fine-tune, khoảng cách này sẽ cho biết model có học thuộc câu hay không.**
+
+**Mức cần vượt khi fine-tune:**
+- WER `_r` trên test: **13,3%**
+- WER tổng trên test: **19,1%**
+- WER khi SNR dưới 30 dB: **47,4%**
+
+Mỗi checkpoint cần báo đủ ba số trên, cùng WER trên `test_newtext`. Lệnh: `--model <ckpt> --split test` (và `--split test_newtext`).
 
 ---
 
@@ -242,4 +339,4 @@ python3 scripts/eda_voice_dataset.py       # biểu đồ + docs/figures/voice_e
 | `duration_s`, `speech_s`, `lead_sil_s`, `trail_sil_s` | độ dài, khoảng từ đầu đến cuối phần có tiếng, khoảng lặng đầu và cuối |
 | `rms_dbfs`, `speech_rms_dbfs`, `peak_dbfs`, `clip_ratio` | âm lượng gốc **trước** khi chuẩn hóa |
 | `snr_db`, `f0_hz`, `cutoff_hz`, `gain_db` | SNR ước lượng, F0 trung vị, băng thông hiệu dụng (ngưỡng −60 dB), mức âm lượng đã chỉnh |
-| `exclude_reason`, `usable`, `split` | lý do loại, có dùng được không, train/val/test |
+| `exclude_reason`, `usable`, `split`, `heldout_text` | lý do loại, có dùng được không, train/val/test/test_newtext, câu có thuộc nhóm giữ riêng không |

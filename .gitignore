@@ -7,7 +7,7 @@ dist/
 build/
 .eggs/
 .kilo
-
+*.csv
 
 # Data — raw/processed/external data stays local
 /data/raw/
@@ -85,3 +85,5 @@ logs/
 *.tar.gz
 *.pt
 .claude/
+notebooks/gen_synth_tts_colab.ipynb
+docs/Bao Cao Clone Voice (1).docx

@@ -115,7 +115,7 @@
    "speaker_id": "PU_M10",
    "minutes": 1.78,
    "n": 25,
-   "split": "train",
+   "split": "test",
    "gender": "Nam",
    "age": 10
   },
@@ -155,7 +155,7 @@
    "speaker_id": "LH_A",
    "minutes": 4.32,
    "n": 80,
-   "split": "train",
+   "split": "val",
    "gender": "Nam",
    "age": 20
   },
@@ -171,7 +171,7 @@
    "speaker_id": "LH_M30",
    "minutes": 4.56,
    "n": 70,
-   "split": "train",
+   "split": "test",
    "gender": "Nam",
    "age": 30
   },
@@ -179,7 +179,7 @@
    "speaker_id": "LH_F30_04",
    "minutes": 4.92,
    "n": 70,
-   "split": "test",
+   "split": "train",
    "gender": "Nữ",
    "age": 30
   },
@@ -187,7 +187,7 @@
    "speaker_id": "APP_1603b1",
    "minutes": 4.96,
    "n": 80,
-   "split": "train",
+   "split": "test",
    "gender": "Nữ",
    "age": 20
   },
@@ -227,7 +227,7 @@
    "speaker_id": "LH_F30_01",
    "minutes": 5.66,
    "n": 70,
-   "split": "train",
+   "split": "test",
    "gender": "Nữ",
    "age": 30
   },
@@ -251,7 +251,7 @@
    "speaker_id": "LH_A2",
    "minutes": 5.92,
    "n": 80,
-   "split": "val",
+   "split": "train",
    "gender": "Nam",
    "age": 18
   },
@@ -296,18 +296,23 @@
  },
  "splits": {
   "test": {
-   "utts": 230,
-   "minutes": 14.1,
-   "speakers": 3
+   "utts": 405,
+   "minutes": 26.2,
+   "speakers": 6
+  },
+  "test_newtext": {
+   "utts": 167,
+   "minutes": 11.5,
+   "speakers": 17
   },
   "train": {
-   "utts": 1266,
-   "minutes": 86.5,
-   "speakers": 23
+   "utts": 924,
+   "minutes": 64.6,
+   "speakers": 20
   },
   "val": {
    "utts": 230,
-   "minutes": 16.9,
+   "minutes": 15.2,
    "speakers": 3
   }
  },
@@ -777,8 +782,8 @@
    "hoi_khoa": 225,
    "hoi_phong": 296
   },
-  "test_sentences_seen_in_train": 1.0,
-  "val_sentences_seen_in_train": 1.0,
+  "test_sentences_seen_in_train": 0.855,
+  "val_sentences_seen_in_train": 0.853,
   "vocab_size": 283,
   "tokens": 14204,
   "hapax": 0,

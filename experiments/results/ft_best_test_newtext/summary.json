@@ -1,0 +1,630 @@
+{
+ "model": "models_finetuned/phoasr_small_hospital_best",
+ "split": "test_newtext",
+ "device": "mps",
+ "num_beams": 1,
+ "rtf": 0.0529,
+ "overall": {
+  "n": 167,
+  "minutes": 11.5,
+  "wer": 0.1168,
+  "cer": 0.0902,
+  "sub": 100,
+  "dele": 21,
+  "ins": 48,
+  "ref_words": 1447,
+  "sent_acc": 0.6347
+ },
+ "macro_wer_by_speaker": 0.1156,
+ "macro_cer_by_speaker": 0.0858,
+ "by_speaker": {
+  "APP_112ba0": {
+   "n": 3,
+   "minutes": 0.1,
+   "wer": 0.3226,
+   "cer": 0.187,
+   "sub": 9,
+   "dele": 1,
+   "ins": 0,
+   "ref_words": 31,
+   "sent_acc": 0.3333
+  },
+  "APP_5ac354": {
+   "n": 12,
+   "minutes": 0.5,
+   "wer": 0.2264,
+   "cer": 0.1368,
+   "sub": 18,
+   "dele": 4,
+   "ins": 2,
+   "ref_words": 106,
+   "sent_acc": 0.3333
+  },
+  "APP_c5de7e": {
+   "n": 4,
+   "minutes": 0.2,
+   "wer": 0.0,
+   "cer": 0.0,
+   "sub": 0,
+   "dele": 0,
+   "ins": 0,
+   "ref_words": 40,
+   "sent_acc": 1.0
+  },
+  "APP_f91703": {
+   "n": 12,
+   "minutes": 0.6,
+   "wer": 0.0755,
+   "cer": 0.0637,
+   "sub": 6,
+   "dele": 2,
+   "ins": 0,
+   "ref_words": 106,
+   "sent_acc": 0.6667
+  },
+  "HT_F20": {
+   "n": 2,
+   "minutes": 0.1,
+   "wer": 0.0,
+   "cer": 0.0,
+   "sub": 0,
+   "dele": 0,
+   "ins": 0,
+   "ref_words": 15,
+   "sent_acc": 1.0
+  },
+  "HT_M20": {
+   "n": 10,
+   "minutes": 0.8,
+   "wer": 0.2308,
+   "cer": 0.2186,
+   "sub": 6,
+   "dele": 1,
+   "ins": 14,
+   "ref_words": 91,
+   "sent_acc": 0.3
+  },
+  "LH_A2": {
+   "n": 12,
+   "minutes": 1.0,
+   "wer": 0.0377,
+   "cer": 0.033,
+   "sub": 2,
+   "dele": 2,
+   "ins": 0,
+   "ref_words": 106,
+   "sent_acc": 0.75
+  },
+  "LH_B": {
+   "n": 12,
+   "minutes": 0.9,
+   "wer": 0.0278,
+   "cer": 0.0283,
+   "sub": 2,
+   "dele": 1,
+   "ins": 0,
+   "ref_words": 108,
+   "sent_acc": 0.8333
+  },
+  "LH_B1": {
+   "n": 12,
+   "minutes": 0.9,
+   "wer": 0.1852,
+   "cer": 0.1297,
+   "sub": 17,
+   "dele": 3,
+   "ins": 0,
+   "ref_words": 108,
+   "sent_acc": 0.25
+  },
+  "LH_B3": {
+   "n": 12,
+   "minutes": 0.7,
+   "wer": 0.0,
+   "cer": 0.0,
+   "sub": 0,
+   "dele": 0,
+   "ins": 0,
+   "ref_words": 108,
+   "sent_acc": 1.0
+  },
+  "LH_B8": {
+   "n": 12,
+   "minutes": 0.8,
+   "wer": 0.0463,
+   "cer": 0.0259,
+   "sub": 4,
+   "dele": 1,
+   "ins": 0,
+   "ref_words": 108,
+   "sent_acc": 0.6667
+  },
+  "LH_F30_02": {
+   "n": 12,
+   "minutes": 1.2,
+   "wer": 0.0326,
+   "cer": 0.0331,
+   "sub": 2,
+   "dele": 1,
+   "ins": 0,
+   "ref_words": 92,
+   "sent_acc": 0.75
+  },
+  "LH_F30_04": {
+   "n": 12,
+   "minutes": 0.7,
+   "wer": 0.0652,
+   "cer": 0.0608,
+   "sub": 4,
+   "dele": 0,
+   "ins": 2,
+   "ref_words": 92,
+   "sent_acc": 0.75
+  },
+  "PU_F10": {
+   "n": 4,
+   "minutes": 0.3,
+   "wer": 0.1333,
+   "cer": 0.0756,
+   "sub": 3,
+   "dele": 0,
+   "ins": 1,
+   "ref_words": 30,
+   "sent_acc": 0.75
+  },
+  "PU_F20_A": {
+   "n": 12,
+   "minutes": 1.0,
+   "wer": 0.1792,
+   "cer": 0.1392,
+   "sub": 8,
+   "dele": 1,
+   "ins": 10,
+   "ref_words": 106,
+   "sent_acc": 0.6667
+  },
+  "PU_F20_B": {
+   "n": 12,
+   "minutes": 1.0,
+   "wer": 0.3056,
+   "cer": 0.2547,
+   "sub": 13,
+   "dele": 2,
+   "ins": 18,
+   "ref_words": 108,
+   "sent_acc": 0.4167
+  },
+  "X_F30": {
+   "n": 12,
+   "minutes": 0.7,
+   "wer": 0.0978,
+   "cer": 0.0718,
+   "sub": 6,
+   "dele": 2,
+   "ins": 1,
+   "ref_words": 92,
+   "sent_acc": 0.6667
+  }
+ },
+ "by_group": {
+  "Nam 20": {
+   "n": 50,
+   "minutes": 3.0,
+   "wer": 0.1269,
+   "cer": 0.0999,
+   "sub": 32,
+   "dele": 9,
+   "ins": 16,
+   "ref_words": 449,
+   "sent_acc": 0.56
+  },
+  "Nữ 20": {
+   "n": 77,
+   "minutes": 5.6,
+   "wer": 0.1301,
+   "cer": 0.0983,
+   "sub": 53,
+   "dele": 9,
+   "ins": 28,
+   "ref_words": 692,
+   "sent_acc": 0.6364
+  },
+  "Nữ 30": {
+   "n": 36,
+   "minutes": 2.6,
+   "wer": 0.0652,
+   "cer": 0.0552,
+   "sub": 12,
+   "dele": 3,
+   "ins": 3,
+   "ref_words": 276,
+   "sent_acc": 0.7222
+  },
+  "trẻ em": {
+   "n": 4,
+   "minutes": 0.3,
+   "wer": 0.1333,
+   "cer": 0.0756,
+   "sub": 3,
+   "dele": 0,
+   "ins": 1,
+   "ref_words": 30,
+   "sent_acc": 0.75
+  }
+ },
+ "by_mode": {
+  "n": {
+   "n": 79,
+   "minutes": 5.4,
+   "wer": 0.1739,
+   "cer": 0.1402,
+   "sub": 62,
+   "dele": 14,
+   "ins": 44,
+   "ref_words": 690,
+   "sent_acc": 0.557
+  },
+  "r": {
+   "n": 84,
+   "minutes": 5.9,
+   "wer": 0.0674,
+   "cer": 0.0463,
+   "sub": 38,
+   "dele": 7,
+   "ins": 4,
+   "ref_words": 727,
+   "sent_acc": 0.6905
+  },
+  "u": {
+   "n": 4,
+   "minutes": 0.2,
+   "wer": 0.0,
+   "cer": 0.0,
+   "sub": 0,
+   "dele": 0,
+   "ins": 0,
+   "ref_words": 30,
+   "sent_acc": 1.0
+  }
+ },
+ "by_heldout_text": {
+  "True": {
+   "n": 167,
+   "minutes": 11.5,
+   "wer": 0.1168,
+   "cer": 0.0902,
+   "sub": 100,
+   "dele": 21,
+   "ins": 48,
+   "ref_words": 1447,
+   "sent_acc": 0.6347
+  }
+ },
+ "by_snr": {
+  "<30": {
+   "n": 13,
+   "minutes": 0.8,
+   "wer": 0.0171,
+   "cer": 0.0172,
+   "sub": 1,
+   "dele": 1,
+   "ins": 0,
+   "ref_words": 117,
+   "sent_acc": 0.9231
+  },
+  "30-45": {
+   "n": 79,
+   "minutes": 5.1,
+   "wer": 0.0966,
+   "cer": 0.0768,
+   "sub": 37,
+   "dele": 5,
+   "ins": 24,
+   "ref_words": 683,
+   "sent_acc": 0.6835
+  },
+  "45-60": {
+   "n": 24,
+   "minutes": 1.9,
+   "wer": 0.0718,
+   "cer": 0.0574,
+   "sub": 11,
+   "dele": 4,
+   "ins": 0,
+   "ref_words": 209,
+   "sent_acc": 0.5417
+  },
+  ">60": {
+   "n": 51,
+   "minutes": 3.7,
+   "wer": 0.1963,
+   "cer": 0.1462,
+   "sub": 51,
+   "dele": 11,
+   "ins": 24,
+   "ref_words": 438,
+   "sent_acc": 0.5294
+  }
+ },
+ "by_has_digit": {
+  "False": {
+   "n": 140,
+   "minutes": 9.6,
+   "wer": 0.1232,
+   "cer": 0.0927,
+   "sub": 87,
+   "dele": 15,
+   "ins": 43,
+   "ref_words": 1177,
+   "sent_acc": 0.6286
+  },
+  "True": {
+   "n": 27,
+   "minutes": 1.9,
+   "wer": 0.0889,
+   "cer": 0.0788,
+   "sub": 13,
+   "dele": 6,
+   "ins": 5,
+   "ref_words": 270,
+   "sent_acc": 0.6667
+  }
+ },
+ "by_intent": {
+  "dang_ky_kham": {
+   "n": 18,
+   "minutes": 1.5,
+   "wer": 0.1111,
+   "cer": 0.089,
+   "sub": 18,
+   "dele": 1,
+   "ins": 5,
+   "ref_words": 216,
+   "sent_acc": 0.4444
+  },
+  "gap_nhan_vien": {
+   "n": 1,
+   "minutes": 0.1,
+   "wer": 0.4444,
+   "cer": 0.225,
+   "sub": 3,
+   "dele": 0,
+   "ins": 1,
+   "ref_words": 9,
+   "sent_acc": 0.0
+  },
+  "hoi_khoa": {
+   "n": 45,
+   "minutes": 2.6,
+   "wer": 0.1317,
+   "cer": 0.0905,
+   "sub": 19,
+   "dele": 3,
+   "ins": 10,
+   "ref_words": 243,
+   "sent_acc": 0.6889
+  },
+  "hoi_phong": {
+   "n": 56,
+   "minutes": 4.1,
+   "wer": 0.1167,
+   "cer": 0.0951,
+   "sub": 35,
+   "dele": 13,
+   "ins": 17,
+   "ref_words": 557,
+   "sent_acc": 0.6071
+  },
+  "nhac_lai": {
+   "n": 10,
+   "minutes": 0.8,
+   "wer": 0.1,
+   "cer": 0.064,
+   "sub": 8,
+   "dele": 2,
+   "ins": 1,
+   "ref_words": 110,
+   "sent_acc": 0.6
+  },
+  "thanh_toan": {
+   "n": 10,
+   "minutes": 0.7,
+   "wer": 0.2667,
+   "cer": 0.1674,
+   "sub": 17,
+   "dele": 1,
+   "ins": 6,
+   "ref_words": 90,
+   "sent_acc": 0.2
+  },
+  "tien_ich": {
+   "n": 27,
+   "minutes": 1.7,
+   "wer": 0.0405,
+   "cer": 0.0454,
+   "sub": 0,
+   "dele": 1,
+   "ins": 8,
+   "ref_words": 222,
+   "sent_acc": 0.9259
+  }
+ },
+ "r_only_by_speaker": {
+  "APP_112ba0": {
+   "n": 2,
+   "minutes": 0.1,
+   "wer": 0.2632,
+   "cer": 0.1622,
+   "sub": 4,
+   "dele": 1,
+   "ins": 0,
+   "ref_words": 19,
+   "sent_acc": 0.5
+  },
+  "APP_5ac354": {
+   "n": 6,
+   "minutes": 0.3,
+   "wer": 0.1509,
+   "cer": 0.0802,
+   "sub": 6,
+   "dele": 1,
+   "ins": 1,
+   "ref_words": 53,
+   "sent_acc": 0.5
+  },
+  "APP_c5de7e": {
+   "n": 2,
+   "minutes": 0.1,
+   "wer": 0.0,
+   "cer": 0.0,
+   "sub": 0,
+   "dele": 0,
+   "ins": 0,
+   "ref_words": 20,
+   "sent_acc": 1.0
+  },
+  "APP_f91703": {
+   "n": 6,
+   "minutes": 0.3,
+   "wer": 0.0755,
+   "cer": 0.066,
+   "sub": 4,
+   "dele": 0,
+   "ins": 0,
+   "ref_words": 53,
+   "sent_acc": 0.6667
+  },
+  "HT_M20": {
+   "n": 4,
+   "minutes": 0.2,
+   "wer": 0.1053,
+   "cer": 0.0649,
+   "sub": 3,
+   "dele": 1,
+   "ins": 0,
+   "ref_words": 38,
+   "sent_acc": 0.25
+  },
+  "LH_A2": {
+   "n": 6,
+   "minutes": 0.5,
+   "wer": 0.0189,
+   "cer": 0.0236,
+   "sub": 0,
+   "dele": 1,
+   "ins": 0,
+   "ref_words": 53,
+   "sent_acc": 0.8333
+  },
+  "LH_B": {
+   "n": 6,
+   "minutes": 0.5,
+   "wer": 0.0185,
+   "cer": 0.0189,
+   "sub": 1,
+   "dele": 0,
+   "ins": 0,
+   "ref_words": 54,
+   "sent_acc": 0.8333
+  },
+  "LH_B1": {
+   "n": 6,
+   "minutes": 0.5,
+   "wer": 0.1481,
+   "cer": 0.0943,
+   "sub": 7,
+   "dele": 1,
+   "ins": 0,
+   "ref_words": 54,
+   "sent_acc": 0.1667
+  },
+  "LH_B3": {
+   "n": 6,
+   "minutes": 0.4,
+   "wer": 0.0,
+   "cer": 0.0,
+   "sub": 0,
+   "dele": 0,
+   "ins": 0,
+   "ref_words": 54,
+   "sent_acc": 1.0
+  },
+  "LH_B8": {
+   "n": 6,
+   "minutes": 0.4,
+   "wer": 0.0556,
+   "cer": 0.0377,
+   "sub": 3,
+   "dele": 0,
+   "ins": 0,
+   "ref_words": 54,
+   "sent_acc": 0.6667
+  },
+  "LH_F30_02": {
+   "n": 6,
+   "minutes": 0.6,
+   "wer": 0.0435,
+   "cer": 0.0387,
+   "sub": 1,
+   "dele": 1,
+   "ins": 0,
+   "ref_words": 46,
+   "sent_acc": 0.6667
+  },
+  "LH_F30_04": {
+   "n": 6,
+   "minutes": 0.4,
+   "wer": 0.0435,
+   "cer": 0.0552,
+   "sub": 1,
+   "dele": 0,
+   "ins": 1,
+   "ref_words": 46,
+   "sent_acc": 0.8333
+  },
+  "PU_F10": {
+   "n": 4,
+   "minutes": 0.3,
+   "wer": 0.1333,
+   "cer": 0.0756,
+   "sub": 3,
+   "dele": 0,
+   "ins": 1,
+   "ref_words": 30,
+   "sent_acc": 0.75
+  },
+  "PU_F20_A": {
+   "n": 6,
+   "minutes": 0.6,
+   "wer": 0.0,
+   "cer": 0.0,
+   "sub": 0,
+   "dele": 0,
+   "ins": 0,
+   "ref_words": 53,
+   "sent_acc": 1.0
+  },
+  "PU_F20_B": {
+   "n": 6,
+   "minutes": 0.5,
+   "wer": 0.037,
+   "cer": 0.0236,
+   "sub": 1,
+   "dele": 0,
+   "ins": 1,
+   "ref_words": 54,
+   "sent_acc": 0.8333
+  },
+  "X_F30": {
+   "n": 6,
+   "minutes": 0.3,
+   "wer": 0.1087,
+   "cer": 0.0663,
+   "sub": 4,
+   "dele": 1,
+   "ins": 0,
+   "ref_words": 46,
+   "sent_acc": 0.5
+  }
+ }
+}

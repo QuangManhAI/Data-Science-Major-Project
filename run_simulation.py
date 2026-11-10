@@ -243,7 +243,7 @@ def main() -> None:
         dest="rl_checkpoint",
         type=str,
         default=None,
-        help="PPO checkpoint (.pt) served by rl_policy_server.py on port 8768 (default: experiments/checkpoints/PPOHospital-full_strongest.pt)",
+        help="PPO checkpoint (.pt) served by rl_policy_server.py on port 8768 (default: experiments/checkpoints/PPOHospital-PureVisionV2_best.pt, pure vision 29-D, no LiDAR)",
     )
     parser.add_argument(
         "--solo-patient",
@@ -326,9 +326,15 @@ def main() -> None:
     if not args.no_yolo:
         yolo_f, yolo_log_path = get_log_handle("yolo", enable_file_logging, log_dir)
         log_info = f" (logging to {yolo_log_path.name})" if yolo_log_path else ""
-        yolo_model_path = REPO_ROOT / "models" / "yolo26n_hospital_robot_v6_best" / "yolo26n_hospital_robot_best_map92.6.pt"
-        if not yolo_model_path.is_file():
-            yolo_model_path = PYTHON_DIR / "yolo26n_hospital_robot_best_map92.6.pt"
+        # Ưu tiên YOLO26n v6 hospital 17 lớp; chưa có trọng số ➔ dùng tạm YOLO26n / YOLOv8n base (COCO).
+        yolo_candidates = [
+            REPO_ROOT / "models" / "yolo26n_hospital_robot_v6_best" / "yolo26n_hospital_robot_best_map92.6.pt",
+            PYTHON_DIR / "yolo26n_hospital_robot_best_map92.6.pt",
+            REPO_ROOT / "models" / "yolo26n_hospital_robot_v6_best" / "yolo26n.pt",  # YOLO26n base COCO (tạm)
+            REPO_ROOT / "models" / "yolov8n" / "yolov8n.pt",
+            PYTHON_DIR / "yolov8n.pt",
+        ]
+        yolo_model_path = next((p for p in yolo_candidates if p.is_file()), yolo_candidates[0])
         log(f"[Launcher] Starting YOLO server on port 8765 (model: {yolo_model_path.name}){log_info}...")
         yolo_proc = subprocess.Popen(
             [str(py_exe), "yolo_server.py", "--model", str(yolo_model_path)],

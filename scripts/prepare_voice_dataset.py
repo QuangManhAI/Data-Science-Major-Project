@@ -10,7 +10,7 @@ Output  data/processed/voice_dataset/
   wav/<speaker_id>/<utt_id>.wav   16 kHz, mono, PCM_16 (Whisper / PhoASR input spec)
   manifest.csv                    one row per recording: speaker metadata, transcript,
                                   intent, audio-quality metrics, exclusion flags, split
-  train.jsonl / val.jsonl / test.jsonl   {"audio_filepath", "text", "duration", ...}
+  train / val / test / test_newtext .jsonl   {"audio_filepath", "text", "duration", ...}
 
 Transcripts come from the recorder app's prompt list (configs/voice_scripts.json,
 exported from Major_BE_FE/backend/src/voice/voice.scripts.ts). They are the *script*
@@ -46,11 +46,25 @@ AUDIO_EXT = {".wav", ".m4a", ".aac", ".webm", ".mp3", ".ogg"}
 MIN_DUR, MAX_DUR = 0.5, 30.0  # Whisper encoder window is 30 s
 TARGET_SPEECH_RMS, PEAK_LIMIT = -23.0, -1.0  # dBFS, loudness normalisation
 
-# Speaker-disjoint split. Held-out speakers are picked to cover each adult
-# gender x age cell and all three regions; children and the only M30 speaker with
-# transcripts stay in train because there are too few of them to hold out.
-TEST_SPEAKERS = {"LH_A3", "LH_B2", "LH_F30_04"}
-VAL_SPEAKERS = {"LH_A2", "LH_B7", "LH_F30_03"}
+# Two-way held-out design (see docs/VOICE_DATASET_EDA.md §11).
+# 1) Speakers. Test = 6 complete speakers, 3 male / 3 female, one per age x gender
+#    cell (child, 20, 30), every region we have (Bắc, Trung, Nam), every source
+#    (Lê Hà, Phương Uyên, web app), both codecs and both a noisy and clean voice.
+#    Speakers with heavy end-truncation (LH_F30_04, PU_F20_A) are kept out of test
+#    so label errors do not inflate WER. Val = one speaker per adult cell.
+TEST_SPEAKERS = {"PU_M10", "LH_A3", "LH_B2", "APP_1603b1", "LH_M30", "LH_F30_01"}
+VAL_SPEAKERS = {"LH_A", "LH_B7", "LH_F30_03"}
+# 2) Sentences. 16 of 110 prompts (~15% per script) never appear in train. Each is
+#    taken from an intent that keeps >=1 other prompt in train, so every intent is
+#    still trained. Their recordings by train speakers form `test_newtext`.
+HELDOUT_CODES = {
+    "C02", "C04",                          # hoi_khoa, hoi_phong
+    "A_06", "A_08", "A_14", "A_18",        # hoi_khoa, hoi_phong, thanh_toan, tien_ich
+    "B_02", "B_07", "B_15", "B_29",        # dang_ky_kham, hoi_phong, tien_ich, nhac_lai
+    "T08", "T10", "T11", "T17",            # dang_ky_kham, hoi_phong, hoi_khoa, tien_ich
+    "K05", "K06",                          # gap_nhan_vien, tien_ich
+}
+SPLITS = ("train", "val", "test", "test_newtext")
 
 LOOKUP = {
     key: {item["code"]: item for item in items} for key, items in SCRIPTS["scripts"].items()
@@ -284,28 +298,36 @@ def main() -> None:
     for r in rows:
         r["exclude_reason"] = exclusion(r, dup_ids)
         r["usable"] = not r["exclude_reason"]
-        r["split"] = ("test" if r["speaker_id"] in TEST_SPEAKERS else
-                      "val" if r["speaker_id"] in VAL_SPEAKERS else "train") if r["usable"] else ""
+        r["heldout_text"] = r["code"] in HELDOUT_CODES
+        if not r["usable"]:
+            r["split"] = ""
+        elif r["speaker_id"] in TEST_SPEAKERS:
+            r["split"] = "test"
+        elif r["speaker_id"] in VAL_SPEAKERS:
+            r["split"] = "val"
+        else:
+            r["split"] = "test_newtext" if r["heldout_text"] else "train"
 
     OUT.mkdir(parents=True, exist_ok=True)
     with open(OUT / "manifest.csv", "w", newline="", encoding="utf8") as f:
         w = csv.DictWriter(f, fieldnames=list(rows[0]))
         w.writeheader()
         w.writerows(rows)
-    for split in ("train", "val", "test"):
+    for split in SPLITS:
         with open(OUT / f"{split}.jsonl", "w", encoding="utf8") as f:
             for r in rows:
                 if r["split"] == split:
                     f.write(json.dumps(dict(audio_filepath=r["audio_path"], text=r["text"],
                                             duration=r["duration_s"], speaker_id=r["speaker_id"],
-                                            mode=r["mode"], intent=r["intent"]), ensure_ascii=False) + "\n")
+                                            mode=r["mode"], intent=r["intent"],
+                                            heldout_text=r["heldout_text"]), ensure_ascii=False) + "\n")
 
     usable = [r for r in rows if r["usable"]]
     print(f"recordings: {len(rows)}  usable: {len(usable)}  "
           f"hours usable: {sum(r['duration_s'] for r in usable) / 3600:.2f}")
-    for split in ("train", "val", "test"):
+    for split in SPLITS:
         s = [r for r in usable if r["split"] == split]
-        print(f"  {split:5s} {len(s):5d} utts  {sum(r['duration_s'] for r in s) / 60:6.1f} min  "
+        print(f"  {split:12s} {len(s):5d} utts  {sum(r['duration_s'] for r in s) / 60:6.1f} min  "
               f"{len({r['speaker_id'] for r in s})} speakers")
 
 

@@ -30,6 +30,7 @@ def resolve_model_path(path: str | Path | None = None) -> str:
         _THIS_DIR / "yolo26n_hospital_robot_best_map92.6.pt",
         _REPO_ROOT / "models" / "yolo26n_hospital_robot_v6_best" / "yolo26n_hospital_robot_best_map92.6.pt",
         _REPO_ROOT / "sim_vision" / "python" / "yolo26n_hospital_robot_best_map92.6.pt",
+        _REPO_ROOT / "models" / "yolo26n_hospital_robot_v6_best" / "yolo26n.pt",
         _THIS_DIR / "yolov8n.pt",
         _REPO_ROOT / "models" / "yolov8n" / "yolov8n.pt",
     ]
@@ -147,6 +148,23 @@ def normalize_boxes(
     return dets
 
 
+# YOLO26n / YOLOv8n base (COCO 80 lớp) dùng tạm khi chưa có trọng số hospital 17 lớp:
+# map vài lớp COCO sang ID bệnh viện; lớp còn lại đẩy ra ngoài dải 0..16 (+100) để
+# policy chỉ coi là vật cản (tránh COCO 1 "bicycle" ➔ doctor, 5 "bus" ➔ door).
+COCO_TO_HOSPITAL: dict[str, int] = {
+    "person": 0,        # patient (COCO không phân biệt bác sĩ / bệnh nhân)
+    "bed": 11,          # hospital_bed
+    "chair": 16,        # hospital_chair
+    "bench": 16,
+    "couch": 16,
+}
+COCO_OFFSET: int = 100
+
+
+def is_coco_names(names: dict[int, str]) -> bool:
+    return len(names) == 80 and str(names.get(0, "")).lower() == "person"
+
+
 class YoloDetector:
     """YOLO model loader qua ultralytics."""
 
@@ -162,6 +180,20 @@ class YoloDetector:
             for k, v in self._model.names.items():
                 if not str(v).lower().startswith("class_"):
                     self._names[int(k)] = str(v)
+        self._coco_remap: np.ndarray | None = None
+        model_names = getattr(self._model, "names", None)
+        if isinstance(model_names, dict) and is_coco_names(model_names):
+            lut = np.arange(len(model_names), dtype=int) + COCO_OFFSET
+            names: dict[int, str] = {}
+            for k, v in model_names.items():
+                hid = COCO_TO_HOSPITAL.get(str(v).lower())
+                if hid is not None:
+                    lut[int(k)] = hid
+                    names[hid] = HOSPITAL_CLASSES[hid]
+                else:
+                    names[int(k) + COCO_OFFSET] = f"coco_{v}"
+            self._coco_remap = lut
+            self._names = names
         # Chạy nháp một lần để khởi động model
         self._model(
             np.zeros((480, 640, 3), dtype=np.uint8),
@@ -179,6 +211,8 @@ class YoloDetector:
 
         xyxy = boxes.xyxy.cpu().numpy()
         confs = boxes.conf.cpu().numpy()
-        clss = boxes.cls.cpu().numpy()
+        clss = boxes.cls.cpu().numpy().astype(int)
+        if self._coco_remap is not None:
+            clss = self._coco_remap[clss]
         dets = normalize_boxes(xyxy, confs, clss, w, h, self._names)
         return dets, (time.perf_counter() - t0) * 1000.0

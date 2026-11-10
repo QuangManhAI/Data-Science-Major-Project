@@ -196,6 +196,7 @@ func test_patrolling_doctor_keeps_personal_space_then_turns_back() -> void:
 	doc.global_position = Vector3(-1.0, 0.0, -1.35)
 	doc._wp_index = 1  # walking east toward (1.8, -1.35)
 	doc.setup_robot(parked)
+	await wait_physics_frames(2)  # body vào physics space trước (đi bằng move_and_slide, không gán đè vị trí)
 	for i: int in 45:
 		doc._physics_process(1.0 / 30.0)
 		assert_true(Human.flat_distance(doc.global_position, parked.global_position) >= HospitalNpc.PERSONAL_SPACE_M - 1e-4,

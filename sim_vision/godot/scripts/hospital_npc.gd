@@ -214,7 +214,7 @@ func set_state(new_state: State) -> void:
 					_anchor_pos = waypoints[1]
 				else:
 					var fwd: Vector3 = -global_transform.basis.z.normalized()
-					global_position = global_position + fwd * 0.9
+					global_position = global_position + fwd * _free_distance(fwd, 0.9)
 					_anchor_pos = global_position
 			is_seated = false
 			if model != null:
@@ -236,7 +236,7 @@ func escort_step_towards(target: Vector3, max_step: float, delta: float) -> void
 	if current_state != State.ESCORTED or is_seated:
 		if is_seated:
 			var fwd: Vector3 = -global_transform.basis.z.normalized()
-			global_position = global_position + fwd * 0.6
+			global_position = global_position + fwd * _free_distance(fwd, 0.6)
 			_anchor_pos = global_position
 		set_state(State.ESCORTED)
 	var model := get_node_or_null(^"Model") as Node3D
@@ -263,9 +263,7 @@ func escort_step_towards(target: Vector3, max_step: float, delta: float) -> void
 				velocity = side / maxf(delta, 1e-4)
 				move_and_slide()
 				velocity = Vector3.ZERO
-				if _blocked_s >= 1.2:
-					global_position += disp.normalized() * minf(max_step, 0.15)
-					_blocked_s = 0.0
+				# Không dịch chuyển xuyên vật cản nữa; kẹt lâu thì RLEnvBridge đưa về dấu chân robot (đường đi được).
 		else:
 			_blocked_s = 0.0
 	else:
@@ -410,10 +408,28 @@ func _move_step_towards(target: Vector3, max_step: float, delta: float = 0.0) ->
 	if dir.length() > 1e-5:
 		_face_yaw(atan2(dir.x, dir.z), delta)
 	if is_inside_tree() and get_world_3d() != null and get_world_3d().space != RID():
-		velocity = dir / maxf(delta, 1e-4)
+		# Đi bằng va chạm thật (trước đây gán đè global_position = next_pos ➔ đi xuyên tường / bàn ghế).
+		var pre: Vector3 = global_position
+		velocity = dir / maxf(get_physics_process_delta_time(), 1e-4)   # move_and_slide đi đúng quãng `dir`
 		move_and_slide()
 		velocity = Vector3.ZERO
-	global_position = next_pos
+		if Human.flat_distance(pre, global_position) < 0.3 * dir.length():
+			_blocked_s += delta   # bị tường chặn ➔ đủ BLOCKED_TURN_S thì chuyển waypoint kế
+	else:
+		global_position = next_pos
+
+
+## Bước tối đa `want` m theo `dir` mà không chui vào tường / bàn ghế (chừa 0.35 m thân người).
+func _free_distance(dir: Vector3, want: float) -> float:
+	if not is_inside_tree() or get_world_3d() == null:
+		return want
+	var from: Vector3 = global_position + Vector3(0.0, 0.5, 0.0)
+	var q := PhysicsRayQueryParameters3D.create(from, from + dir * (want + 0.35))
+	q.exclude = [get_rid()]
+	var hit: Dictionary = get_world_3d().direct_space_state.intersect_ray(q)
+	if hit.is_empty():
+		return want
+	return clampf(from.distance_to(hit["position"]) - 0.35, 0.0, want)
 
 
 func _face_yaw(yaw: float, delta: float) -> void:

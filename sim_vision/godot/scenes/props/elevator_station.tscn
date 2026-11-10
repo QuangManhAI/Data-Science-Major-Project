@@ -217,7 +217,7 @@ position = Vector3(1.0, 1.25, 0)
 mesh = SubResource("mesh_cabin_side")
 
 [node name="Floor" type="MeshInstance3D" parent="Cabin"]
-position = Vector3(0, -0.05, 0)
+position = Vector3(0, -0.075, 0)
 mesh = SubResource("mesh_cabin_floor")
 
 [node name="Ceiling" type="MeshInstance3D" parent="Cabin"]

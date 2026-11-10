@@ -318,7 +318,11 @@ const FOLLOW_ACCEL: float = 1.2           # m/s²
 const FOLLOW_STOP_M: float = 0.2          # tới gần hơn ➔ dừng
 const FOLLOW_RESUME_M: float = 0.45       # xa hơn ➔ bước lại
 const FOLLOW_JUMP_M: float = 1.5          # điểm đứng nhảy xa (đổi kiểu đích / thang máy) ➔ không làm mượt
+const PATH_CLEAR_RADIUS_M: float = 0.22   # ~ nửa bề ngang thân người
+const STUCK_PROGRESS_M: float = 0.15      # khoảng cách tới robot phải giảm ít nhất chừng này …
+const STUCK_WINDOW_S: float = 2.5         # … trong chừng này giây khi đang tụt lại, không thì coi là kẹt
 static var _patient_stuck_s: float = 0.0
+static var _progress_best: float = INF
 static var _follow_heading: Vector3 = Vector3.ZERO
 static var _follow_target: Vector3 = Vector3.ZERO
 static var _follow_vel: Vector3 = Vector3.ZERO
@@ -328,18 +332,27 @@ static var _follow_moving: bool = false
 ## Gọi khi bắt đầu dẫn một bệnh nhân / sau thang máy: quên trạng thái làm mượt cũ.
 static func reset_escort_follow() -> void:
 	_patient_stuck_s = 0.0
+	_progress_best = INF
 	_follow_heading = Vector3.ZERO
 	_follow_target = Vector3.ZERO
 	_follow_vel = Vector3.ZERO
 	_follow_moving = false
 
 
+## Thân người (cầu bán kính PATH_CLEAR_RADIUS_M) đi thẳng từ `from` tới `to` được không. Trước đây chỉ bắn một tia
+## mỏng: tia lọt qua mép tường / khe bàn ghế nhưng thân người thì không ➔ bệnh nhân tì vào góc tường mà kẹt.
 static func _path_clear(patient: CharacterBody3D, from: Vector3, to: Vector3) -> bool:
 	if not patient.is_inside_tree() or patient.get_world_3d() == null:
 		return true
-	var q := PhysicsRayQueryParameters3D.create(from + Vector3(0, 0.35, 0), to + Vector3(0, 0.35, 0))
+	var sphere := SphereShape3D.new()
+	sphere.radius = PATH_CLEAR_RADIUS_M
+	var q := PhysicsShapeQueryParameters3D.new()
+	q.shape = sphere
+	q.transform = Transform3D(Basis(), from + Vector3(0, 0.5, 0))
+	q.motion = Vector3(to.x - from.x, 0.0, to.z - from.z)
 	q.exclude = [patient.get_rid()]
-	return patient.get_world_3d().direct_space_state.intersect_ray(q).is_empty()
+	var frac: PackedFloat32Array = patient.get_world_3d().direct_space_state.cast_motion(q)
+	return frac.size() >= 1 and frac[0] >= 1.0
 
 
 static func step_escorted_patient(patient: CharacterBody3D, robot_pos: Vector3, delta: float, trail: Array[Vector3] = [], robot_yaw: float = 0.0) -> void:
@@ -403,17 +416,27 @@ static func step_escorted_patient(patient: CharacterBody3D, robot_pos: Vector3, 
 	if speed < 1e-4:
 		return
 	patient.escort_step_towards(p_pos + _follow_vel / speed, speed * delta, delta)
-	if Human.flat_distance(p_pos, patient.global_position) < 0.002:
-		_patient_stuck_s += delta
-		if _patient_stuck_s >= PATIENT_STUCK_RESET_S and not trail.is_empty():
-			var nearest: Vector3 = trail[0]
-			for c: Vector3 in trail:
-				if Human.flat_distance(c, p_pos) < Human.flat_distance(nearest, p_pos):
-					nearest = c
-			patient.global_position = Vector3(nearest.x, patient.global_position.y, nearest.z)
-			_patient_stuck_s = 0.0
-			_follow_vel = Vector3.ZERO
-			_follow_target = Vector3.ZERO
-	else:
+	# Kẹt = tụt lại (> 1.6 m) mà khoảng cách tới robot không giảm được STUCK_PROGRESS_M trong STUCK_WINDOW_S.
+	# (Đo theo tiến độ: trượt dọc tường vẫn nhích từng chút nên "đứng im" không bắt được.)
+	var gap: float = Human.flat_distance(patient.global_position, robot_pos)
+	var lagging: bool = gap > 1.6
+	if not lagging or gap < _progress_best - STUCK_PROGRESS_M:
+		_progress_best = gap if lagging else INF
 		_patient_stuck_s = 0.0
+	else:
+		_patient_stuck_s += delta
+	if _patient_stuck_s >= STUCK_WINDOW_S and not trail.is_empty():
+		# Đưa về dấu chân robot cách robot ~1 m dọc đường robot vừa đi (chắc chắn đi được, cùng phía tường với robot).
+		var back: Vector3 = trail[trail.size() - 1]
+		var walked: float = 0.0
+		for i: int in range(trail.size() - 1, 0, -1):
+			walked += Human.flat_distance(trail[i], trail[i - 1])
+			back = trail[i - 1]
+			if walked >= 1.0:
+				break
+		patient.global_position = Vector3(back.x, patient.global_position.y, back.z)
+		_patient_stuck_s = 0.0
+		_progress_best = INF
+		_follow_vel = Vector3.ZERO
+		_follow_target = Vector3.ZERO
 

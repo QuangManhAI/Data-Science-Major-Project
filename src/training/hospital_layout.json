@@ -966,27 +966,27 @@
     {
       "name": "Floor2/InteriorWalls/NorthCol1",
       "x0": 38.0,
-      "x1": 40.3,
+      "x1": 41.1,
       "z0": -2.09,
       "z1": -1.91
     },
     {
       "name": "Floor2/InteriorWalls/NorthCol2",
-      "x0": 43.0,
-      "x1": 49.0,
+      "x0": 42.9,
+      "x1": 49.1,
       "z0": -2.09,
       "z1": -1.91
     },
     {
       "name": "Floor2/InteriorWalls/NorthCol3",
-      "x0": 51.0,
-      "x1": 57.0,
+      "x0": 50.9,
+      "x1": 57.1,
       "z0": -2.09,
       "z1": -1.91
     },
     {
       "name": "Floor2/InteriorWalls/NorthCol4",
-      "x0": 59.7,
+      "x0": 58.9,
       "x1": 62.0,
       "z0": -2.09,
       "z1": -1.91
@@ -1007,14 +1007,14 @@
     },
     {
       "name": "Floor2/InteriorWalls/SouthCol1",
-      "x0": 37.85,
-      "x1": 40.15,
+      "x0": 38.0,
+      "x1": 40.1,
       "z0": 1.91,
       "z1": 2.09
     },
     {
       "name": "Floor2/InteriorWalls/SouthCol2",
-      "x0": 43.7,
+      "x0": 41.9,
       "x1": 48.3,
       "z0": 1.91,
       "z1": 2.09
@@ -1190,27 +1190,27 @@
     {
       "name": "Floor3/InteriorWalls/NorthCol1",
       "x0": 88.0,
-      "x1": 90.3,
+      "x1": 91.1,
       "z0": -2.09,
       "z1": -1.91
     },
     {
       "name": "Floor3/InteriorWalls/NorthCol2",
-      "x0": 93.0,
-      "x1": 99.0,
+      "x0": 92.9,
+      "x1": 99.1,
       "z0": -2.09,
       "z1": -1.91
     },
     {
       "name": "Floor3/InteriorWalls/NorthCol3",
-      "x0": 101.0,
-      "x1": 107.0,
+      "x0": 100.9,
+      "x1": 107.1,
       "z0": -2.09,
       "z1": -1.91
     },
     {
       "name": "Floor3/InteriorWalls/NorthCol4",
-      "x0": 109.7,
+      "x0": 108.9,
       "x1": 112.0,
       "z0": -2.09,
       "z1": -1.91
@@ -1231,14 +1231,14 @@
     },
     {
       "name": "Floor3/InteriorWalls/SouthCol1",
-      "x0": 87.85,
-      "x1": 90.15,
+      "x0": 88.0,
+      "x1": 90.1,
       "z0": 1.91,
       "z1": 2.09
     },
     {
       "name": "Floor3/InteriorWalls/SouthCol2",
-      "x0": 93.7,
+      "x0": 91.9,
       "x1": 98.3,
       "z0": 1.91,
       "z1": 2.09

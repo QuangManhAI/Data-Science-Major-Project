@@ -40,6 +40,35 @@ func _update_labels() -> void:
 	for lbl: Label3D in [front, back]:
 		if lbl != null:
 			lbl.text = text_to_set
+			SlidingDoor.fit_label(lbl)
+
+
+## Bảng tên phòng (HeaderSign 1.5 × 0.26 m): vùng chữ chừa lề. Tên dài trước đây tràn ra ngoài bảng.
+const SIGN_TEXT_W_M: float = 1.36
+const SIGN_TEXT_H_M: float = 0.22
+const SIGN_FONT_SIZE: int = 52
+const SIGN_MIN_ONE_LINE: int = 34   # nhỏ hơn mức này thì xuống 2 dòng cho dễ đọc
+const SIGN_MIN_FONT: int = 18
+
+
+## Co chữ cho vừa bảng: một dòng nếu thu nhỏ vừa phải là đủ, không thì 2 dòng (ngắt theo từ).
+static func fit_label(lbl: Label3D) -> void:
+	var font: Font = lbl.font if lbl.font != null else ThemeDB.fallback_font
+	lbl.autowrap_mode = TextServer.AUTOWRAP_OFF
+	lbl.width = 500.0
+	lbl.font_size = SIGN_FONT_SIZE
+	var w_m: float = font.get_string_size(lbl.text, HORIZONTAL_ALIGNMENT_LEFT, -1, SIGN_FONT_SIZE).x * lbl.pixel_size
+	if w_m <= SIGN_TEXT_W_M:
+		return
+	var one_line: int = int(floor(SIGN_FONT_SIZE * SIGN_TEXT_W_M / w_m))
+	if one_line >= SIGN_MIN_ONE_LINE:
+		lbl.font_size = one_line
+		return
+	var by_width: int = int(floor(SIGN_FONT_SIZE * SIGN_TEXT_W_M * 1.85 / w_m))   # ~ nửa chữ mỗi dòng
+	var by_height: int = int(floor(SIGN_TEXT_H_M / (2.0 * 1.25 * lbl.pixel_size)))  # 2 dòng, giãn dòng 1.25
+	lbl.font_size = maxi(SIGN_MIN_FONT, mini(by_width, by_height))
+	lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	lbl.width = SIGN_TEXT_W_M / lbl.pixel_size
 
 
 func _ready() -> void:

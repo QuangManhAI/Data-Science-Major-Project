@@ -81,16 +81,33 @@ def parse_name(name: str) -> ClipName | None:
 
 
 def decode_audio(path: Path, sr: int = config.SAMPLE_RATE) -> np.ndarray:
-    """Đọc file ➔ float32 mono ở `sr`. .m4a qua ffmpeg; .wav qua soundfile + librosa."""
+    """Đọc file ➔ float32 mono ở `sr`. .m4a qua ffmpeg hoặc PyAV; .wav qua soundfile + librosa."""
     if path.suffix.lower() == ".m4a":
         ffmpeg = shutil.which("ffmpeg")
-        if ffmpeg is None:
-            raise RuntimeError("ffmpeg not found: install ffmpeg (brew install ffmpeg) to convert .m4a")
-        proc = subprocess.run([ffmpeg, "-v", "error", "-i", str(path), "-ac", "1", "-ar", str(sr), "-f", "f32le", "-"],
-                              capture_output=True, check=False)
-        if proc.returncode != 0:
-            raise SkipError("decode error")
-        return np.frombuffer(proc.stdout, dtype=np.float32).copy()
+        if ffmpeg is not None:
+            proc = subprocess.run([ffmpeg, "-v", "error", "-i", str(path), "-ac", "1", "-ar", str(sr), "-f", "f32le", "-"],
+                                  capture_output=True, check=False)
+            if proc.returncode == 0:
+                return np.frombuffer(proc.stdout, dtype=np.float32).copy()
+        try:
+            import av
+            container = av.open(str(path))
+            if container.streams.audio:
+                stream = container.streams.audio[0]
+                resampler = av.AudioResampler(format="flt", layout="mono", rate=sr)
+                chunks = []
+                for packet in container.demux(stream):
+                    try:
+                        for frame in packet.decode():
+                            for rf in resampler.resample(frame):
+                                chunks.append(rf.to_ndarray().flatten())
+                    except Exception:
+                        continue
+                if chunks:
+                    return np.concatenate(chunks, axis=0).astype(np.float32)
+        except Exception as exc:
+            raise SkipError("decode error") from exc
+        raise SkipError("decode error")
     try:
         audio, file_sr = sf.read(str(path), dtype="float32", always_2d=True)
     except (sf.LibsndfileError, RuntimeError) as exc:
@@ -176,7 +193,7 @@ def prepare(data_dir: Path, script_md: Path, src_dirs: list[Path] | None = None)
     files = sorted(p for d in (src_dirs or [data_dir / config.RAW_SUBDIR]) for p in d.iterdir()
                    if p.is_file() and not p.name.startswith("."))
     for f in files:
-        rel = str(f.relative_to(data_dir)) if f.is_relative_to(data_dir) else str(f)
+        rel = f.relative_to(data_dir).as_posix() if f.is_relative_to(data_dir) else Path(f).as_posix()
         name = parse_name(f.name)
         if name is None:
             skipped.append({"file": rel, "reason": "bad name"})

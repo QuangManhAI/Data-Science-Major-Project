@@ -1,0 +1,846 @@
+{
+ "source": "Major_BE_FE/backend/src/voice/voice.scripts.ts",
+ "scripts": {
+  "COMMON": [
+   {
+    "code": "C01",
+    "text": "Cho tôi hỏi khoa tim mạch ở đâu?",
+    "intent": "hoi_khoa"
+   },
+   {
+    "code": "C02",
+    "text": "Khoa nhi ở tầng mấy?",
+    "intent": "hoi_khoa"
+   },
+   {
+    "code": "C03",
+    "text": "Phòng xét nghiệm máu đi đường nào?",
+    "intent": "hoi_phong"
+   },
+   {
+    "code": "C04",
+    "text": "Phòng siêu âm số 304 ở đâu?",
+    "intent": "hoi_phong"
+   },
+   {
+    "code": "C05",
+    "text": "Quầy thu ngân ở đâu?",
+    "intent": "thanh_toan"
+   },
+   {
+    "code": "C06",
+    "text": "Nhà thuốc ở đâu?",
+    "intent": "nha_thuoc"
+   },
+   {
+    "code": "C07",
+    "text": "Dẫn tôi đến khoa sản được không?",
+    "intent": "dan_duong"
+   },
+   {
+    "code": "C08",
+    "text": "Đi chậm lại giúp tôi.",
+    "intent": "dieu_chinh_toc_do"
+   },
+   {
+    "code": "C09",
+    "text": "Gọi nhân viên giúp tôi với.",
+    "intent": "gap_nhan_vien"
+   },
+   {
+    "code": "C10",
+    "text": "Cảm ơn nhé.",
+    "intent": "cam_on"
+   }
+  ],
+  "K": [
+   {
+    "code": "K01",
+    "text": "Robot ơi, chỗ khám cho trẻ con ở đâu?",
+    "intent": "hoi_khoa"
+   },
+   {
+    "code": "K02",
+    "text": "Con bị sốt, mẹ bảo đi khám nhi, ở đâu ạ?",
+    "intent": "hoi_khoa"
+   },
+   {
+    "code": "K03",
+    "text": "Nhà vệ sinh ở đâu ạ? Con buồn đi vệ sinh lắm.",
+    "intent": "tien_ich"
+   },
+   {
+    "code": "K04",
+    "text": "Robot ơi, con bị lạc mẹ rồi.",
+    "intent": "gap_nhan_vien"
+   },
+   {
+    "code": "K05",
+    "text": "Con không tìm thấy bố, robot giúp con với.",
+    "intent": "gap_nhan_vien"
+   },
+   {
+    "code": "K06",
+    "text": "Chỗ uống nước ở đâu ạ?",
+    "intent": "tien_ich"
+   },
+   {
+    "code": "K07",
+    "text": "Con đói, ở đây có chỗ bán đồ ăn không?",
+    "intent": "tien_ich"
+   },
+   {
+    "code": "K08",
+    "text": "Phòng tiêm ở đâu ạ? Con sợ tiêm lắm.",
+    "intent": "hoi_phong"
+   },
+   {
+    "code": "K09",
+    "text": "Robot dẫn con ra quầy đăng ký được không?",
+    "intent": "dan_duong"
+   },
+   {
+    "code": "K10",
+    "text": "Robot đi chậm thôi, con theo không kịp.",
+    "intent": "dieu_chinh_toc_do"
+   },
+   {
+    "code": "K11",
+    "text": "Robot nói lại đi, con chưa nghe rõ.",
+    "intent": "nhac_lai"
+   },
+   {
+    "code": "K12",
+    "text": "Em con bị ngã chảy máu rồi, cứu với!",
+    "intent": "cap_cuu"
+   },
+   {
+    "code": "K13",
+    "text": "Con có phải uống thuốc đắng không ạ?",
+    "intent": "khong_ho_tro"
+   },
+   {
+    "code": "K14",
+    "text": "Chỗ chơi cho trẻ con ở đâu ạ?",
+    "intent": "tien_ich"
+   },
+   {
+    "code": "K15",
+    "text": "Con cảm ơn robot ạ.",
+    "intent": "cam_on"
+   }
+  ],
+  "A": [
+   {
+    "code": "A_01",
+    "text": "Chào bạn, cho mình hỏi chỗ đăng ký khám ở đâu vậy?",
+    "intent": "dang_ky_kham"
+   },
+   {
+    "code": "A_02",
+    "text": "Mình khám lần đầu thì phải làm thủ tục gì trước?",
+    "intent": "dang_ky_kham"
+   },
+   {
+    "code": "A_03",
+    "text": "Mình có bảo hiểm y tế, đưa thẻ ở quầy nào?",
+    "intent": "bao_hiem"
+   },
+   {
+    "code": "A_04",
+    "text": "Mình quên mang thẻ bảo hiểm, dùng căn cước công dân được không?",
+    "intent": "bao_hiem"
+   },
+   {
+    "code": "A_05",
+    "text": "Mình bị đau bụng mấy hôm nay thì nên khám khoa nào?",
+    "intent": "hoi_khoa"
+   },
+   {
+    "code": "A_06",
+    "text": "Khoa tiêu hóa ở tầng mấy?",
+    "intent": "hoi_khoa"
+   },
+   {
+    "code": "A_07",
+    "text": "Phòng khám số 205 đi đường nào?",
+    "intent": "hoi_phong"
+   },
+   {
+    "code": "A_08",
+    "text": "Bác sĩ bảo mình đi nội soi dạ dày, phòng nội soi ở đâu?",
+    "intent": "hoi_phong"
+   },
+   {
+    "code": "A_09",
+    "text": "Xét nghiệm máu thì lấy máu ở đâu?",
+    "intent": "hoi_phong"
+   },
+   {
+    "code": "A_10",
+    "text": "Mình phải nhịn ăn trước khi xét nghiệm không?",
+    "intent": "khong_ho_tro"
+   },
+   {
+    "code": "A_11",
+    "text": "Bao lâu thì có kết quả xét nghiệm?",
+    "intent": "thoi_gian_cho"
+   },
+   {
+    "code": "A_12",
+    "text": "Lấy kết quả ở đâu vậy bạn?",
+    "intent": "hoi_phong"
+   },
+   {
+    "code": "A_13",
+    "text": "Đóng tiền viện phí ở quầy nào?",
+    "intent": "thanh_toan"
+   },
+   {
+    "code": "A_14",
+    "text": "Ở đây có thanh toán bằng chuyển khoản không?",
+    "intent": "thanh_toan"
+   },
+   {
+    "code": "A_15",
+    "text": "Nhà thuốc bệnh viện ở đâu?",
+    "intent": "nha_thuoc"
+   },
+   {
+    "code": "A_16",
+    "text": "Thang máy gần nhất ở đâu?",
+    "intent": "tien_ich"
+   },
+   {
+    "code": "A_17",
+    "text": "Cho mình hỏi nhà vệ sinh nam ở đâu?",
+    "intent": "tien_ich"
+   },
+   {
+    "code": "A_18",
+    "text": "Mình muốn gửi xe máy thì gửi ở đâu?",
+    "intent": "tien_ich"
+   },
+   {
+    "code": "A_19",
+    "text": "Bố mình bị đau ngực, khám tim mạch ở đâu?",
+    "intent": "hoi_khoa"
+   },
+   {
+    "code": "A_20",
+    "text": "Bố mình đi lại hơi khó, bệnh viện có cho mượn xe lăn không?",
+    "intent": "ho_tro_di_chuyen"
+   },
+   {
+    "code": "A_21",
+    "text": "Bạn dẫn bố con mình đến phòng siêu âm tim được không?",
+    "intent": "dan_duong"
+   },
+   {
+    "code": "A_22",
+    "text": "Đi chậm thôi nhé, bố mình đi không nhanh được.",
+    "intent": "dieu_chinh_toc_do"
+   },
+   {
+    "code": "A_23",
+    "text": "Khoan, dừng lại chút, bố mình mệt.",
+    "intent": "dung_lai"
+   },
+   {
+    "code": "A_24",
+    "text": "Được rồi, đi tiếp đi.",
+    "intent": "tiep_tuc"
+   },
+   {
+    "code": "A_25",
+    "text": "Bố mình đang khó thở quá, gọi bác sĩ giúp mình với!",
+    "intent": "cap_cuu"
+   },
+   {
+    "code": "A_26",
+    "text": "Khoa cấp cứu ở đâu?",
+    "intent": "cap_cuu"
+   },
+   {
+    "code": "A_27",
+    "text": "Mình muốn gặp nhân viên hướng dẫn.",
+    "intent": "gap_nhan_vien"
+   },
+   {
+    "code": "A_28",
+    "text": "Phòng điện tim là phòng mấy?",
+    "intent": "hoi_phong"
+   },
+   {
+    "code": "A_29",
+    "text": "Bây giờ còn bao nhiêu người nữa thì tới số của mình?",
+    "intent": "thoi_gian_cho"
+   },
+   {
+    "code": "A_30",
+    "text": "Ok, cảm ơn bạn nhiều nha.",
+    "intent": "cam_on"
+   }
+  ],
+  "B": [
+   {
+    "code": "B_01",
+    "text": "Dạ cho em hỏi lấy số khám bệnh ở đâu ạ?",
+    "intent": "dang_ky_kham"
+   },
+   {
+    "code": "B_02",
+    "text": "Em có đặt lịch khám online rồi thì đến quầy nào ạ?",
+    "intent": "dang_ky_kham"
+   },
+   {
+    "code": "B_03",
+    "text": "Thẻ bảo hiểm của em ở tỉnh khác thì có dùng được không ạ?",
+    "intent": "bao_hiem"
+   },
+   {
+    "code": "B_04",
+    "text": "Em bị sốt với đau họng thì khám khoa nào ạ?",
+    "intent": "hoi_khoa"
+   },
+   {
+    "code": "B_05",
+    "text": "Khoa tai mũi họng đi lối nào vậy ạ?",
+    "intent": "hoi_khoa"
+   },
+   {
+    "code": "B_06",
+    "text": "Phòng 112 ở tầng một hay tầng hai ạ?",
+    "intent": "hoi_phong"
+   },
+   {
+    "code": "B_07",
+    "text": "Chụp X-quang phổi ở đâu ạ?",
+    "intent": "hoi_phong"
+   },
+   {
+    "code": "B_08",
+    "text": "Em cần nộp phiếu chỉ định ở đâu ạ?",
+    "intent": "hoi_phong"
+   },
+   {
+    "code": "B_09",
+    "text": "Chỗ ngồi chờ khám ở đâu ạ?",
+    "intent": "tien_ich"
+   },
+   {
+    "code": "B_10",
+    "text": "Em có cần đeo khẩu trang không ạ?",
+    "intent": "khong_ho_tro"
+   },
+   {
+    "code": "B_11",
+    "text": "Em đợi lâu quá rồi mà chưa tới lượt, hỏi ai ạ?",
+    "intent": "gap_nhan_vien"
+   },
+   {
+    "code": "B_12",
+    "text": "Em muốn trả tiền bằng thẻ ngân hàng được không ạ?",
+    "intent": "thanh_toan"
+   },
+   {
+    "code": "B_13",
+    "text": "Lấy thuốc bảo hiểm ở đâu ạ?",
+    "intent": "nha_thuoc"
+   },
+   {
+    "code": "B_14",
+    "text": "Nhà vệ sinh nữ ở đâu ạ?",
+    "intent": "tien_ich"
+   },
+   {
+    "code": "B_15",
+    "text": "Ở đây có chỗ bán đồ ăn không ạ?",
+    "intent": "tien_ich"
+   },
+   {
+    "code": "B_16",
+    "text": "Bà em bị đau đầu gối, đi khám xương khớp ở đâu ạ?",
+    "intent": "hoi_khoa"
+   },
+   {
+    "code": "B_17",
+    "text": "Bà em lớn tuổi rồi, có quầy ưu tiên cho người già không ạ?",
+    "intent": "dang_ky_kham"
+   },
+   {
+    "code": "B_18",
+    "text": "Bà em nghe không rõ, bạn nói to hơn được không?",
+    "intent": "dieu_chinh_am_luong"
+   },
+   {
+    "code": "B_19",
+    "text": "Bạn nói lại lần nữa được không, em chưa nghe kịp.",
+    "intent": "nhac_lai"
+   },
+   {
+    "code": "B_20",
+    "text": "Bạn dẫn bà em tới khoa cơ xương khớp giúp em với.",
+    "intent": "dan_duong"
+   },
+   {
+    "code": "B_21",
+    "text": "Đi chậm chậm thôi bạn ơi.",
+    "intent": "dieu_chinh_toc_do"
+   },
+   {
+    "code": "B_22",
+    "text": "Bà em muốn ngồi nghỉ một chút.",
+    "intent": "dung_lai"
+   },
+   {
+    "code": "B_23",
+    "text": "Rồi, mình đi tiếp nha.",
+    "intent": "tiep_tuc"
+   },
+   {
+    "code": "B_24",
+    "text": "Có thang máy không, bà em không leo cầu thang được.",
+    "intent": "tien_ich"
+   },
+   {
+    "code": "B_25",
+    "text": "Bà em bị chóng mặt, sắp ngã rồi, giúp em với!",
+    "intent": "cap_cuu"
+   },
+   {
+    "code": "B_26",
+    "text": "Phòng vật lý trị liệu ở đâu ạ?",
+    "intent": "hoi_phong"
+   },
+   {
+    "code": "B_27",
+    "text": "Khám xong thì quay lại chỗ bác sĩ để đọc kết quả hả bạn?",
+    "intent": "hoi_phong"
+   },
+   {
+    "code": "B_28",
+    "text": "Mấy giờ thì bệnh viện nghỉ trưa ạ?",
+    "intent": "thoi_gian_cho"
+   },
+   {
+    "code": "B_29",
+    "text": "Em không hiểu, bạn chỉ lại đường giúp em được không?",
+    "intent": "nhac_lai"
+   },
+   {
+    "code": "B_30",
+    "text": "Dạ em cảm ơn ạ.",
+    "intent": "cam_on"
+   }
+  ],
+  "T": [
+   {
+    "code": "T01",
+    "text": "Cho hỏi đặt lịch qua app rồi thì check-in ở đâu?",
+    "intent": "dang_ky_kham"
+   },
+   {
+    "code": "T02",
+    "text": "Con tôi bị ho mấy hôm nay, khám nhi ở tầng nào?",
+    "intent": "hoi_khoa"
+   },
+   {
+    "code": "T03",
+    "text": "Phòng tiêm chủng cho trẻ em ở đâu?",
+    "intent": "hoi_phong"
+   },
+   {
+    "code": "T04",
+    "text": "Vợ tôi đang mang bầu, khám thai ở khoa nào?",
+    "intent": "hoi_khoa"
+   },
+   {
+    "code": "T05",
+    "text": "Chỗ gửi ô tô ở đâu vậy em?",
+    "intent": "tien_ich"
+   },
+   {
+    "code": "T06",
+    "text": "Thanh toán bằng mã QR được không?",
+    "intent": "thanh_toan"
+   },
+   {
+    "code": "T07",
+    "text": "Lấy kết quả xét nghiệm ở quầy nào?",
+    "intent": "hoi_phong"
+   },
+   {
+    "code": "T08",
+    "text": "Tôi đi làm gấp, muốn khám nhanh thì đăng ký ở đâu?",
+    "intent": "dang_ky_kham"
+   },
+   {
+    "code": "T09",
+    "text": "Thẻ bảo hiểm trên ứng dụng VNeID dùng được không?",
+    "intent": "bao_hiem"
+   },
+   {
+    "code": "T10",
+    "text": "Phòng chụp cộng hưởng từ ở đâu?",
+    "intent": "hoi_phong"
+   },
+   {
+    "code": "T11",
+    "text": "Khoa da liễu đi lối nào?",
+    "intent": "hoi_khoa"
+   },
+   {
+    "code": "T12",
+    "text": "Dẫn hai mẹ con tôi lên khoa sản với.",
+    "intent": "dan_duong"
+   },
+   {
+    "code": "T13",
+    "text": "Từ từ thôi, vợ tôi đi không nhanh được.",
+    "intent": "dieu_chinh_toc_do"
+   },
+   {
+    "code": "T14",
+    "text": "Đợi chút, con tôi đang khóc.",
+    "intent": "dung_lai"
+   },
+   {
+    "code": "T15",
+    "text": "Ok, đi tiếp đi em.",
+    "intent": "tiep_tuc"
+   },
+   {
+    "code": "T16",
+    "text": "Có xe đẩy cho em bé không?",
+    "intent": "ho_tro_di_chuyen"
+   },
+   {
+    "code": "T17",
+    "text": "Phòng cho con bú ở đâu?",
+    "intent": "tien_ich"
+   },
+   {
+    "code": "T18",
+    "text": "Con tôi đang co giật, gọi bác sĩ gấp!",
+    "intent": "cap_cuu"
+   },
+   {
+    "code": "T19",
+    "text": "Bé nhà tôi uống thuốc hạ sốt mấy lần một ngày?",
+    "intent": "khong_ho_tro"
+   },
+   {
+    "code": "T20",
+    "text": "Chờ khám nhi khoảng bao lâu nữa?",
+    "intent": "thoi_gian_cho"
+   },
+   {
+    "code": "T21",
+    "text": "Tôi muốn gặp nhân viên chăm sóc khách hàng.",
+    "intent": "gap_nhan_vien"
+   },
+   {
+    "code": "T22",
+    "text": "Nói to lên chút, ở đây ồn quá.",
+    "intent": "dieu_chinh_am_luong"
+   },
+   {
+    "code": "T23",
+    "text": "Phòng 410 là phòng gì vậy?",
+    "intent": "hoi_phong"
+   },
+   {
+    "code": "T24",
+    "text": "Nhà thuốc có bán sữa cho trẻ sơ sinh không?",
+    "intent": "nha_thuoc"
+   },
+   {
+    "code": "T25",
+    "text": "Cảm ơn em nhé.",
+    "intent": "cam_on"
+   }
+  ],
+  "N": [
+   {
+    "code": "N01",
+    "text": "Tôi đến tái khám theo lịch hẹn thì vào quầy nào?",
+    "intent": "dang_ky_kham"
+   },
+   {
+    "code": "N02",
+    "text": "Tôi bị tiểu đường, khám nội tiết ở đâu?",
+    "intent": "hoi_khoa"
+   },
+   {
+    "code": "N03",
+    "text": "Đo huyết áp ở chỗ nào?",
+    "intent": "hoi_phong"
+   },
+   {
+    "code": "N04",
+    "text": "Khoa mắt ở tầng mấy cháu?",
+    "intent": "hoi_khoa"
+   },
+   {
+    "code": "N05",
+    "text": "Thẻ bảo hiểm của tôi sắp hết hạn, gia hạn ở đâu?",
+    "intent": "bao_hiem"
+   },
+   {
+    "code": "N06",
+    "text": "Bảo hiểm có chi trả tiền thuốc này không?",
+    "intent": "bao_hiem"
+   },
+   {
+    "code": "N07",
+    "text": "Tôi cần chụp X-quang cột sống, đi đường nào?",
+    "intent": "hoi_phong"
+   },
+   {
+    "code": "N08",
+    "text": "Lấy máu xét nghiệm đường huyết ở phòng nào?",
+    "intent": "hoi_phong"
+   },
+   {
+    "code": "N09",
+    "text": "Tôi phải nhịn đói bao lâu thì xét nghiệm được?",
+    "intent": "khong_ho_tro"
+   },
+   {
+    "code": "N10",
+    "text": "Đóng tiền tạm ứng ở đâu?",
+    "intent": "thanh_toan"
+   },
+   {
+    "code": "N11",
+    "text": "Nhà thuốc bảo hiểm mở cửa đến mấy giờ?",
+    "intent": "nha_thuoc"
+   },
+   {
+    "code": "N12",
+    "text": "Khoa thận ở khu nào?",
+    "intent": "hoi_khoa"
+   },
+   {
+    "code": "N13",
+    "text": "Cháu dẫn bác lên khoa nội tiết với.",
+    "intent": "dan_duong"
+   },
+   {
+    "code": "N14",
+    "text": "Đi chậm thôi cháu, bác bị đau chân.",
+    "intent": "dieu_chinh_toc_do"
+   },
+   {
+    "code": "N15",
+    "text": "Cho bác nghỉ một lát.",
+    "intent": "dung_lai"
+   },
+   {
+    "code": "N16",
+    "text": "Rồi, đi tiếp.",
+    "intent": "tiep_tuc"
+   },
+   {
+    "code": "N17",
+    "text": "Cháu nói lại chậm chậm cho bác nghe với.",
+    "intent": "nhac_lai"
+   },
+   {
+    "code": "N18",
+    "text": "Có ghế ngồi chờ gần đây không?",
+    "intent": "tien_ich"
+   },
+   {
+    "code": "N19",
+    "text": "Thang máy ở đâu, bác không leo cầu thang nổi.",
+    "intent": "tien_ich"
+   },
+   {
+    "code": "N20",
+    "text": "Tôi tức ngực, khó thở quá.",
+    "intent": "cap_cuu"
+   },
+   {
+    "code": "N21",
+    "text": "Đợi lâu quá, tôi muốn hỏi nhân viên.",
+    "intent": "gap_nhan_vien"
+   },
+   {
+    "code": "N22",
+    "text": "Mấy giờ thì có kết quả?",
+    "intent": "thoi_gian_cho"
+   },
+   {
+    "code": "N23",
+    "text": "Có cho mượn xe lăn không cháu?",
+    "intent": "ho_tro_di_chuyen"
+   },
+   {
+    "code": "N24",
+    "text": "Phòng siêu âm tuyến giáp ở đâu?",
+    "intent": "hoi_phong"
+   },
+   {
+    "code": "N25",
+    "text": "Cảm ơn cháu nhiều.",
+    "intent": "cam_on"
+   }
+  ],
+  "G": [
+   {
+    "code": "G01",
+    "text": "Cháu ơi, khám bệnh ở đâu?",
+    "intent": "dang_ky_kham"
+   },
+   {
+    "code": "G02",
+    "text": "Bác đau lưng, khám ở khoa nào?",
+    "intent": "hoi_khoa"
+   },
+   {
+    "code": "G03",
+    "text": "Phòng khám người già ở đâu?",
+    "intent": "hoi_khoa"
+   },
+   {
+    "code": "G04",
+    "text": "Bác không nghe rõ, nói to lên.",
+    "intent": "dieu_chinh_am_luong"
+   },
+   {
+    "code": "G05",
+    "text": "Nói lại cho bác nghe.",
+    "intent": "nhac_lai"
+   },
+   {
+    "code": "G06",
+    "text": "Cháu đưa bác đi với.",
+    "intent": "dan_duong"
+   },
+   {
+    "code": "G07",
+    "text": "Đi chậm thôi cháu.",
+    "intent": "dieu_chinh_toc_do"
+   },
+   {
+    "code": "G08",
+    "text": "Đứng lại, bác mỏi chân.",
+    "intent": "dung_lai"
+   },
+   {
+    "code": "G09",
+    "text": "Ừ, đi tiếp.",
+    "intent": "tiep_tuc"
+   },
+   {
+    "code": "G10",
+    "text": "Có xe lăn không cháu?",
+    "intent": "ho_tro_di_chuyen"
+   },
+   {
+    "code": "G11",
+    "text": "Nhà vệ sinh đâu cháu?",
+    "intent": "tien_ich"
+   },
+   {
+    "code": "G12",
+    "text": "Bác ngồi đâu chờ được?",
+    "intent": "tien_ich"
+   },
+   {
+    "code": "G13",
+    "text": "Bác quên thẻ bảo hiểm rồi.",
+    "intent": "bao_hiem"
+   },
+   {
+    "code": "G14",
+    "text": "Lấy thuốc ở đâu?",
+    "intent": "nha_thuoc"
+   },
+   {
+    "code": "G15",
+    "text": "Trả tiền ở chỗ nào?",
+    "intent": "thanh_toan"
+   },
+   {
+    "code": "G16",
+    "text": "Con cháu bác đâu mất rồi, gọi giúp bác.",
+    "intent": "gap_nhan_vien"
+   },
+   {
+    "code": "G17",
+    "text": "Bác chóng mặt quá, muốn ngã.",
+    "intent": "cap_cuu"
+   },
+   {
+    "code": "G18",
+    "text": "Thuốc này bác uống lúc no hay lúc đói?",
+    "intent": "khong_ho_tro"
+   },
+   {
+    "code": "G19",
+    "text": "Bao giờ đến lượt bác?",
+    "intent": "thoi_gian_cho"
+   },
+   {
+    "code": "G20",
+    "text": "Cảm ơn cháu nhé.",
+    "intent": "cam_on"
+   }
+  ]
+ },
+ "subjects": {
+  "M10": {
+   "gender": "Nam",
+   "age": 10,
+   "script": "K"
+  },
+  "F10": {
+   "gender": "Nữ",
+   "age": 10,
+   "script": "K"
+  },
+  "A": {
+   "gender": "Nam",
+   "age": 20,
+   "script": "A"
+  },
+  "B": {
+   "gender": "Nữ",
+   "age": 20,
+   "script": "B"
+  },
+  "M30": {
+   "gender": "Nam",
+   "age": 30,
+   "script": "T"
+  },
+  "F30": {
+   "gender": "Nữ",
+   "age": 30,
+   "script": "T"
+  },
+  "M50": {
+   "gender": "Nam",
+   "age": 50,
+   "script": "N"
+  },
+  "F50": {
+   "gender": "Nữ",
+   "age": 50,
+   "script": "N"
+  },
+  "M80": {
+   "gender": "Nam",
+   "age": 80,
+   "script": "G"
+  },
+  "F80": {
+   "gender": "Nữ",
+   "age": 80,
+   "script": "G"
+  }
+ }
+}

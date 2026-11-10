@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-PROJECT_ROOT: Path = Path(os.environ.get("PROJECT_ROOT", "/Users/quangmanh/Project/Data-Science-Major-Project"))
+PROJECT_ROOT: Path = Path(os.environ.get("PROJECT_ROOT", str(Path(__file__).resolve().parents[3])))
 VIENEU_DIR: Path = PROJECT_ROOT / "models" / "Vie-neu-v3-turbo"
 VIENEU_ONNX_SUBDIR: str = "onnx_update"            # fp32 (int8 cần CPU có VNNI, Apple Silicon không có)
 MOSS_CODEC_DIR: Path = PROJECT_ROOT / "models" / "MOSS-Audio-Tokenizer-Nano"

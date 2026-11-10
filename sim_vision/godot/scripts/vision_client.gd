@@ -67,6 +67,9 @@ func _try_connect(now: int) -> void:
 
 
 func _send_frame(now: int) -> void:
+	if not _connected or _ws == null or _ws.get_ready_state() != WebSocketPeer.STATE_OPEN:
+		_set_connected(false)
+		return
 	var img: Image = _viewport.get_texture().get_image()
 	if img == null or img.is_empty():
 		return
@@ -76,7 +79,7 @@ func _send_frame(now: int) -> void:
 	}
 	var err: Error = _ws.send_text(JSON.stringify(msg))
 	if err != OK:
-		push_warning("VisionClient: send failed: %s" % error_string(err))
+		_set_connected(false)
 		return
 	record_sent(_next_id, now)
 	_next_id += 1
@@ -158,8 +161,18 @@ static func parse_message(text: String) -> Dictionary:
 	for d: Variant in m["detections"]:
 		if VisionClient.is_valid_detection(d):
 			var dd := d as Dictionary
-			dets.append({"x1": float(dd["x1"]), "y1": float(dd["y1"]), "x2": float(dd["x2"]),
-					"y2": float(dd["y2"]), "conf": float(dd["conf"])})
+			var item: Dictionary = {
+				"x1": float(dd["x1"]),
+				"y1": float(dd["y1"]),
+				"x2": float(dd["x2"]),
+				"y2": float(dd["y2"]),
+				"conf": float(dd["conf"]),
+			}
+			if dd.has("class_id"):
+				item["class_id"] = int(dd["class_id"])
+			if dd.has("class_name"):
+				item["class_name"] = str(dd["class_name"])
+			dets.append(item)
 	out["ok"] = true
 	out["dets"] = dets
 	out["infer_ms"] = float(m["infer_ms"])

@@ -34,6 +34,15 @@ func test_parse_valid_with_detection() -> void:
 	assert_almost_eq(r["dets"][0]["x2"], 0.58, 1e-6)
 
 
+func test_parse_preserves_class_id_and_class_name() -> void:
+	var multi_det: String = '{"x1":0.1,"y1":0.2,"x2":0.3,"y2":0.4,"conf":0.95,"class_id":1,"class_name":"doctor"}'
+	var r: Dictionary = VisionClient.parse_message(_msg(7, "[" + multi_det + "]"))
+	assert_true(r["ok"])
+	assert_eq(r["dets"].size(), 1)
+	assert_eq(r["dets"][0]["class_id"], 1)
+	assert_eq(r["dets"][0]["class_name"], "doctor")
+
+
 func test_parse_example_detections_string() -> void:
 	var r: Dictionary = VisionClient.parse_message('{"detections":"abc"}')
 	assert_false(r["ok"])

@@ -1,1 +1,1 @@
-"""Training layer: script-only training loop, logging, and CLI entry points."""
+"""Training scripts and environments for the Hospital Helper Robot."""

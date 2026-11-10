@@ -86,7 +86,9 @@ func test_norm_to_pixel_full_frame() -> void:
 
 
 func test_overlay_texts() -> void:
-	assert_eq(ViewOverlay.label_text({"conf": 0.87}), "person 0.87")
+	assert_eq(ViewOverlay.label_text({"conf": 0.87, "class_name": "patient"}), "patient 0.87")
+	assert_eq(ViewOverlay.label_text({"conf": 0.95, "class_name": "doctor"}), "doctor 0.95")
+	assert_eq(ViewOverlay.label_text({"conf": 0.82, "class_name": "wheelchair"}), "wheelchair 0.82")
 	assert_eq(ViewOverlay.connection_text(true), "YOLO: đã kết nối")
 	assert_eq(ViewOverlay.connection_text(false), "YOLO: mất kết nối")
 
@@ -101,3 +103,45 @@ func test_overlay_layout_top_right() -> void:
 	overlay.show_detections([{"x1": 0.25, "y1": 0.25, "x2": 0.75, "y2": 0.75, "conf": 0.87}], "SEARCH", true)
 	await wait_process_frames(2)
 	pass_test("show_detections không lỗi")
+
+
+func test_depth_readings_see_wall_and_respect_ignore() -> void:
+	# V2 depth fan: 15 tia trái -> phải, tối đa 4 m; tia giữa thấy tường cách tâm robot 1.0 m.
+	var robot := RobotScene.instantiate() as Robot
+	robot.position = Vector3(80, 0, 0)
+	add_child_autofree(robot)
+	var wall := StaticBody3D.new()
+	var cs := CollisionShape3D.new()
+	var box := BoxShape3D.new()
+	box.size = Vector3(0.6, 2, 0.2)
+	cs.shape = box
+	wall.add_child(cs)
+	add_child_autofree(wall)
+	wall.position = Vector3(80, 0.5, -1.1)  # mặt tường ở z = -1.0
+	await wait_physics_frames(3)
+	var d: PackedFloat32Array = robot.get_depth_readings()
+	assert_eq(d.size(), Robot.DEPTH_NUM_RAYS)
+	assert_almost_eq(d[7], 1.0, 0.02)
+	assert_almost_eq(d[0], Robot.DEPTH_MAX_RANGE, 1e-3)  # tia trái ngoài cùng không chạm
+	robot.depth_ignore = wall  # người đang được theo dõi bị che khỏi depth
+	assert_almost_eq(robot.get_depth_readings()[7], Robot.DEPTH_MAX_RANGE, 1e-3)
+
+
+func test_no_hardcoded_escape_when_blocked() -> void:
+	# Bỏ D-071: kẹt vào tường thì robot KHÔNG tự lùi/xoay; chỉ chạy theo lệnh (v, omega).
+	var robot := RobotScene.instantiate() as Robot
+	robot.position = Vector3(110, 0, 0)
+	add_child_autofree(robot)
+	var wall := StaticBody3D.new()
+	var cs := CollisionShape3D.new()
+	var box := BoxShape3D.new()
+	box.size = Vector3(2, 2, 0.2)
+	cs.shape = box
+	wall.add_child(cs)
+	add_child_autofree(wall)
+	wall.position = Vector3(110, 0.5, -0.5)
+	var yaw0: float = robot.rotation.y
+	robot.set_command(0.5, 0.0)
+	await wait_seconds(1.5)
+	assert_almost_eq(robot.rotation.y, yaw0, 1e-4)
+	assert_lt(robot.global_position.z, 0.01)  # không bị đẩy lùi về +Z

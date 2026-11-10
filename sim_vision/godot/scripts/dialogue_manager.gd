@@ -36,6 +36,8 @@ var clarify_count: int = 0
 var used_clips: Array[String] = []
 
 var _start_ms: int = 0
+var active_npc: Npc = null
+var _registered_npcs: Array[Npc] = []
 var _reply: Dictionary = {}         # transcript đang trả lời
 var _row: Dictionary = {}           # dòng log chờ kết quả TTS
 
@@ -51,10 +53,9 @@ var _row: Dictionary = {}           # dòng log chờ kết quả TTS
 func _ready() -> void:
 	_start_ms = Time.get_ticks_msec()
 	# Main chưa _ready (con _ready trước cha) ➔ lấy Robot bằng get_node, đọc main.state lúc gọi.
+	active_npc = npc
 	npc.setup(main.get_node(^"Robot"), func() -> int: return main.state)
-	npc.talk_started.connect(_on_talk_started)
-	npc.talk_aborted.connect(_on_talk_aborted)
-	npc.utterance_finished.connect(_on_utterance_finished)
+	register_npc(npc)
 	stt.transcript_received.connect(_on_transcript)
 	stt.error_received.connect(_on_stt_error)
 	stt.connection_changed.connect(_on_stt_connection_changed)
@@ -95,6 +96,10 @@ func reset() -> void:
 	action = ""
 	clarify_count = 0
 	used_clips.clear()
+	for n: Npc in _registered_npcs:
+		if is_instance_valid(n):
+			n.reset()
+	active_npc = npc
 	if voice != null and voice.speaking:
 		voice.speaking = false            # không phát finished_speaking cho lượt đã hủy
 		voice.stop()
@@ -147,7 +152,13 @@ func build_log_row(r: Dictionary, error: String) -> Dictionary:
 
 
 func _on_talk_started(clip_id: String) -> void:
-	if main.state == Config.RobotState.ARRIVED:
+	if main != null and (main.is_task_busy() or Main.is_dialogue_state(main.state)):
+		return
+	print("[ESCORT_DEBUG] >>> NPC talk started: clip_id='%s', robot_state=%s" % [clip_id, Config.state_name(main.state)])
+	if main.state == Config.RobotState.ARRIVED or main.state in [Config.RobotState.APPROACH, Config.RobotState.SEARCH]:
+		var r_node: Node3D = main.get_node_or_null(^"Robot")
+		if r_node != null and r_node.has_method("set_command"):
+			r_node.set_command(0.0, 0.0)
 		clarify_count = 0
 		used_clips = [clip_id]
 		main.overlay.set_alert("")
@@ -161,9 +172,12 @@ func _on_talk_aborted(_clip_id: String) -> void:
 
 
 func _on_utterance_finished(clip_id: String) -> void:
+	if main.state != Config.RobotState.LISTEN:
+		return
 	utt_id += 1
 	pending_clip = clip_id
-	sent_distance_m = Human.flat_distance(main.get_node(^"Robot").global_position, npc.human.global_position)
+	var speaker_node: Node3D = active_npc.human if (active_npc != null and active_npc.human != null) else npc.human
+	sent_distance_m = Human.flat_distance(main.get_node(^"Robot").global_position, speaker_node.global_position)
 	main.set_dialogue_state(Config.RobotState.THINK)
 	deadline_ms = Time.get_ticks_msec() + int(Config.STT_TIMEOUT_S * 1000.0)
 	if not stt.send_utterance(utt_id, clip_id, sent_distance_m, snr_db, noise):
@@ -260,11 +274,13 @@ func _on_subtitle_finished() -> void:
 
 ## Robot nói xong. clarify ➔ người bệnh nói lại bằng clip khác take (tối đa MAX_CLARIFY lần), không thì kết thúc.
 func _after_response() -> void:
-	if action == "clarify" and clarify_count < Config.MAX_CLARIFY:
-		var alt: String = Npc.alternate_clip(npc.get_clips(), pending_clip, used_clips)
+	var target_npc: Npc = active_npc if active_npc != null else npc
+	var is_escort_only: bool = bool(main.get("escort_only_mode")) if main != null and "escort_only_mode" in main else false
+	if action == "clarify" and clarify_count < Config.MAX_CLARIFY and not is_escort_only:
+		var alt: String = Npc.alternate_clip(target_npc.get_clips(), pending_clip, used_clips)
 		if alt != "":
 			main.set_dialogue_state(Config.RobotState.LISTEN)
-			if npc.say_again(alt):
+			if target_npc.say_again(alt):
 				clarify_count += 1
 				used_clips.append(alt)
 				return
@@ -282,10 +298,42 @@ func _fail(error: String) -> void:
 func _finish() -> void:
 	action = ""
 	main.set_dialogue_state(Config.RobotState.ARRIVED)
-	npc.on_reply_shown()
+	if active_npc != null:
+		active_npc.on_reply_shown()
+	else:
+		npc.on_reply_shown()
 
 
 func _log(row: Dictionary) -> void:
 	if logger != null:
 		logger.log_row(row)
 	turn_completed.emit(row)
+
+func register_npc(other_npc: Npc) -> void:
+	if other_npc == null or _registered_npcs.has(other_npc):
+		return
+	_registered_npcs.append(other_npc)
+	other_npc.talk_started.connect(func(clip_id: String) -> void:
+		if main != null and (main.is_task_busy() or Main.is_dialogue_state(main.state)):
+			return
+		if active_npc != null and active_npc != other_npc and Main.is_dialogue_state(main.state):
+			return
+		active_npc = other_npc
+		_on_talk_started(clip_id)
+	)
+	other_npc.talk_aborted.connect(func(clip_id: String) -> void:
+		if active_npc != other_npc:
+			return
+		_on_talk_aborted(clip_id)
+	)
+	other_npc.utterance_finished.connect(func(clip_id: String) -> void:
+		if active_npc != other_npc:
+			return
+		_on_utterance_finished(clip_id)
+	)
+
+
+func show_subtitle(speaker: String, text: String, duration: float = Config.SUBTITLE_S) -> void:
+	if subtitle != null:
+		var line: String = "%s: %s" % [speaker, text] if speaker != "" else text
+		subtitle.show_reply("", line, duration)

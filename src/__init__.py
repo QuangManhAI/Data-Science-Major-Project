@@ -1,1 +1,1 @@
-"""Core package for the deep-learning pipeline."""
+"""Hospital Helper Robot RL training & evaluation package."""

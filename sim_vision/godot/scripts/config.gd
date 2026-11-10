@@ -5,7 +5,7 @@ extends RefCounted
 ## Tên và giá trị phải khớp đúng file kế hoạch; không thêm hằng số ngoài kế hoạch ở đây.
 
 const WS_URL: String = "ws://127.0.0.1:8765"
-const CAPTURE_HZ: int = 5
+const CAPTURE_HZ: int = 30
 const IMG_W: int = 640
 const IMG_H: int = 480
 const JPEG_QUALITY: float = 0.8

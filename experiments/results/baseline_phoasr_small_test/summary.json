@@ -1,0 +1,542 @@
+{
+ "model": "/Users/quangmanh/Project/Data-Science-Major-Project/models/PhoASR-whisper-small",
+ "split": "test",
+ "device": "mps",
+ "num_beams": 1,
+ "rtf": 0.0537,
+ "overall": {
+  "n": 405,
+  "minutes": 26.2,
+  "wer": 0.1905,
+  "cer": 0.129,
+  "sub": 475,
+  "dele": 87,
+  "ins": 74,
+  "ref_words": 3338,
+  "sent_acc": 0.4123
+ },
+ "macro_wer_by_speaker": 0.1789,
+ "macro_cer_by_speaker": 0.1174,
+ "by_speaker": {
+  "APP_1603b1": {
+   "n": 80,
+   "minutes": 5.0,
+   "wer": 0.1912,
+   "cer": 0.1409,
+   "sub": 72,
+   "dele": 11,
+   "ins": 52,
+   "ref_words": 706,
+   "sent_acc": 0.325
+  },
+  "LH_A3": {
+   "n": 80,
+   "minutes": 3.6,
+   "wer": 0.4745,
+   "cer": 0.3216,
+   "sub": 261,
+   "dele": 46,
+   "ins": 9,
+   "ref_words": 666,
+   "sent_acc": 0.1
+  },
+  "LH_B2": {
+   "n": 80,
+   "minutes": 5.6,
+   "wer": 0.0524,
+   "cer": 0.0368,
+   "sub": 20,
+   "dele": 11,
+   "ins": 6,
+   "ref_words": 706,
+   "sent_acc": 0.6375
+  },
+  "LH_F30_01": {
+   "n": 70,
+   "minutes": 5.7,
+   "wer": 0.1101,
+   "cer": 0.0639,
+   "sub": 50,
+   "dele": 8,
+   "ins": 1,
+   "ref_words": 536,
+   "sent_acc": 0.4857
+  },
+  "LH_M30": {
+   "n": 70,
+   "minutes": 4.6,
+   "wer": 0.1231,
+   "cer": 0.0722,
+   "sub": 55,
+   "dele": 10,
+   "ins": 1,
+   "ref_words": 536,
+   "sent_acc": 0.5143
+  },
+  "PU_M10": {
+   "n": 25,
+   "minutes": 1.8,
+   "wer": 0.1223,
+   "cer": 0.0689,
+   "sub": 17,
+   "dele": 1,
+   "ins": 5,
+   "ref_words": 188,
+   "sent_acc": 0.48
+  }
+ },
+ "by_group": {
+  "Nam 20": {
+   "n": 80,
+   "minutes": 3.6,
+   "wer": 0.4745,
+   "cer": 0.3216,
+   "sub": 261,
+   "dele": 46,
+   "ins": 9,
+   "ref_words": 666,
+   "sent_acc": 0.1
+  },
+  "Nam 30": {
+   "n": 70,
+   "minutes": 4.6,
+   "wer": 0.1231,
+   "cer": 0.0722,
+   "sub": 55,
+   "dele": 10,
+   "ins": 1,
+   "ref_words": 536,
+   "sent_acc": 0.5143
+  },
+  "Nữ 20": {
+   "n": 160,
+   "minutes": 10.6,
+   "wer": 0.1218,
+   "cer": 0.0889,
+   "sub": 92,
+   "dele": 22,
+   "ins": 58,
+   "ref_words": 1412,
+   "sent_acc": 0.4813
+  },
+  "Nữ 30": {
+   "n": 70,
+   "minutes": 5.7,
+   "wer": 0.1101,
+   "cer": 0.0639,
+   "sub": 50,
+   "dele": 8,
+   "ins": 1,
+   "ref_words": 536,
+   "sent_acc": 0.4857
+  },
+  "trẻ em": {
+   "n": 25,
+   "minutes": 1.8,
+   "wer": 0.1223,
+   "cer": 0.0689,
+   "sub": 17,
+   "dele": 1,
+   "ins": 5,
+   "ref_words": 188,
+   "sent_acc": 0.48
+  }
+ },
+ "by_mode": {
+  "n": {
+   "n": 190,
+   "minutes": 12.1,
+   "wer": 0.2546,
+   "cer": 0.1796,
+   "sub": 287,
+   "dele": 57,
+   "ins": 57,
+   "ref_words": 1575,
+   "sent_acc": 0.3421
+  },
+  "r": {
+   "n": 215,
+   "minutes": 14.0,
+   "wer": 0.1333,
+   "cer": 0.0838,
+   "sub": 188,
+   "dele": 30,
+   "ins": 17,
+   "ref_words": 1763,
+   "sent_acc": 0.4744
+  }
+ },
+ "by_heldout_text": {
+  "False": {
+   "n": 341,
+   "minutes": 22.0,
+   "wer": 0.1859,
+   "cer": 0.1255,
+   "sub": 393,
+   "dele": 61,
+   "ins": 67,
+   "ref_words": 2802,
+   "sent_acc": 0.437
+  },
+  "True": {
+   "n": 64,
+   "minutes": 4.2,
+   "wer": 0.2146,
+   "cer": 0.1475,
+   "sub": 82,
+   "dele": 26,
+   "ins": 7,
+   "ref_words": 536,
+   "sent_acc": 0.2812
+  }
+ },
+ "by_snr": {
+  "<30": {
+   "n": 80,
+   "minutes": 3.6,
+   "wer": 0.4745,
+   "cer": 0.3216,
+   "sub": 261,
+   "dele": 46,
+   "ins": 9,
+   "ref_words": 666,
+   "sent_acc": 0.1
+  },
+  "30-45": {
+   "n": 36,
+   "minutes": 2.4,
+   "wer": 0.1182,
+   "cer": 0.0891,
+   "sub": 23,
+   "dele": 6,
+   "ins": 12,
+   "ref_words": 347,
+   "sent_acc": 0.4167
+  },
+  "45-60": {
+   "n": 137,
+   "minutes": 9.1,
+   "wer": 0.1228,
+   "cer": 0.0876,
+   "sub": 79,
+   "dele": 19,
+   "ins": 46,
+   "ref_words": 1173,
+   "sent_acc": 0.4891
+  },
+  ">60": {
+   "n": 152,
+   "minutes": 11.1,
+   "wer": 0.1172,
+   "cer": 0.0675,
+   "sub": 112,
+   "dele": 16,
+   "ins": 7,
+   "ref_words": 1152,
+   "sent_acc": 0.5066
+  }
+ },
+ "by_has_digit": {
+  "False": {
+   "n": 384,
+   "minutes": 24.8,
+   "wer": 0.1867,
+   "cer": 0.1239,
+   "sub": 449,
+   "dele": 62,
+   "ins": 73,
+   "ref_words": 3128,
+   "sent_acc": 0.4297
+  },
+  "True": {
+   "n": 21,
+   "minutes": 1.4,
+   "wer": 0.2476,
+   "cer": 0.204,
+   "sub": 26,
+   "dele": 25,
+   "ins": 1,
+   "ref_words": 210,
+   "sent_acc": 0.0952
+  }
+ },
+ "by_intent": {
+  "bao_hiem": {
+   "n": 12,
+   "minutes": 1.0,
+   "wer": 0.2431,
+   "cer": 0.157,
+   "sub": 28,
+   "dele": 5,
+   "ins": 2,
+   "ref_words": 144,
+   "sent_acc": 0.25
+  },
+  "cam_on": {
+   "n": 22,
+   "minutes": 1.2,
+   "wer": 0.0814,
+   "cer": 0.0355,
+   "sub": 6,
+   "dele": 1,
+   "ins": 0,
+   "ref_words": 86,
+   "sent_acc": 0.7273
+  },
+  "cap_cuu": {
+   "n": 13,
+   "minutes": 0.9,
+   "wer": 0.3171,
+   "cer": 0.2122,
+   "sub": 31,
+   "dele": 2,
+   "ins": 6,
+   "ref_words": 123,
+   "sent_acc": 0.1538
+  },
+  "dan_duong": {
+   "n": 22,
+   "minutes": 1.4,
+   "wer": 0.1959,
+   "cer": 0.1261,
+   "sub": 29,
+   "dele": 4,
+   "ins": 5,
+   "ref_words": 194,
+   "sent_acc": 0.4091
+  },
+  "dang_ky_kham": {
+   "n": 24,
+   "minutes": 2.0,
+   "wer": 0.1345,
+   "cer": 0.0832,
+   "sub": 32,
+   "dele": 1,
+   "ins": 6,
+   "ref_words": 290,
+   "sent_acc": 0.3333
+  },
+  "dieu_chinh_am_luong": {
+   "n": 8,
+   "minutes": 0.6,
+   "wer": 0.1974,
+   "cer": 0.1096,
+   "sub": 12,
+   "dele": 1,
+   "ins": 2,
+   "ref_words": 76,
+   "sent_acc": 0.375
+  },
+  "dieu_chinh_toc_do": {
+   "n": 22,
+   "minutes": 1.4,
+   "wer": 0.1678,
+   "cer": 0.1239,
+   "sub": 14,
+   "dele": 8,
+   "ins": 2,
+   "ref_words": 143,
+   "sent_acc": 0.5909
+  },
+  "dung_lai": {
+   "n": 10,
+   "minutes": 0.6,
+   "wer": 0.3485,
+   "cer": 0.2057,
+   "sub": 21,
+   "dele": 1,
+   "ins": 1,
+   "ref_words": 66,
+   "sent_acc": 0.3
+  },
+  "gap_nhan_vien": {
+   "n": 23,
+   "minutes": 1.4,
+   "wer": 0.1722,
+   "cer": 0.126,
+   "sub": 21,
+   "dele": 4,
+   "ins": 6,
+   "ref_words": 180,
+   "sent_acc": 0.4783
+  },
+  "ho_tro_di_chuyen": {
+   "n": 6,
+   "minutes": 0.4,
+   "wer": 0.2143,
+   "cer": 0.1262,
+   "sub": 11,
+   "dele": 1,
+   "ins": 0,
+   "ref_words": 56,
+   "sent_acc": 0.5
+  },
+  "hoi_khoa": {
+   "n": 54,
+   "minutes": 3.6,
+   "wer": 0.1922,
+   "cer": 0.1154,
+   "sub": 73,
+   "dele": 9,
+   "ins": 7,
+   "ref_words": 463,
+   "sent_acc": 0.2963
+  },
+  "hoi_phong": {
+   "n": 69,
+   "minutes": 4.5,
+   "wer": 0.2197,
+   "cer": 0.1571,
+   "sub": 96,
+   "dele": 28,
+   "ins": 10,
+   "ref_words": 610,
+   "sent_acc": 0.3043
+  },
+  "khong_ho_tro": {
+   "n": 11,
+   "minutes": 0.8,
+   "wer": 0.1667,
+   "cer": 0.1183,
+   "sub": 14,
+   "dele": 2,
+   "ins": 1,
+   "ref_words": 102,
+   "sent_acc": 0.6364
+  },
+  "nha_thuoc": {
+   "n": 21,
+   "minutes": 1.2,
+   "wer": 0.1694,
+   "cer": 0.1109,
+   "sub": 13,
+   "dele": 4,
+   "ins": 4,
+   "ref_words": 124,
+   "sent_acc": 0.5714
+  },
+  "nhac_lai": {
+   "n": 9,
+   "minutes": 0.6,
+   "wer": 0.1771,
+   "cer": 0.1235,
+   "sub": 10,
+   "dele": 3,
+   "ins": 4,
+   "ref_words": 96,
+   "sent_acc": 0.2222
+  },
+  "thanh_toan": {
+   "n": 23,
+   "minutes": 1.3,
+   "wer": 0.2264,
+   "cer": 0.1516,
+   "sub": 28,
+   "dele": 2,
+   "ins": 6,
+   "ref_words": 159,
+   "sent_acc": 0.3478
+  },
+  "thoi_gian_cho": {
+   "n": 12,
+   "minutes": 0.7,
+   "wer": 0.19,
+   "cer": 0.1274,
+   "sub": 17,
+   "dele": 2,
+   "ins": 0,
+   "ref_words": 100,
+   "sent_acc": 0.3333
+  },
+  "tien_ich": {
+   "n": 34,
+   "minutes": 2.1,
+   "wer": 0.1268,
+   "cer": 0.1056,
+   "sub": 18,
+   "dele": 8,
+   "ins": 9,
+   "ref_words": 276,
+   "sent_acc": 0.5294
+  },
+  "tiep_tuc": {
+   "n": 10,
+   "minutes": 0.6,
+   "wer": 0.1,
+   "cer": 0.0934,
+   "sub": 1,
+   "dele": 1,
+   "ins": 3,
+   "ref_words": 50,
+   "sent_acc": 0.8
+  }
+ },
+ "r_only_by_speaker": {
+  "APP_1603b1": {
+   "n": 40,
+   "minutes": 2.4,
+   "wer": 0.0567,
+   "cer": 0.0311,
+   "sub": 16,
+   "dele": 2,
+   "ins": 2,
+   "ref_words": 353,
+   "sent_acc": 0.6
+  },
+  "LH_A3": {
+   "n": 40,
+   "minutes": 1.9,
+   "wer": 0.3694,
+   "cer": 0.2413,
+   "sub": 106,
+   "dele": 13,
+   "ins": 4,
+   "ref_words": 333,
+   "sent_acc": 0.125
+  },
+  "LH_B2": {
+   "n": 40,
+   "minutes": 2.8,
+   "wer": 0.0595,
+   "cer": 0.0455,
+   "sub": 9,
+   "dele": 7,
+   "ins": 5,
+   "ref_words": 353,
+   "sent_acc": 0.6
+  },
+  "LH_F30_01": {
+   "n": 35,
+   "minutes": 2.8,
+   "wer": 0.1007,
+   "cer": 0.0528,
+   "sub": 21,
+   "dele": 5,
+   "ins": 1,
+   "ref_words": 268,
+   "sent_acc": 0.4857
+  },
+  "LH_M30": {
+   "n": 35,
+   "minutes": 2.4,
+   "wer": 0.0784,
+   "cer": 0.0407,
+   "sub": 19,
+   "dele": 2,
+   "ins": 0,
+   "ref_words": 268,
+   "sent_acc": 0.5714
+  },
+  "PU_M10": {
+   "n": 25,
+   "minutes": 1.8,
+   "wer": 0.1223,
+   "cer": 0.0689,
+   "sub": 17,
+   "dele": 1,
+   "ins": 5,
+   "ref_words": 188,
+   "sent_acc": 0.48
+  }
+ }
+}

@@ -7,7 +7,7 @@ dist/
 build/
 .eggs/
 .kilo
-
+*.csv
 
 # Data — raw/processed/external data stays local
 /data/raw/
@@ -24,6 +24,11 @@ build/
 !/data/nlu/seed.csv
 !/data/nlu/stats.md
 /data/tts_cache/
+
+# Voice datasets (audio, ~600 MB): HF dataset ManhQuangAI/voice_vietnamese + raw recordings
+# synced to MinIO major-be-fe/voice_finetune/. Rebuild with scripts/prepare_voice_dataset.py.
+/voice/
+/voice_finetune/
 
 # Large model binaries stay local (keep configs, tokenizers, and docs tracked)
 /models/**/*.safetensors
@@ -79,3 +84,8 @@ logs/
 .env.*
 *.tar.gz
 *.pt
+.claude/
+notebooks/gen_synth_tts_colab.ipynb
+docs/Bao Cao Clone Voice (1).docx
+sim_vision/godot/assets/sounds/hospital_ambience.wav
+sim_vision/godot/assets/sounds/monitor_beep.wav

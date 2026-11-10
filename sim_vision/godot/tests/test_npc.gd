@@ -190,3 +190,88 @@ func test_not_arrived_no_talk() -> void:
 	robot_state = S.APPROACH
 	await wait_process_frames(3)
 	assert_eq(npc.state, Npc.IDLE)
+
+
+func test_pick_intent_clip_matches_speaker_and_intent() -> void:
+	var clips: Dictionary = {
+		"A_01_n": {"speaker": "A", "intent": "hoi_phong"},
+		"A_30_n": {"speaker": "A", "intent": "cam_on"},
+		"B_30_n": {"speaker": "B", "intent": "cam_on"},
+	}
+	var rng := RandomNumberGenerator.new()
+	assert_eq(Npc.pick_intent_clip(clips, "B", "cam_on", rng), "B_30_n")
+	assert_eq(Npc.pick_intent_clip(clips, "A", "cam_on", rng), "A_30_n")
+
+
+func test_pick_intent_clip_falls_back_to_speaker_a_or_empty() -> void:
+	var clips: Dictionary = {"A_30_r": {"speaker": "A", "intent": "cam_on"}}
+	var rng := RandomNumberGenerator.new()
+	assert_eq(Npc.pick_intent_clip(clips, "B", "cam_on", rng), "A_30_r")
+	assert_eq(Npc.pick_intent_clip(clips, "A", "cap_cuu", rng), "")
+
+
+func test_pick_clip_keeps_one_voice_and_escort_flag() -> void:
+	var clips: Dictionary = {
+		"B01_B05_r": {"speaker": "B", "voice": "B01", "intent": "hoi_phong", "sentence_id": "B05", "take": "r", "escort_ok": true},
+		"B01_B06_r": {"speaker": "B", "voice": "B01", "intent": "hoi_khoa", "sentence_id": "B06", "take": "r", "escort_ok": false},
+		"B02_B05_r": {"speaker": "B", "voice": "B02", "intent": "hoi_phong", "sentence_id": "B05", "take": "r", "escort_ok": true},
+		"B01_B05_n": {"speaker": "B", "voice": "B01", "intent": "hoi_phong", "sentence_id": "B05", "take": "n", "escort_ok": true},
+	}
+	var rng := RandomNumberGenerator.new()
+	var used: Array[String] = []
+	for i: int in 20:
+		var id: String = Npc.pick_clip(clips, "B", used, rng, true, "B01")
+		assert_true(id.begins_with("B01_") and id != "B01_B06_r", "escort clip of voice B01, got %s" % id)
+	assert_eq(Npc.alternate_clip(clips, "B01_B05_r"), "B01_B05_n", "clarify retake stays in the same voice")
+	assert_eq(Npc.voices_of(clips, "B"), ["B01", "B02"] as Array[String])
+
+
+func test_old_clips_without_voice_keep_old_escort_rule() -> void:
+	assert_false(Npc.is_escort_clip({"intent": "hoi_khoa", "sentence_id": "05"}))
+	assert_true(Npc.is_escort_clip({"intent": "hoi_khoa", "sentence_id": "C01"}))
+	assert_true(Npc.voice_matches({"speaker": "A"}, "A"))
+
+
+func test_pick_free_voice_prefers_unused_then_least_used() -> void:
+	var rng := RandomNumberGenerator.new()
+	var vs: Array[String] = ["B01", "B02", "B03"]
+	var users: Dictionary = {}
+	var got: Dictionary = {}
+	for i: int in 3:
+		var v: String = Npc.pick_free_voice(vs, users, rng)
+		users[v] = int(users.get(v, 0)) + 1
+		got[v] = true
+	assert_eq(got.size(), 3, "three NPCs get three different voices")
+	users["B01"] = 2
+	assert_ne(Npc.pick_free_voice(vs, users, rng), "B01", "reuse goes to a least-used voice")
+
+
+## Được dẫn tới nơi: robot nghe ngay (talk_started), người bệnh quay lại từ từ rồi mới nói lời cảm ơn.
+func test_thanks_turns_back_slowly_before_speaking() -> void:
+	DirAccess.make_dir_recursive_absolute(TEST_DIR)
+	var wav := AudioStreamWAV.new()
+	wav.format = AudioStreamWAV.FORMAT_16_BITS
+	wav.mix_rate = 16000
+	var data := PackedByteArray()
+	data.resize(16000)
+	wav.data = data
+	wav.save_to_wav(TEST_DIR.path_join("A_30_r.wav"))
+	var f := FileAccess.open(TEST_DIR.path_join("clips.json"), FileAccess.WRITE)
+	f.store_string(JSON.stringify({"A_30_r": {"speaker": "A", "intent": "cam_on", "duration_s": 0.5}}))
+	f.close()
+	var parts: Array = _setup(Vector3(0.0, 0.0, -2.0))   # robot sau lưng: người bệnh nhìn +Z, robot ở −Z
+	var human: Human = parts[0]
+	var npc: Npc = parts[2]
+	human.rotation.y = 0.0
+	watch_signals(npc)
+	assert_eq(npc.say_intent("cam_on"), "A_30_r")
+	assert_signal_emitted(npc, "talk_started", "robot starts listening right away")
+	assert_true(npc.is_turning())
+	assert_false(npc.player.playing, "does not talk while still turning")
+	await wait_seconds(0.3)
+	var mid: float = absf(wrapf(human.rotation.y, -PI, PI))
+	assert_between(mid, 0.05, PI - 0.3, "turning gradually, not snapping (yaw %.2f)" % mid)
+	await wait_seconds(1.1)
+	assert_false(npc.is_turning())
+	assert_almost_eq(absf(wrapf(human.rotation.y, -PI, PI)), PI, 0.05, "now faces the robot")
+	assert_true(npc.player.playing, "says thanks after turning")

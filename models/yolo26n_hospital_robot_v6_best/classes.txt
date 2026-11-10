@@ -1,0 +1,17 @@
+patient
+doctor
+wheelchair
+queue_kiosk
+reception_counter
+sanitizer_stand
+pccc_station
+medical_waste_bin
+water_dispenser
+wc_station
+elevator_doors
+hospital_bed
+stretcher_cart
+iv_stand
+medical_trolley
+vital_monitor
+hospital_chair

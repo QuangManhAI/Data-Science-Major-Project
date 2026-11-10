@@ -3,7 +3,7 @@ extends GutTest
 
 func test_constants_match_contract() -> void:
 	assert_eq(Config.WS_URL, "ws://127.0.0.1:8765")
-	assert_eq(Config.CAPTURE_HZ, 5)
+	assert_eq(Config.CAPTURE_HZ, 30)
 	assert_eq(Config.IMG_W, 640)
 	assert_eq(Config.IMG_H, 480)
 	assert_almost_eq(Config.JPEG_QUALITY, 0.8, 1e-6)

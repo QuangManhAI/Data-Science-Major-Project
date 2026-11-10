@@ -143,7 +143,8 @@ class ClipStore:
     def babble_pool(self, clip_id: str) -> list[str]:
         """Clip của người khác; chưa có người khác ➔ clip cùng người nhưng khác câu."""
         me = self.manifest[clip_id]
-        others = [c for c, r in self.manifest.items() if r["speaker"] != me["speaker"]]
+        who = me.get("voice") or me["speaker"]   # voice = người nói cụ thể (nhiều người nữ cùng speaker "B")
+        others = [c for c, r in self.manifest.items() if (r.get("voice") or r["speaker"]) != who]
         return sorted(others or [c for c, r in self.manifest.items() if r["sentence_id"] != me["sentence_id"]])
 
     def noise_fn(self, clip_id: str) -> audio_sim.NoiseFn:
@@ -302,6 +303,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     from voice.transcriber import PhoWhisperTranscriber
 
+    log.info("Loading STT model (%s)...", Path(args.model).name)
     store = ClipStore(read_manifest(manifest_path), config.wav_dir(args.data_dir), args.data_dir / "noise")
     transcriber = PhoWhisperTranscriber(args.model, args.device, args.beams)
     log.info("model %s on device=%s beams=%d, %d clips", Path(args.model).name, transcriber.device,

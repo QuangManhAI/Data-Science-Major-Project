@@ -434,6 +434,7 @@ static func step_escorted_patient(patient: CharacterBody3D, robot_pos: Vector3, 
 			back = trail[i - 1]
 			if walked >= 1.0:
 				break
+		print("[ESCORT_DEBUG] >>> Patient stuck %.1fs (gap %.2fm) ➔ moved back onto robot trail" % [_patient_stuck_s, gap])
 		patient.global_position = Vector3(back.x, patient.global_position.y, back.z)
 		_patient_stuck_s = 0.0
 		_progress_best = INF

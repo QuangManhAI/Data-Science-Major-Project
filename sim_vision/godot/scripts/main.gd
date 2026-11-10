@@ -57,6 +57,8 @@ var current_target_patient: CharacterBody3D = null
 var _pending_turn_reset: bool = false
 ## Lượt bệnh nhân cảm ơn khi tới nơi: không tạo nhiệm vụ / không cộng thưởng; hết lượt (về ARRIVED) ➔ _after_thanks.
 var _thanks_pending: bool = false
+var _eval_min_clear_m: float = INF
+var _eval_bump_frames: int = 0
 ## Âm thanh nền bệnh viện (chỉ cho người xem; STT tự trộn nhiễu ở server). Tạo bằng gen_hospital_ambience.py.
 const AMBIENCE_PATH: String = "res://assets/sounds/hospital_ambience.wav"
 const MONITOR_BEEP_PATH: String = "res://assets/sounds/monitor_beep.wav"
@@ -217,6 +219,16 @@ func _physics_process(delta: float) -> void:
 	if _is_in_elevator_transit:
 		return
 
+	# Số liệu đánh giá (scripts/eval_godot_escort.py): khoảng trống nhỏ nhất (LiDAR, m) và số frame robot va vào
+	# tường / đồ đạc kể từ dòng log trước — đo mỗi physics frame để không sót cú quẹt ngắn.
+	var lid: PackedFloat32Array = robot.get_lidar_readings()
+	for r: float in lid:
+		_eval_min_clear_m = minf(_eval_min_clear_m, r * Robot.LIDAR_MAX_RANGE)
+	for ci: int in robot.get_slide_collision_count():
+		if absf(robot.get_slide_collision(ci).get_normal().y) < 0.5:
+			_eval_bump_frames += 1
+			break
+
 	# Log vị trí & hành vi robot + bệnh nhân mỗi 1.0 giây
 	_escort_debug_timer += delta
 	if _escort_debug_timer >= 1.0:
@@ -246,7 +258,9 @@ func _physics_process(delta: float) -> void:
 			p_pos.x, p_pos.z, d_tether,
 			g_key, d_goal, d_p_goal,
 			trail_count
-		])
+		] + " | clear_min=%.2fm bump=%d floor=%d" % [_eval_min_clear_m, _eval_bump_frames, Room.get_floor(r_pos)])
+		_eval_min_clear_m = INF
+		_eval_bump_frames = 0
 
 	# Đồng hồ kẹt áp dụng cả pha tìm bệnh nhân (đích = bệnh nhân), trừ lúc hội thoại / đã tới nơi chờ NPC nói
 	if not Main.is_dialogue_state(state) and state != Config.RobotState.ARRIVED:

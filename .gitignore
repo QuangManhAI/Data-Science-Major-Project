@@ -25,6 +25,11 @@ build/
 !/data/nlu/stats.md
 /data/tts_cache/
 
+# Voice datasets (audio, ~600 MB): HF dataset ManhQuangAI/voice_vietnamese + raw recordings
+# synced to MinIO major-be-fe/voice_finetune/. Rebuild with scripts/prepare_voice_dataset.py.
+/voice/
+/voice_finetune/
+
 # Large model binaries stay local (keep configs, tokenizers, and docs tracked)
 /models/**/*.safetensors
 /models/**/*.bin

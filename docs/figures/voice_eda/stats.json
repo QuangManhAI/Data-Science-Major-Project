@@ -1,0 +1,804 @@
+{
+ "overview": {
+  "recordings_total": 1839,
+  "usable": 1726,
+  "hours_usable": 1.959,
+  "speakers_usable": 29,
+  "excluded": {
+   "OK": 1726,
+   "withdrawn_subject": 70,
+   "no_transcript": 25,
+   "app_test_session": 13,
+   "no_signal": 3,
+   "too_short": 1,
+   "duplicate_take": 1
+  },
+  "src_codec": {
+   "opus": 1206,
+   "aac": 520
+  },
+  "src_sr": {
+   "48000": 1558,
+   "16000": 166,
+   "44100": 2
+  }
+ },
+ "duration": {
+  "quantiles": {
+   "0.0": 1.08,
+   "0.05": 2.22,
+   "0.25": 3.18,
+   "0.5": 4.0,
+   "0.75": 4.83,
+   "0.95": 6.39,
+   "1.0": 10.92
+  },
+  "mean": 4.09,
+  "by_mode": {
+   "n": {
+    "count": 823,
+    "mean": 4.08,
+    "median": 3.95
+   },
+   "r": {
+    "count": 883,
+    "mean": 4.11,
+    "median": 4.04
+   },
+   "u": {
+    "count": 20,
+    "mean": 3.3,
+    "median": 3.21
+   }
+  },
+  "whisper_padding_ratio": 0.864,
+  "speech_ratio_median": 0.64
+ },
+ "speakers": [
+  {
+   "speaker_id": "LH_A4",
+   "minutes": 0.06,
+   "n": 1,
+   "split": "train",
+   "gender": "Nam",
+   "age": 20
+  },
+  {
+   "speaker_id": "APP_2ff99b",
+   "minutes": 0.62,
+   "n": 11,
+   "split": "train",
+   "gender": "Nam",
+   "age": 20
+  },
+  {
+   "speaker_id": "HT_F20",
+   "minutes": 0.69,
+   "n": 10,
+   "split": "train",
+   "gender": "Nữ",
+   "age": 20
+  },
+  {
+   "speaker_id": "APP_ba76d1",
+   "minutes": 0.74,
+   "n": 8,
+   "split": "train",
+   "gender": "Nam",
+   "age": 20
+  },
+  {
+   "speaker_id": "APP_112ba0",
+   "minutes": 0.79,
+   "n": 15,
+   "split": "train",
+   "gender": "Nữ",
+   "age": 20
+  },
+  {
+   "speaker_id": "APP_c5de7e",
+   "minutes": 1.1,
+   "n": 22,
+   "split": "train",
+   "gender": "Nam",
+   "age": 20
+  },
+  {
+   "speaker_id": "PU_F10",
+   "minutes": 1.75,
+   "n": 25,
+   "split": "train",
+   "gender": "Nữ",
+   "age": 10
+  },
+  {
+   "speaker_id": "PU_M10",
+   "minutes": 1.78,
+   "n": 25,
+   "split": "train",
+   "gender": "Nam",
+   "age": 10
+  },
+  {
+   "speaker_id": "LH_A3",
+   "minutes": 3.57,
+   "n": 80,
+   "split": "test",
+   "gender": "Nam",
+   "age": 20
+  },
+  {
+   "speaker_id": "APP_f91703",
+   "minutes": 3.83,
+   "n": 80,
+   "split": "train",
+   "gender": "Nam",
+   "age": 20
+  },
+  {
+   "speaker_id": "APP_5ac354",
+   "minutes": 3.85,
+   "n": 80,
+   "split": "train",
+   "gender": "Nam",
+   "age": 20
+  },
+  {
+   "speaker_id": "X_F30",
+   "minutes": 4.27,
+   "n": 70,
+   "split": "train",
+   "gender": "Nữ",
+   "age": 30
+  },
+  {
+   "speaker_id": "LH_A",
+   "minutes": 4.32,
+   "n": 80,
+   "split": "train",
+   "gender": "Nam",
+   "age": 20
+  },
+  {
+   "speaker_id": "LH_B3",
+   "minutes": 4.47,
+   "n": 80,
+   "split": "train",
+   "gender": "Nữ",
+   "age": 19
+  },
+  {
+   "speaker_id": "LH_M30",
+   "minutes": 4.56,
+   "n": 70,
+   "split": "train",
+   "gender": "Nam",
+   "age": 30
+  },
+  {
+   "speaker_id": "LH_F30_04",
+   "minutes": 4.92,
+   "n": 70,
+   "split": "test",
+   "gender": "Nữ",
+   "age": 30
+  },
+  {
+   "speaker_id": "APP_1603b1",
+   "minutes": 4.96,
+   "n": 80,
+   "split": "train",
+   "gender": "Nữ",
+   "age": 20
+  },
+  {
+   "speaker_id": "LH_B8",
+   "minutes": 5.15,
+   "n": 79,
+   "split": "train",
+   "gender": "Nữ",
+   "age": 20
+  },
+  {
+   "speaker_id": "LH_F30_03",
+   "minutes": 5.16,
+   "n": 70,
+   "split": "val",
+   "gender": "Nữ",
+   "age": 30
+  },
+  {
+   "speaker_id": "HT_M20",
+   "minutes": 5.27,
+   "n": 70,
+   "split": "train",
+   "gender": "Nam",
+   "age": 20
+  },
+  {
+   "speaker_id": "LH_B2",
+   "minutes": 5.64,
+   "n": 80,
+   "split": "test",
+   "gender": "Nữ",
+   "age": 20
+  },
+  {
+   "speaker_id": "LH_F30_01",
+   "minutes": 5.66,
+   "n": 70,
+   "split": "train",
+   "gender": "Nữ",
+   "age": 30
+  },
+  {
+   "speaker_id": "LH_B7",
+   "minutes": 5.78,
+   "n": 80,
+   "split": "val",
+   "gender": "Nữ",
+   "age": 20
+  },
+  {
+   "speaker_id": "LH_B1",
+   "minutes": 5.92,
+   "n": 80,
+   "split": "train",
+   "gender": "Nữ",
+   "age": 20
+  },
+  {
+   "speaker_id": "LH_A2",
+   "minutes": 5.92,
+   "n": 80,
+   "split": "val",
+   "gender": "Nam",
+   "age": 18
+  },
+  {
+   "speaker_id": "LH_B",
+   "minutes": 6.09,
+   "n": 80,
+   "split": "train",
+   "gender": "Nữ",
+   "age": 20
+  },
+  {
+   "speaker_id": "PU_F20_A",
+   "minutes": 6.66,
+   "n": 80,
+   "split": "train",
+   "gender": "Nữ",
+   "age": 20
+  },
+  {
+   "speaker_id": "PU_F20_B",
+   "minutes": 6.84,
+   "n": 80,
+   "split": "train",
+   "gender": "Nữ",
+   "age": 20
+  },
+  {
+   "speaker_id": "LH_F30_02",
+   "minutes": 7.18,
+   "n": 70,
+   "split": "train",
+   "gender": "Nữ",
+   "age": 28
+  }
+ ],
+ "speaker_concentration": {
+  "gini": 0.29,
+  "top5_share": 0.278,
+  "min_minutes": 0.06,
+  "max_minutes": 7.18
+ },
+ "splits": {
+  "test": {
+   "utts": 230,
+   "minutes": 14.1,
+   "speakers": 3
+  },
+  "train": {
+   "utts": 1266,
+   "minutes": 86.5,
+   "speakers": 23
+  },
+  "val": {
+   "utts": 230,
+   "minutes": 16.9,
+   "speakers": 3
+  }
+ },
+ "demographics": {
+  "minutes_age_gender": {
+   "Nam": {
+    "10": 1.8,
+    "20": 29.3,
+    "30": 4.6
+   },
+   "Nữ": {
+    "10": 1.7,
+    "20": 53.0,
+    "30": 27.2
+   }
+  },
+  "minutes_region": {
+   "Bắc": 5.6,
+   "Trung": 14.4,
+   "không rõ": 43.1,
+   "Nam": 54.3
+  },
+  "speakers_gender": {
+   "Nam": 12,
+   "Nữ": 17
+  },
+  "speakers_age": {
+   "10": 2,
+   "20": 21,
+   "30": 6
+  },
+  "provinces": [
+   "TpHcM",
+   "TP.HCM",
+   "Bình Định",
+   "Đồng Nai",
+   "TP.hcm",
+   "TPHCM",
+   "Quảng Ngãi",
+   "hải phòng",
+   "Tây Ninh",
+   "Đồng Tháp",
+   "Đắk Nông",
+   "Bảo Lộc",
+   "Bình Thuận"
+  ]
+ },
+ "loudness": {
+  "speech_rms_quantiles": {
+   "0.05": -34.9,
+   "0.5": -22.1,
+   "0.95": -11.6
+  },
+  "speaker_median_range": [
+   -46.1,
+   -10.6
+  ],
+  "gain_db_quantiles": {
+   "0.05": -11.4,
+   "0.5": -1.0,
+   "0.95": 11.9
+  },
+  "clipped_files": 8,
+  "clipped_by_speaker": {
+   "LH_B1": 8
+  },
+  "peak_limited": 37
+ },
+ "snr": {
+  "quantiles": {
+   "0.05": 26.9,
+   "0.25": 38.6,
+   "0.5": 50.6,
+   "0.75": 66.0
+  },
+  "below_30db": 144,
+  "below_30_by_speaker": {
+   "LH_A3": 80,
+   "X_F30": 31,
+   "LH_B3": 13,
+   "LH_B8": 9,
+   "PU_F20_A": 6,
+   "APP_2ff99b": 4,
+   "APP_c5de7e": 1
+  },
+  "by_codec": {
+   "aac": 50.4,
+   "opus": 50.6
+  },
+  "cutoff_below_7k": 268,
+  "cutoff_by_speaker": {
+   "PU_F10": 4960.0,
+   "PU_M10": 5720.0,
+   "LH_A2": 5840.0,
+   "LH_M30": 6410.0,
+   "APP_f91703": 6700.0,
+   "PU_F20_B": 7020.0
+  }
+ },
+ "silence": {
+  "lead_median": 0.72,
+  "trail_median": 0.54,
+  "lead_gt_1s": 611,
+  "trail_gt_1s": 395,
+  "lead_lt_0_1s": 308,
+  "trail_lt_0_1s": 305,
+  "silence_share": 0.357,
+  "trail_lt_0_1_by_speaker": {
+   "LH_F30_04": 57,
+   "PU_F20_A": 54,
+   "HT_M20": 36,
+   "APP_f91703": 34,
+   "LH_B3": 23,
+   "LH_M30": 17
+  }
+ },
+ "rate": {
+  "by_age_mode": {
+   "n": {
+    "10": NaN,
+    "20": 3.44,
+    "30": 3.49
+   },
+   "r": {
+    "10": 2.75,
+    "20": 3.38,
+    "30": 3.17
+   },
+   "u": {
+    "10": NaN,
+    "20": 3.0,
+    "30": NaN
+   }
+  },
+  "overall_median": 3.38,
+  "corr_syll_duration": 0.467,
+  "outliers": [
+   {
+    "utt_id": "APP_5ac354__A_01_n",
+    "syll": 12,
+    "duration_s": 3.0,
+    "speech_s": 1.74,
+    "rate": 6.88
+   },
+   {
+    "utt_id": "APP_5ac354__A_06_r",
+    "syll": 6,
+    "duration_s": 2.04,
+    "speech_s": 0.94,
+    "rate": 6.42
+   },
+   {
+    "utt_id": "APP_5ac354__A_11_r",
+    "syll": 8,
+    "duration_s": 2.04,
+    "speech_s": 1.22,
+    "rate": 6.58
+   },
+   {
+    "utt_id": "APP_5ac354__A_15_n",
+    "syll": 6,
+    "duration_s": 1.98,
+    "speech_s": 0.92,
+    "rate": 6.49
+   },
+   {
+    "utt_id": "APP_5ac354__A_17_r",
+    "syll": 9,
+    "duration_s": 2.28,
+    "speech_s": 1.26,
+    "rate": 7.11
+   },
+   {
+    "utt_id": "APP_5ac354__A_27_n",
+    "syll": 7,
+    "duration_s": 3.18,
+    "speech_s": 1.03,
+    "rate": 6.76
+   },
+   {
+    "utt_id": "APP_5ac354__A_29_n",
+    "syll": 12,
+    "duration_s": 2.82,
+    "speech_s": 1.52,
+    "rate": 7.87
+   },
+   {
+    "utt_id": "APP_5ac354__C02_n",
+    "syll": 5,
+    "duration_s": 2.1,
+    "speech_s": 0.64,
+    "rate": 7.87
+   },
+   {
+    "utt_id": "APP_5ac354__C06_n",
+    "syll": 4,
+    "duration_s": 2.34,
+    "speech_s": 0.57,
+    "rate": 6.96
+   },
+   {
+    "utt_id": "APP_2ff99b__A_04_r",
+    "syll": 13,
+    "duration_s": 1.74,
+    "speech_s": 1.66,
+    "rate": 7.81
+   },
+   {
+    "utt_id": "APP_f91703__A_09_n",
+    "syll": 8,
+    "duration_s": 2.4,
+    "speech_s": 1.02,
+    "rate": 7.8
+   },
+   {
+    "utt_id": "HT_M20__A_06_n",
+    "syll": 6,
+    "duration_s": 6.23,
+    "speech_s": 6.18,
+    "rate": 0.97
+   },
+   {
+    "utt_id": "HT_M20__A_07_n",
+    "syll": 7,
+    "duration_s": 6.4,
+    "speech_s": 6.36,
+    "rate": 1.1
+   },
+   {
+    "utt_id": "HT_M20__A_15_n",
+    "syll": 6,
+    "duration_s": 7.19,
+    "speech_s": 6.3,
+    "rate": 0.95
+   },
+   {
+    "utt_id": "LH_A3__A_12_n",
+    "syll": 7,
+    "duration_s": 1.8,
+    "speech_s": 1.04,
+    "rate": 6.7
+   },
+   {
+    "utt_id": "LH_A3__A_12_r",
+    "syll": 7,
+    "duration_s": 1.5,
+    "speech_s": 1.02,
+    "rate": 6.83
+   },
+   {
+    "utt_id": "LH_A3__C01_r",
+    "syll": 8,
+    "duration_s": 1.32,
+    "speech_s": 1.2,
+    "rate": 6.69
+   },
+   {
+    "utt_id": "LH_A3__C02_n",
+    "syll": 5,
+    "duration_s": 1.38,
+    "speech_s": 0.76,
+    "rate": 6.54
+   },
+   {
+    "utt_id": "LH_A3__C09_n",
+    "syll": 6,
+    "duration_s": 1.26,
+    "speech_s": 0.92,
+    "rate": 6.56
+   },
+   {
+    "utt_id": "LH_M30__T16_n",
+    "syll": 7,
+    "duration_s": 3.36,
+    "speech_s": 1.01,
+    "rate": 6.9
+   },
+   {
+    "utt_id": "LH_M30__T18_n",
+    "syll": 9,
+    "duration_s": 4.2,
+    "speech_s": 1.22,
+    "rate": 7.41
+   },
+   {
+    "utt_id": "LH_M30__T25_r",
+    "syll": 4,
+    "duration_s": 4.56,
+    "speech_s": 3.92,
+    "rate": 1.02
+   },
+   {
+    "utt_id": "LH_B__C02_n",
+    "syll": 5,
+    "duration_s": 4.26,
+    "speech_s": 4.12,
+    "rate": 1.21
+   },
+   {
+    "utt_id": "LH_B__C06_n",
+    "syll": 4,
+    "duration_s": 4.14,
+    "speech_s": 3.28,
+    "rate": 1.22
+   },
+   {
+    "utt_id": "LH_B__C06_r",
+    "syll": 4,
+    "duration_s": 4.2,
+    "speech_s": 3.4,
+    "rate": 1.17
+   },
+   {
+    "utt_id": "LH_B__C10_r",
+    "syll": 3,
+    "duration_s": 4.14,
+    "speech_s": 3.6,
+    "rate": 0.83
+   },
+   {
+    "utt_id": "LH_B3__C10_r",
+    "syll": 3,
+    "duration_s": 2.88,
+    "speech_s": 2.74,
+    "rate": 1.1
+   },
+   {
+    "utt_id": "LH_B8__C02_n",
+    "syll": 5,
+    "duration_s": 4.1,
+    "speech_s": 3.96,
+    "rate": 1.26
+   },
+   {
+    "utt_id": "LH_B8__C06_n",
+    "syll": 4,
+    "duration_s": 4.25,
+    "speech_s": 4.24,
+    "rate": 0.94
+   },
+   {
+    "utt_id": "LH_B8__C10_n",
+    "syll": 3,
+    "duration_s": 4.32,
+    "speech_s": 4.22,
+    "rate": 0.71
+   },
+   {
+    "utt_id": "LH_B8__C10_r",
+    "syll": 3,
+    "duration_s": 4.21,
+    "speech_s": 4.16,
+    "rate": 0.72
+   },
+   {
+    "utt_id": "LH_F30_02__T25_n",
+    "syll": 4,
+    "duration_s": 5.57,
+    "speech_s": 4.28,
+    "rate": 0.94
+   },
+   {
+    "utt_id": "PU_F20_A__A_06_r",
+    "syll": 6,
+    "duration_s": 5.89,
+    "speech_s": 4.58,
+    "rate": 1.31
+   },
+   {
+    "utt_id": "PU_F20_A__A_23_n",
+    "syll": 7,
+    "duration_s": 5.55,
+    "speech_s": 5.4,
+    "rate": 1.3
+   },
+   {
+    "utt_id": "PU_M10__C10_r",
+    "syll": 3,
+    "duration_s": 3.9,
+    "speech_s": 2.7,
+    "rate": 1.11
+   },
+   {
+    "utt_id": "PU_F10__C10_r",
+    "syll": 3,
+    "duration_s": 3.58,
+    "speech_s": 2.98,
+    "rate": 1.01
+   }
+  ],
+  "syll_quantiles": {
+   "0.0": 3.0,
+   "0.5": 8.0,
+   "1.0": 14.0
+  }
+ },
+ "pitch": {
+  "median_by_group": {
+   "Nam": {
+    "10": 262.0,
+    "20": 158.0,
+    "30": 126.0
+   },
+   "Nữ": {
+    "10": 271.0,
+    "20": 235.0,
+    "30": 239.0
+   }
+  },
+  "pu_f20_compare": {
+   "PU_F20_A": {
+    "50%": 213.3,
+    "25%": 207.1,
+    "75%": 219.2
+   },
+   "PU_F20_B": {
+    "50%": 210.5,
+    "25%": 202.5,
+    "75%": 219.2
+   }
+  },
+  "male_speakers_f0": {
+   "APP_2ff99b": 110.0,
+   "LH_A3": 121.0,
+   "LH_A": 124.0,
+   "LH_M30": 126.0,
+   "APP_c5de7e": 137.0,
+   "HT_M20": 150.0,
+   "LH_A4": 167.0,
+   "LH_A2": 168.0,
+   "APP_5ac354": 178.0,
+   "APP_f91703": 188.0,
+   "APP_ba76d1": 238.0
+  }
+ },
+ "text": {
+  "unique_sentences": 110,
+  "intents": 19,
+  "per_sentence": {
+   "count": 110.0,
+   "mean": 15.7,
+   "std": 10.3,
+   "min": 2.0,
+   "25%": 12.0,
+   "50%": 14.0,
+   "75%": 16.0,
+   "max": 46.0
+  },
+  "intent_counts": {
+   "ho_tro_di_chuyen": 26,
+   "dieu_chinh_am_luong": 28,
+   "nhac_lai": 34,
+   "dung_lai": 42,
+   "tiep_tuc": 42,
+   "khong_ho_tro": 47,
+   "cap_cuu": 58,
+   "thoi_gian_cho": 58,
+   "bao_hiem": 69,
+   "nha_thuoc": 86,
+   "dan_duong": 88,
+   "dieu_chinh_toc_do": 88,
+   "cam_on": 90,
+   "gap_nhan_vien": 92,
+   "thanh_toan": 101,
+   "dang_ky_kham": 117,
+   "tien_ich": 139,
+   "hoi_khoa": 225,
+   "hoi_phong": 296
+  },
+  "test_sentences_seen_in_train": 1.0,
+  "val_sentences_seen_in_train": 1.0,
+  "vocab_size": 283,
+  "tokens": 14204,
+  "hapax": 0,
+  "by_script": {
+   "B": 494,
+   "A": 459,
+   "C": 443,
+   "T": 300,
+   "K": 30
+  },
+  "mode_counts": {
+   "r": 883,
+   "n": 823,
+   "u": 20
+  }
+ },
+ "r_vs_n": {
+  "pairs": 822,
+  "n_longer_share": 0.436,
+  "median_ratio_n_over_r": 0.975,
+  "identical_duration_pairs": 13
+ }
+}

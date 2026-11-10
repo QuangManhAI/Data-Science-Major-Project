@@ -123,3 +123,28 @@ func test_escorted_patient_follows_and_rl_controller_pauses_when_far() -> void:
 		Vector3(0.0, 0.0, 0.0), 0.0, Vector3(0.0, 0.0, -5.0), lidar, 3.0, true
 	)
 	assert_eq(wait_cmd, Vector2.ZERO, "robot waits when escorted elderly patient is > 2.5m behind")
+
+
+## Robot đi thẳng (−Z) nhưng góc đầu dao động ±0.35 rad (policy đánh lái): bệnh nhân không được lắc theo.
+## Logic cũ (điểm đứng xoay cứng theo yaw) cho dao động ngang ~0.8 m đỉnh-đỉnh.
+func test_escorted_patient_does_not_wobble_with_robot_yaw() -> void:
+	var human := HumanScene.instantiate() as Human
+	add_child_autofree(human)
+	RLEnvBridge.reset_escort_follow()
+	var trail: Array[Vector3] = []
+	var dt: float = 1.0 / float(Engine.physics_ticks_per_second)   # move_and_slide đi theo delta physics
+	var robot_pos := Vector3.ZERO
+	human.global_position = Vector3(0.45, 0.0, -1.2)
+	var xs: Array[float] = []
+	for i: int in int(10.0 / dt):
+		var t: float = i * dt
+		robot_pos.z -= 0.52 * dt
+		var yaw: float = 0.35 * sin(TAU * 1.0 * t)
+		RLEnvBridge.step_escorted_patient(human, robot_pos, dt, trail, yaw)
+		if t > 3.0:
+			xs.append(human.global_position.x)
+	var lo: float = xs.min()
+	var hi: float = xs.max()
+	assert_lt(hi - lo, 0.25, "lateral sway peak-to-peak %.2f m" % (hi - lo))
+	var gap: float = Human.flat_distance(human.global_position, robot_pos)
+	assert_between(gap, 0.6, 2.0, "patient keeps up near the companion spot")

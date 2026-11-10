@@ -88,6 +88,7 @@ func begin_post_dialogue_task(act: String, target_str: String, floor_num: int, _
 	if act == "guide":
 		task_phase = TaskPhase.GUIDE_ESCORT
 		escort_trail.clear()
+		RLEnvBridge.reset_escort_follow()
 		if robot_ref != null:
 			escort_trail.append(robot_ref.global_position)
 		if room_ref != null:
@@ -301,15 +302,36 @@ static func compute_step_reward(
 	}
 
 
-## Bệnh nhân đi cùng robot trong pha GUIDE_ESCORT (V2, khớp HospitalPureVisionV2Env._step_escorted_patient):
-## - Đứng chếch trước-phải robot (~20°) để luôn nằm trong camera khi đường thẳng tới đó không bị chắn.
-## - Nếu bị chắn: đi theo dấu chân robot (điểm mới nhất nhìn thẳng tới được) thay vì trượt vào bàn ghế.
-## - Kẹt > 2 s: về điểm dấu chân gần nhất (người thật tự tìm đường quay lại lối robot đã đi).
+## Bệnh nhân đi cùng robot trong pha GUIDE_ESCORT (V2, cùng vị trí đứng với HospitalPureVisionV2Env._step_escorted_patient):
+## - Đứng chếch trước-phải robot (~20°) để luôn nằm trong camera (policy đọc tether từ bbox bệnh nhân) khi đường
+##   thẳng tới đó không bị chắn; bị chắn ➔ đi theo dấu chân robot; kẹt > 2 s ➔ về dấu chân gần nhất.
+## - Khác bản train (chỉ để nhìn tự nhiên, không đổi vị trí trung bình): điểm đứng tính theo hướng đi đã làm mượt
+##   (không theo góc robot từng frame ➔ hết lắc khi policy đánh lái), vận tốc giới hạn gia tốc, vùng chết có trễ
+##   (đứng gần đủ thì đứng yên, xa hơn mới bước lại).
 const PATIENT_ESCORT_SPEED: float = 0.70  # > tốc độ dẫn đường 0.52 m/s của robot để bệnh nhân theo kịp
 const COMPANION_OFFSETS: Array[Vector2] = [Vector2(1.2, 0.45), Vector2(1.1, 0.25), Vector2(1.0, 0.0)]  # (trước, phải) m
 const TRAIL_SPACING_M: float = 0.25
 const PATIENT_STUCK_RESET_S: float = 2.0
+const FOLLOW_HEADING_RATE: float = 2.0    # 1/s, làm mượt hướng đi của robot
+const FOLLOW_TARGET_RATE: float = 3.0     # 1/s, làm mượt điểm đứng
+const FOLLOW_ACCEL: float = 1.2           # m/s²
+const FOLLOW_STOP_M: float = 0.2          # tới gần hơn ➔ dừng
+const FOLLOW_RESUME_M: float = 0.45       # xa hơn ➔ bước lại
+const FOLLOW_JUMP_M: float = 1.5          # điểm đứng nhảy xa (đổi kiểu đích / thang máy) ➔ không làm mượt
 static var _patient_stuck_s: float = 0.0
+static var _follow_heading: Vector3 = Vector3.ZERO
+static var _follow_target: Vector3 = Vector3.ZERO
+static var _follow_vel: Vector3 = Vector3.ZERO
+static var _follow_moving: bool = false
+
+
+## Gọi khi bắt đầu dẫn một bệnh nhân / sau thang máy: quên trạng thái làm mượt cũ.
+static func reset_escort_follow() -> void:
+	_patient_stuck_s = 0.0
+	_follow_heading = Vector3.ZERO
+	_follow_target = Vector3.ZERO
+	_follow_vel = Vector3.ZERO
+	_follow_moving = false
 
 
 static func _path_clear(patient: CharacterBody3D, from: Vector3, to: Vector3) -> bool:
@@ -321,14 +343,20 @@ static func _path_clear(patient: CharacterBody3D, from: Vector3, to: Vector3) ->
 
 
 static func step_escorted_patient(patient: CharacterBody3D, robot_pos: Vector3, delta: float, trail: Array[Vector3] = [], robot_yaw: float = 0.0) -> void:
-	if patient == null:
+	if patient == null or delta <= 0.0:
 		return
 	if trail.is_empty() or Human.flat_distance(trail[trail.size() - 1], robot_pos) >= TRAIL_SPACING_M:
 		trail.append(robot_pos)
 		while trail.size() > 200:
 			trail.remove_at(0)
-	var fwd := Vector3(-sin(robot_yaw), 0.0, -cos(robot_yaw))
-	var right := Vector3(cos(robot_yaw), 0.0, -sin(robot_yaw))
+	var fwd_now := Vector3(-sin(robot_yaw), 0.0, -cos(robot_yaw))
+	if _follow_heading == Vector3.ZERO:
+		_follow_heading = fwd_now
+	else:
+		var h: Vector3 = _follow_heading.lerp(fwd_now, Human.smooth_factor(FOLLOW_HEADING_RATE, delta))
+		_follow_heading = h.normalized() if h.length() > 0.05 else fwd_now
+	var fwd: Vector3 = _follow_heading
+	var right := Vector3(-fwd.z, 0.0, fwd.x)
 	var p_pos: Vector3 = patient.global_position
 	var has_target: bool = false
 	var target: Vector3 = Vector3.ZERO
@@ -351,12 +379,30 @@ static func step_escorted_patient(patient: CharacterBody3D, robot_pos: Vector3, 
 		for c: Vector3 in trail:
 			if Human.flat_distance(c, p_pos) < Human.flat_distance(target, p_pos):
 				target = c
-	var d_target: float = Human.flat_distance(p_pos, target)
-	if d_target <= 0.15:
+	if _follow_target == Vector3.ZERO or Human.flat_distance(_follow_target, target) > FOLLOW_JUMP_M:
+		_follow_target = target
+	else:
+		_follow_target = _follow_target.lerp(target, Human.smooth_factor(FOLLOW_TARGET_RATE, delta))
+
+	var to := Vector3(_follow_target.x - p_pos.x, 0.0, _follow_target.z - p_pos.z)
+	var d: float = to.length()
+	if _follow_moving and d < FOLLOW_STOP_M:
+		_follow_moving = false
+	elif not _follow_moving and d > FOLLOW_RESUME_M:
+		_follow_moving = true
+	var desired := Vector3.ZERO
+	if _follow_moving and d > 1e-3:
+		desired = to / d * minf(PATIENT_ESCORT_SPEED, d * 1.5)   # chậm dần khi tới gần
+	_follow_vel = _follow_vel.move_toward(desired, FOLLOW_ACCEL * delta)
+	var speed: float = _follow_vel.length()
+	if speed < 0.03 and desired == Vector3.ZERO:   # chỉ dừng hẳn khi đang giảm tốc (không chặn lúc khởi bước)
+		_follow_vel = Vector3.ZERO
 		patient.escort_stop()
 		_patient_stuck_s = 0.0
 		return
-	patient.escort_step_towards(target, minf(PATIENT_ESCORT_SPEED * delta, d_target), delta)
+	if speed < 1e-4:
+		return
+	patient.escort_step_towards(p_pos + _follow_vel / speed, speed * delta, delta)
 	if Human.flat_distance(p_pos, patient.global_position) < 0.002:
 		_patient_stuck_s += delta
 		if _patient_stuck_s >= PATIENT_STUCK_RESET_S and not trail.is_empty():
@@ -366,5 +412,8 @@ static func step_escorted_patient(patient: CharacterBody3D, robot_pos: Vector3, 
 					nearest = c
 			patient.global_position = Vector3(nearest.x, patient.global_position.y, nearest.z)
 			_patient_stuck_s = 0.0
+			_follow_vel = Vector3.ZERO
+			_follow_target = Vector3.ZERO
 	else:
 		_patient_stuck_s = 0.0
+

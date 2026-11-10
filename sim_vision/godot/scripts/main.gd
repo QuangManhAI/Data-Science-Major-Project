@@ -57,6 +57,11 @@ var current_target_patient: CharacterBody3D = null
 var _pending_turn_reset: bool = false
 ## Lượt bệnh nhân cảm ơn khi tới nơi: không tạo nhiệm vụ / không cộng thưởng; hết lượt (về ARRIVED) ➔ _after_thanks.
 var _thanks_pending: bool = false
+## Trạm thang máy camera FOLLOW đang nhìn vào trong lúc đi thang (null = bám robot như thường).
+var _elev_cam_station: ElevatorStation = null
+const ELEV_ROBOT_SPEED: float = 0.7      # m/s khi vào / ra thang máy
+const ELEV_PATIENT_SPEED: float = 0.75
+const ELEV_PATIENT_DELAY_S: float = 0.6  # bệnh nhân bước theo sau robot
 var _after_thanks: Callable = Callable()
 @onready var robot: Robot = $Robot
 @onready var vision: VisionClient = $VisionClient
@@ -639,96 +644,92 @@ func _execute_elevator_transit(from_floor: int, to_floor: int, with_patient: boo
 	station_from.set_floor_indicator(from_floor, arrow)
 	station_to.set_floor_indicator(from_floor, arrow)
 	overlay.set_status("Đang gọi thang máy: Tầng %d -> Tầng %d" % [from_floor, to_floor])
+	_elev_cam_station = station_from
+	var esc_p: CharacterBody3D = (active_escorted_patient if active_escorted_patient != null else human) if with_patient else null
 
-	# 1. Đảm bảo cửa tầng xuất phát đã mở
-	if not station_from.is_open:
-		station_from.open_doors()
+	# 1. Cửa tầng xuất phát mở (thường đã mở khi robot tới gần ➔ không kêu chuông lần nữa)
+	station_from.open_doors()
+
+	# 2. Robot chạy vào buồng qua giữa cửa rồi quay mặt ra cửa; bệnh nhân đi bộ theo sau, đứng cạnh robot.
+	#    Toạ độ cục bộ trạm: cửa ở z≈0, buồng z∈[-2.1, 0], hành lang z>0 (+Z hướng ra ngoài).
+	var tf_from: Transform3D = station_from.global_transform
+	var inv_from: Transform3D = tf_from.affine_inverse()
+	var face_out_from: float = station_from.global_rotation.y + PI   # robot nhìn theo -Z cục bộ của nó
+	var r_loc: Vector3 = inv_from * robot.global_position
+	var p_loc: Vector3 = inv_from * esc_p.global_position if esc_p != null else Vector3(-1.0, 0.0, 1.0)
+	# Mỗi người giữ phía (trái / phải) đang đứng ➔ không đi cắt ngang nhau trong buồng
+	var r_side: float = 1.0 if r_loc.x >= p_loc.x else -1.0
+	var t_robot_in: float = _tween_walk(robot, _elev_entry_path(tf_from, r_loc, Vector3(0.35 * r_side, 0.0, -1.25)),
+			ELEV_ROBOT_SPEED, true, face_out_from, 0.0)
+	var t_pat_in: float = 0.0
+	if esc_p != null:
+		t_pat_in = _tween_walk(esc_p, _elev_entry_path(tf_from, p_loc, Vector3(-0.4 * r_side, 0.0, -1.15)),
+				ELEV_PATIENT_SPEED, false, station_from.global_rotation.y, ELEV_PATIENT_DELAY_S)
 
 	var seq := create_tween()
-	seq.tween_interval(0.2)
+	seq.tween_interval(maxf(t_robot_in, t_pat_in) + 0.2)
 
-	# 2. Robot và bệnh nhân căn chỉnh vị trí đứng trong buồng và quay mặt hướng ra cửa
-	var cabin_pos_from: Vector3 = station_from.get_cabin_position()
-	var robot_cabin_target: Vector3 = cabin_pos_from + station_from.global_transform.basis * Vector3(0.25, 0.0, 0.0)
-	var human_cabin_target: Vector3 = cabin_pos_from + station_from.global_transform.basis * Vector3(-0.25, 0.0, 0.0)
-	var face_door_from: float = station_from.global_rotation.y + PI
-
-	seq.tween_callback(func():
-		var move_in := create_tween().set_parallel(true)
-		move_in.tween_property(robot, "global_position", robot_cabin_target, 0.35)
-		move_in.tween_property(robot, "rotation:y", face_door_from, 0.35)
-		if with_patient:
-			var esc_p: CharacterBody3D = active_escorted_patient if active_escorted_patient != null else human
-			move_in.tween_property(esc_p, "global_position", human_cabin_target, 0.35)
-			move_in.tween_property(esc_p, "rotation:y", face_door_from, 0.35)
-	)
-	seq.tween_interval(0.4)
-
-	# 3. Đóng cửa tầng xuất phát
+	# 3. Đóng cửa tầng xuất phát, động cơ chạy, đèn LED đổi tầng
 	seq.tween_callback(func():
 		station_from.close_doors()
 	)
-	seq.tween_interval(0.5)
-
-	# 4. Hiệu ứng đi thang máy (tiếng hum động cơ + cập nhật đèn LED)
+	seq.tween_interval(0.8)
 	seq.tween_callback(func():
 		station_from.start_hum()
 		station_to.start_hum()
 		overlay.set_status("Thang máy đang di chuyển (%s Tầng %d)..." % [("Lên" if to_floor > from_floor else "Xuống"), to_floor])
 	)
-
-	seq.tween_interval(0.7)
+	seq.tween_interval(0.8)
 	seq.tween_callback(func():
 		station_from.set_floor_indicator(to_floor, arrow)
 		station_to.set_floor_indicator(to_floor, arrow)
 	)
 	seq.tween_interval(0.8)
 
-	# 5. Đến nơi: Dừng hum, chuông ding-dong báo tầng, teleport sang buồng cabin tầng đích
+	# 4. Đến nơi (cửa đang đóng nên không thấy dịch chuyển): đặt robot / bệnh nhân vào buồng tầng đích, giữ tư thế
+	var tf_to: Transform3D = station_to.global_transform
+	# Cửa đóng khi đổi tầng ➔ luôn xếp robot bên +X, bệnh nhân bên −X của buồng; ra ngoài bệnh nhân bước thẳng tới
+	# chỗ đứng chếch trước-phải robot (giống lúc dẫn đường: nằm trong camera) mà không cắt ngang trước mặt robot.
+	var robot_out: Array[Vector3] = [tf_to * Vector3(0.3, 0.0, 0.5), tf_to * Vector3(0.3, 0.0, 1.5)]
+	var pat_out: Array[Vector3] = [tf_to * Vector3(-0.3, 0.0, 0.4), tf_to * Vector3(-0.15, 0.0, 2.6)]
 	seq.tween_callback(func():
 		station_from.stop_hum()
 		station_to.stop_hum()
-		station_to.play_chime()
-
-		var cabin_pos_to: Vector3 = station_to.get_cabin_position()
-		var face_door_to: float = station_to.global_rotation.y + PI
-		robot.global_position = cabin_pos_to + station_to.global_transform.basis * Vector3(0.25, 0.0, 0.0)
-		robot.rotation.y = face_door_to
-		if with_patient:
-			var esc_p: CharacterBody3D = active_escorted_patient if active_escorted_patient != null else human
-			esc_p.global_position = cabin_pos_to + station_to.global_transform.basis * Vector3(-0.25, 0.0, 0.0)
-			esc_p.rotation.y = face_door_to
-
+		var face_out_to: float = station_to.global_rotation.y + PI
+		robot.global_position = tf_to * Vector3(0.35, 0.0, -1.25)
+		robot.rotation.y = face_out_to
+		if esc_p != null:
+			esc_p.global_position = tf_to * Vector3(-0.4, 0.0, -1.15)
+			esc_p.rotation.y = station_to.global_rotation.y
 		station_from.set_floor_indicator(to_floor, "")
 		station_to.set_floor_indicator(to_floor, "")
-
+		_elev_cam_station = station_to
 		_update_viewer_camera()
 	)
-	seq.tween_interval(0.4)
+	seq.tween_interval(0.5)
 
-	# 6. Mở cửa tầng đích
+	# 5. Mở cửa tầng đích (open_doors tự phát chuông ding-dong một lần)
 	seq.tween_callback(func():
 		station_to.open_doors()
 	)
-	seq.tween_interval(0.4)
+	seq.tween_interval(0.7)
 
-	# 7. Robot và bệnh nhân bước ra ngoài hành lang tầng đích
-	var entrance_to: Vector3 = station_to.get_entrance_position()
-	var robot_out_target: Vector3 = entrance_to + station_to.global_transform.basis * Vector3(0.3, 0.0, 0.0)
-	var human_out_target: Vector3 = entrance_to + station_to.global_transform.basis * Vector3(-0.3, 0.0, 0.0)
-
+	# 6. Robot ra trước, bệnh nhân bước ra theo sau lưng (cách ~1 m, không đứng chồng lên robot)
+	var t_out: float = (tf_to * Vector3(0.35, 0.0, -1.25)).distance_to(robot_out[0]) / ELEV_ROBOT_SPEED \
+			+ robot_out[0].distance_to(robot_out[1]) / ELEV_ROBOT_SPEED + 0.4
 	seq.tween_callback(func():
-		var move_out := create_tween().set_parallel(true)
-		move_out.tween_property(robot, "global_position", robot_out_target, 0.8)
-		if with_patient:
-			var esc_p: CharacterBody3D = active_escorted_patient if active_escorted_patient != null else human
-			move_out.tween_property(esc_p, "global_position", human_out_target, 0.8)
+		_tween_walk(robot, robot_out, ELEV_ROBOT_SPEED, true, station_to.global_rotation.y + PI, 0.0)
+		if esc_p != null:
+			_tween_walk(esc_p, pat_out, ELEV_PATIENT_SPEED, false, station_to.global_rotation.y, ELEV_PATIENT_DELAY_S)
 	)
-	seq.tween_interval(0.9)
+	seq.tween_interval(t_out + ELEV_PATIENT_DELAY_S)
 
-	# 8. Đóng cửa thang máy tầng đích, chuyển goal sang phòng khám cuối cùng (hoặc sảnh tìm bệnh nhân)
+	# 7. Đóng cửa tầng đích, chuyển goal sang phòng khám cuối cùng (hoặc sảnh tìm bệnh nhân)
 	seq.tween_callback(func():
 		station_to.close_doors()
+		_elev_cam_station = null
+		_rl_bridge.escort_trail.clear()   # vết đường của tầng cũ không còn dùng được
+		RLEnvBridgeScript.reset_escort_follow()
 		if with_patient:
 			_rl_bridge.goal_key = _rl_bridge.final_target_key
 			_rl_bridge.goal_position = room.get_room_waypoint(_rl_bridge.final_target_key)
@@ -745,6 +746,44 @@ func _execute_elevator_transit(from_floor: int, to_floor: int, with_patient: boo
 	)
 
 
+## Đường vào buồng (toạ độ thế giới): còn ở hành lang ➔ đi qua giữa cửa trước; đã ở cửa / trong buồng ➔ thẳng tới chỗ đứng.
+static func _elev_entry_path(tf: Transform3D, cur_local: Vector3, slot_local: Vector3) -> Array[Vector3]:
+	var pts: Array[Vector3] = []
+	if cur_local.z > 0.35:
+		pts.append(tf * Vector3(clampf(cur_local.x, -0.45, 0.45) * 0.5 + slot_local.x * 0.5, 0.0, 0.6))
+	pts.append(tf * slot_local)
+	return pts
+
+
+## Cho `node` đi qua các điểm `pts` (mặt phẳng XZ) với tốc độ `speed`, quay theo hướng đi (góc ngắn nhất),
+## cuối cùng quay về `final_yaw`. `forward_neg_z` = mặt trước là -Z (robot); NPC nhìn theo +Z.
+## Trả tổng thời gian (giây, gồm `delay`). Di chuyển theo vị trí ➔ NPC tự chạy animation đi bộ.
+func _tween_walk(node: Node3D, pts: Array[Vector3], speed: float, forward_neg_z: bool, final_yaw: float, delay: float) -> float:
+	var tw := create_tween()
+	var total: float = delay
+	if delay > 0.0:
+		tw.tween_interval(delay)
+	var prev: Vector3 = node.global_position
+	var yaw: float = node.rotation.y
+	for p: Vector3 in pts:
+		var target := Vector3(p.x, prev.y, p.z)
+		var d := target - prev
+		var dist: float = Vector2(d.x, d.z).length()
+		if dist < 0.02:
+			continue
+		var heading: float = atan2(-d.x, -d.z) if forward_neg_z else atan2(d.x, d.z)
+		yaw += wrapf(heading - yaw, -PI, PI)
+		var t_turn: float = 0.25
+		var t_move: float = dist / speed
+		tw.tween_property(node, ^"rotation:y", yaw, t_turn)
+		tw.tween_property(node, ^"global_position", target, t_move)
+		total += t_turn + t_move
+		prev = target
+	yaw += wrapf(final_yaw - yaw, -PI, PI)
+	tw.tween_property(node, ^"rotation:y", yaw, 0.4)
+	return total + 0.4
+
+
 func _update_viewer_camera() -> void:
 	if viewer_camera == null or robot == null:
 		return
@@ -754,6 +793,10 @@ func _update_viewer_camera() -> void:
 		room.set_ceiling_visible(camera_mode != CameraMode.TOP_DOWN)
 	var x_center: float = 100.0 if robot.global_position.x >= 75.0 else (50.0 if robot.global_position.x >= 25.0 else 0.0)
 	match camera_mode:
+		CameraMode.FOLLOW when _elev_cam_station != null:
+			# Đang đi thang máy: góc cố định ngoài hành lang nhìn thẳng vào buồng (camera bám robot bị tường che)
+			var stf: Transform3D = _elev_cam_station.global_transform
+			viewer_camera.look_at_from_position(stf * Vector3(0.9, 1.75, 2.7), stf * Vector3(0.0, 0.9, -0.8), Vector3.UP)
 		CameraMode.FOLLOW:
 			var cam_target := robot.global_position + Vector3(0.0, 0.8, 0.0)
 			var orbit_dist: float = 2.4
@@ -926,6 +969,7 @@ func reset_positions(is_task_transition: bool = false) -> void:
 	_pending_turn_reset = false
 	_thanks_pending = false
 	_after_thanks = Callable()
+	_elev_cam_station = null
 	human.end_escort()
 	current_target_patient = pick_next_target_patient(prev_pat)
 	if is_task_transition:

@@ -44,6 +44,8 @@ func _process(delta: float) -> void:
 
 ## Mở cửa thang máy, tắt va chạm chắn cửa để robot/bệnh nhân bước vào
 func open_doors() -> void:
+	if is_open:
+		return  # đã mở ➔ không phát chuông lần nữa
 	is_open = true
 	if collision_shape != null:
 		collision_shape.set_deferred(&"disabled", true)

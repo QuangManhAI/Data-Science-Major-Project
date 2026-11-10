@@ -14,7 +14,6 @@ anim_offset = 1.2
 is_seated = true
 staff_role = "patient"
 badge_text = "BỆNH NHÂN CAO TUỔI (SỐ 1025)"
-has_cane = true
 
 [node name="Model" parent="." instance=ExtResource("2")]
 

@@ -764,7 +764,6 @@ func _tween_walk(node: Node3D, pts: Array[Vector3], speed: float, forward_neg_z:
 	if delay > 0.0:
 		tw.tween_interval(delay)
 	var prev: Vector3 = node.global_position
-	var yaw: float = node.rotation.y
 	for p: Vector3 in pts:
 		var target := Vector3(p.x, prev.y, p.z)
 		var d := target - prev
@@ -772,16 +771,22 @@ func _tween_walk(node: Node3D, pts: Array[Vector3], speed: float, forward_neg_z:
 		if dist < 0.02:
 			continue
 		var heading: float = atan2(-d.x, -d.z) if forward_neg_z else atan2(d.x, d.z)
-		yaw += wrapf(heading - yaw, -PI, PI)
 		var t_turn: float = 0.25
 		var t_move: float = dist / speed
-		tw.tween_property(node, ^"rotation:y", yaw, t_turn)
+		_tween_turn(tw, node, heading, t_turn)
 		tw.tween_property(node, ^"global_position", target, t_move)
 		total += t_turn + t_move
 		prev = target
-	yaw += wrapf(final_yaw - yaw, -PI, PI)
-	tw.tween_property(node, ^"rotation:y", yaw, 0.4)
+	_tween_turn(tw, node, final_yaw, 0.4)
 	return total + 0.4
+
+
+## Quay `node` tới `yaw` theo góc ngắn nhất. Góc xuất phát đọc lúc bắt đầu quay (không lúc dựng tween), vì Godot
+## trả rotation.y đã quy về [−π, π] (robot.gd ghi rotation.y mỗi frame) ➔ nội suy số thực thẳng có thể quay cả vòng.
+func _tween_turn(tw: Tween, node: Node3D, yaw: float, duration: float) -> void:
+	var from := [0.0]
+	tw.tween_callback(func() -> void: from[0] = node.rotation.y)
+	tw.tween_method(func(t: float) -> void: node.rotation.y = lerp_angle(from[0], yaw, t), 0.0, 1.0, duration)
 
 
 func _update_viewer_camera() -> void:

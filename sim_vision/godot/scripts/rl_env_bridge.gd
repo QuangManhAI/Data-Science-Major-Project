@@ -301,19 +301,70 @@ static func compute_step_reward(
 	}
 
 
-## Bệnh nhân đi cùng robot trong pha GUIDE_ESCORT theo đội hình bạn đồng hành (side-by-side companion formation).
-## Bệnh nhân đi chếch phía trước-bên phải robot (~29-35 độ) để luôn nằm trong góc nhìn camera 75 độ của robot,
-## cho phép YOLO nhận diện liên tục mà không cần biến thần thánh từ simulation.
+## Bệnh nhân đi cùng robot trong pha GUIDE_ESCORT (V2, khớp HospitalPureVisionV2Env._step_escorted_patient):
+## - Đứng chếch trước-phải robot (~20°) để luôn nằm trong camera khi đường thẳng tới đó không bị chắn.
+## - Nếu bị chắn: đi theo dấu chân robot (điểm mới nhất nhìn thẳng tới được) thay vì trượt vào bàn ghế.
+## - Kẹt > 2 s: về điểm dấu chân gần nhất (người thật tự tìm đường quay lại lối robot đã đi).
+const PATIENT_ESCORT_SPEED: float = 0.70  # > tốc độ dẫn đường 0.52 m/s của robot để bệnh nhân theo kịp
+const COMPANION_OFFSETS: Array[Vector2] = [Vector2(1.2, 0.45), Vector2(1.1, 0.25), Vector2(1.0, 0.0)]  # (trước, phải) m
+const TRAIL_SPACING_M: float = 0.25
+const PATIENT_STUCK_RESET_S: float = 2.0
+static var _patient_stuck_s: float = 0.0
+
+
+static func _path_clear(patient: CharacterBody3D, from: Vector3, to: Vector3) -> bool:
+	if not patient.is_inside_tree() or patient.get_world_3d() == null:
+		return true
+	var q := PhysicsRayQueryParameters3D.create(from + Vector3(0, 0.35, 0), to + Vector3(0, 0.35, 0))
+	q.exclude = [patient.get_rid()]
+	return patient.get_world_3d().direct_space_state.intersect_ray(q).is_empty()
+
+
 static func step_escorted_patient(patient: CharacterBody3D, robot_pos: Vector3, delta: float, trail: Array[Vector3] = [], robot_yaw: float = 0.0) -> void:
 	if patient == null:
 		return
+	if trail.is_empty() or Human.flat_distance(trail[trail.size() - 1], robot_pos) >= TRAIL_SPACING_M:
+		trail.append(robot_pos)
+		while trail.size() > 200:
+			trail.remove_at(0)
 	var fwd := Vector3(-sin(robot_yaw), 0.0, -cos(robot_yaw))
 	var right := Vector3(cos(robot_yaw), 0.0, -sin(robot_yaw))
-	var companion_target: Vector3 = robot_pos + fwd * 1.0 + right * 0.55
-
-	var d_target: float = Human.flat_distance(patient.global_position, companion_target)
-	if d_target <= 0.20:
+	var p_pos: Vector3 = patient.global_position
+	var has_target: bool = false
+	var target: Vector3 = Vector3.ZERO
+	for off: Vector2 in COMPANION_OFFSETS:
+		var c: Vector3 = robot_pos + fwd * off.x + right * off.y
+		if _path_clear(patient, p_pos, c):
+			target = c
+			has_target = true
+			break
+	if not has_target:
+		for i: int in range(trail.size() - 1, -1, -1):
+			if _path_clear(patient, p_pos, trail[i]):
+				target = trail[i]
+				has_target = true
+				break
+	if not has_target:
+		if trail.is_empty():
+			return
+		target = trail[0]
+		for c: Vector3 in trail:
+			if Human.flat_distance(c, p_pos) < Human.flat_distance(target, p_pos):
+				target = c
+	var d_target: float = Human.flat_distance(p_pos, target)
+	if d_target <= 0.15:
 		patient.escort_stop()
+		_patient_stuck_s = 0.0
 		return
-	var step: float = minf(ESCORT_WALK_SPEED * delta, d_target)
-	patient.escort_step_towards(companion_target, step, delta)
+	patient.escort_step_towards(target, minf(PATIENT_ESCORT_SPEED * delta, d_target), delta)
+	if Human.flat_distance(p_pos, patient.global_position) < 0.002:
+		_patient_stuck_s += delta
+		if _patient_stuck_s >= PATIENT_STUCK_RESET_S and not trail.is_empty():
+			var nearest: Vector3 = trail[0]
+			for c: Vector3 in trail:
+				if Human.flat_distance(c, p_pos) < Human.flat_distance(nearest, p_pos):
+					nearest = c
+			patient.global_position = Vector3(nearest.x, patient.global_position.y, nearest.z)
+			_patient_stuck_s = 0.0
+	else:
+		_patient_stuck_s = 0.0

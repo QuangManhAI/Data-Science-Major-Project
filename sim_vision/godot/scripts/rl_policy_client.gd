@@ -47,7 +47,8 @@ func _set_connected(value: bool) -> void:
 
 ## Gửi một bước quan sát; bỏ qua nếu bước trước chưa có trả lời (không dồn hàng đợi).
 func send_state(robot_pos: Vector3, robot_yaw: float, v: float, omega: float, lidar: PackedFloat32Array,
-		patient_pos: Vector3, phase: int, goal_pos: Vector3, task_id: int, yolo: Array = [], dets: Array = []) -> void:
+		patient_pos: Vector3, phase: int, goal_pos: Vector3, task_id: int, yolo: Array = [], dets: Array = [],
+		depth: PackedFloat32Array = PackedFloat32Array()) -> void:
 	if not _connected or _waiting:
 		return
 	var msg: Dictionary = {
@@ -61,6 +62,8 @@ func send_state(robot_pos: Vector3, robot_yaw: float, v: float, omega: float, li
 		msg["yolo"] = yolo
 	if not dets.is_empty():
 		msg["dets"] = dets
+	if not depth.is_empty():
+		msg["depth"] = Array(depth)  # V2: 15 khoảng cách depth (m) trong HFOV camera
 	if _ws.send_text(JSON.stringify(msg)) == OK:
 		_waiting = true
 		_next_id += 1

@@ -1,6 +1,7 @@
 """RL policy server (port 8768): Godot gửi trạng thái thô, server trả lệnh (v, omega) từ PPO.
 
 Hỗ trợ tự động:
+- Policy Pure Vision V2 21-D (camera depth 5 sector + patient + phase + goal + tether), xem hospital_env_pure_vision_v2.py.
 - Policy thuần thị giác Pure Vision 29-D (5-sector visual depth, patient/doctor channels, ZERO LiDAR).
 - Policy lai Hybrid 37-D (17-ray LiDAR + YOLO person).
 - Policy cũ Legacy 31-D.
@@ -44,6 +45,15 @@ from src.training.hospital_env_pure_vision import (  # noqa: E402
     HospitalPureVisionEnv,
     compute_5_sector_depth,
 )
+from src.training.hospital_env_pure_vision_v2 import (  # noqa: E402
+    DEPTH_HFOV_RAD,
+    DEPTH_MAX_RANGE_M,
+    DEPTH_NUM_RAYS,
+    OBS_DIM_V2,
+    depth_rays_to_sectors,
+    remap_v1_obs,
+    tether_features,
+)
 from src.training.hospital_env_vision import (  # noqa: E402
     PUBLIC_PATROL_WAYPOINTS,
     HospitalVisualShiftEnv,
@@ -65,7 +75,7 @@ class PolicyRunner:
         self.lidar_source = lidar_source
         self.trace = trace
         self.n_steps = 0
-        if self.obs_dim == 29:
+        if self.obs_dim in (29, OBS_DIM_V2):
             self.env = HospitalPureVisionEnv(curriculum_stage=1, env_mode="solo")
         else:
             self.env = HospitalVisualShiftEnv(curriculum_stage=1, env_mode="solo")
@@ -75,6 +85,25 @@ class PolicyRunner:
         self.lost_det_frames: int = 0
         self.last_vis_goal: tuple[float, float, float] = (0.05, 0.0, 1.0)
         self.last_sectors: list[float] = [0.0, 0.0, 0.0, 0.0, 0.0]
+        self.tether_last_d: float = 1.0
+        self.tether_unseen_s: float = 0.0
+
+    def _to_v2(self, obs29: np.ndarray, msg: dict) -> np.ndarray:
+        """29-D pipeline (patient / phase / goal / kinematics) -> 21-D V2 obs with camera depth + tether."""
+        sectors = depth_rays_to_sectors(depth_from_msg(msg))
+        self.last_sectors = sectors.tolist()
+        if self.env.task_phase == TaskPhase.GUIDE_ESCORT:
+            seen = bool(obs29[5] > 0.5)
+            if seen:
+                self.tether_last_d = float(np.clip(1.20 / max(float(obs29[7]), 0.05), 0.5, 5.0))
+                self.tether_unseen_s = 0.0
+            tether = tether_features(self.tether_last_d, seen, self.tether_unseen_s)
+            if not seen:
+                self.tether_unseen_s += 0.2
+        else:
+            self.tether_last_d, self.tether_unseen_s = 1.0, 0.0
+            tether = np.zeros(3, dtype=np.float32)
+        return remap_v1_obs(obs29, sectors, tether)
 
     def act(self, msg: dict) -> dict:
         env = self.env
@@ -105,7 +134,7 @@ class PolicyRunner:
         # =========================================================================
         # 1. PURE VISION MODE (29-D, ZERO LIDAR)
         # =========================================================================
-        if self.obs_dim == 29:
+        if self.obs_dim in (29, OBS_DIM_V2):
             obs = env._get_obs()
 
             # Parse multi-class YOLO detections from Godot
@@ -310,6 +339,9 @@ class PolicyRunner:
                     obs[26] = math.sin(angle_goal)
                     obs[27] = math.cos(angle_goal)
 
+        if self.obs_dim == OBS_DIM_V2:
+            obs = self._to_v2(obs, msg)
+
         # Forward through Actor network
         with torch.no_grad():
             action, _, _, _ = self.agent.get_action_and_value(
@@ -340,6 +372,19 @@ class PolicyRunner:
             "phase": int(env.task_phase),
             "sectors": self.last_sectors,
         }
+
+
+def depth_from_msg(msg: dict) -> np.ndarray:
+    """15 depth distances (m). Prefer Godot's camera-depth fan; fall back to the LiDAR rays inside the HFOV."""
+    depth = msg.get("depth")
+    if depth is not None and len(depth) == DEPTH_NUM_RAYS:
+        return np.clip(np.asarray(depth, dtype=np.float32), 0.0, DEPTH_MAX_RANGE_M)
+    lidar = np.asarray(msg.get("lidar", []), dtype=np.float32) * 6.0
+    if lidar.size < 2:
+        return np.full(DEPTH_NUM_RAYS, DEPTH_MAX_RANGE_M, dtype=np.float32)
+    lidar_ang = np.linspace(-100.0, 100.0, lidar.size)
+    want = np.degrees(np.linspace(-DEPTH_HFOV_RAD / 2.0, DEPTH_HFOV_RAD / 2.0, DEPTH_NUM_RAYS))
+    return np.clip(np.interp(want, lidar_ang, lidar), 0.0, DEPTH_MAX_RANGE_M).astype(np.float32)
 
 
 def load_agent(checkpoint: Path) -> PPOHospitalAgent:

@@ -9,6 +9,15 @@ const WALK_SPEED: float = 0.5     # m/s (G4.1)
 const ARRIVE_TOL: float = 0.05    # m, coi như đã tới waypoint
 const PARDON_TRIGGER_DIST: float = 1.4
 const PARDON_CLEAR_DIST: float = 1.85
+## Locomotion: walk.res đã gỡ root motion (tools/extract_human_anims.gd); clip gốc tiến 1.40 m/s.
+const WALK_ANIM_SPEED: float = 1.40       # m/s ➔ speed_scale = v_thật / 1.40 để chân không trượt
+const WALK_ANIM_SCALE_MIN: float = 0.3
+const WALK_ANIM_SCALE_MAX: float = 1.6
+const WALK_START_SPEED: float = 0.12      # m/s (đã lọc) ➔ chuyển sang walk
+const WALK_STOP_SPEED: float = 0.06       # m/s ➔ về idle (trễ/hysteresis, tránh nháy walk↔idle)
+const SPEED_SMOOTH_RATE: float = 10.0     # 1/s, lọc thông thấp vận tốc đo được
+const TURN_RATE: float = 9.0              # 1/s, xoay thân mượt thay vì quay ngoắt
+const TELEPORT_DIST: float = 0.5          # m/khung: dịch chuyển tức thời ➔ không tính là đi
 
 @export var walks: bool = false
 @export var waypoints: Array[Vector3] = []
@@ -22,14 +31,20 @@ var _is_pardoning: bool = false
 var _pardon_target: Vector3 = Vector3.ZERO
 var _anchor_pos: Vector3 = Vector3.ZERO
 var _escorted: bool = false  # đang được robot dẫn đường: main điều khiển bước đi, bỏ qua waypoint / pardon
+var _last_pos: Vector3 = Vector3.ZERO
+var _speed: float = 0.0       # vận tốc phẳng đã lọc (m/s)
+var _moving: bool = false
 
 @onready var _anim: AnimationPlayer = $AnimationPlayer
 
 
 func _ready() -> void:
 	_anchor_pos = global_position
+	_last_pos = global_position
+	_moving = _is_walking()
+	_speed = WALK_SPEED if _moving else 0.0
 	if not use_t_pose:
-		_anim.play(&"human/walk" if _is_walking() else &"human/idle")
+		_anim.play(&"human/walk" if _moving else &"human/idle")
 	elif _anim != null and _anim.is_playing():
 		_anim.stop()
 
@@ -85,17 +100,15 @@ func escort_step_towards(target: Vector3, max_step: float, delta: float) -> void
 		escort_stop()
 		return
 	var disp: Vector3 = to / d * minf(max_step, d)
-	rotation.y = atan2(disp.x, disp.z)
+	face_yaw(atan2(disp.x, disp.z), delta)
 	velocity = disp / maxf(delta, 1e-4)
 	move_and_slide()
 	velocity = Vector3.ZERO
-	_play(&"human/walk")
 
 
 func escort_stop() -> void:
 	_escorted = true
 	velocity = Vector3.ZERO
-	_play(&"human/idle")
 
 
 ## Kết thúc dẫn đường (reset / hoàn thành nhiệm vụ) ➔ hành vi thường.
@@ -105,6 +118,7 @@ func end_escort() -> void:
 
 
 func _physics_process(delta: float) -> void:
+	_update_locomotion(delta)
 	if _escorted:
 		return
 	if pardon_enabled and robot_ref != null and is_instance_valid(robot_ref):
@@ -121,27 +135,23 @@ func _physics_process(delta: float) -> void:
 
 	if _is_pardoning:
 		if Human.flat_distance(global_position, _pardon_target) > ARRIVE_TOL:
-			_play(&"human/walk")
 			var p_step: Vector3 = Human.step_towards(global_position, _pardon_target, WALK_SPEED * delta)
 			var p_dir := Vector3(p_step.x - global_position.x, 0.0, p_step.z - global_position.z)
 			if p_dir.length() > 0.0:
-				rotation.y = atan2(p_dir.x, p_dir.z)
+				face_yaw(atan2(p_dir.x, p_dir.z), delta)
 				velocity = p_dir / delta
 				move_and_slide()
 		else:
 			velocity = Vector3.ZERO
-			_play(&"human/idle")
 			if robot_ref != null and is_instance_valid(robot_ref):
-				rotation.y = atan2(
+				face_yaw(atan2(
 					robot_ref.global_position.x - global_position.x,
 					robot_ref.global_position.z - global_position.z
-				)
+				), delta)
 		return
 
 	if not _is_walking():
-		_play(&"human/idle")
 		return
-	_play(&"human/walk")
 	var target: Vector3 = waypoints[_wp_index]
 	if Human.flat_distance(global_position, target) <= ARRIVE_TOL:
 		_wp_index = Human.next_waypoint_index(_wp_index, waypoints.size())
@@ -149,13 +159,33 @@ func _physics_process(delta: float) -> void:
 	var step: Vector3 = Human.step_towards(global_position, target, WALK_SPEED * delta)
 	var dir := Vector3(step.x - global_position.x, 0.0, step.z - global_position.z)
 	if dir.length() > 0.0:
-		rotation.y = atan2(dir.x, dir.z)  # quay mặt (+Z) theo hướng đi
+		face_yaw(atan2(dir.x, dir.z), delta)  # quay mặt (+Z) dần theo hướng đi
 		velocity = dir / delta
 		move_and_slide()
 
 
 func _is_walking() -> bool:
 	return walks and waypoints.size() >= 2
+
+
+## Xoay thân mượt về `yaw` (không quay ngoắt 180° ở đầu vòng tuần).
+func face_yaw(yaw: float, delta: float) -> void:
+	rotation.y = lerp_angle(rotation.y, yaw, Human.smooth_factor(TURN_RATE, delta))
+
+
+## Chọn walk/idle theo vận tốc THẬT (đo từ dịch chuyển mỗi khung, đã lọc + trễ) và chỉnh nhịp
+## bước `speed_scale` = v / WALK_ANIM_SPEED ➔ bàn chân khớp mặt sàn, không trượt, không nháy.
+func _update_locomotion(delta: float) -> void:
+	var moved: float = Human.flat_distance(global_position, _last_pos)
+	_last_pos = global_position
+	if delta <= 0.0:
+		return
+	var inst_speed: float = 0.0 if moved > TELEPORT_DIST else moved / delta
+	_speed = lerpf(_speed, inst_speed, Human.smooth_factor(SPEED_SMOOTH_RATE, delta))
+	_moving = Human.next_moving(_moving, _speed)
+	_play(&"human/walk" if _moving else &"human/idle")
+	if _anim != null:
+		_anim.speed_scale = Human.walk_anim_scale(_speed) if _moving else 1.0
 
 
 func _play(anim_name: StringName) -> void:
@@ -165,6 +195,19 @@ func _play(anim_name: StringName) -> void:
 		return
 	if _anim != null and _anim.current_animation != anim_name:
 		_anim.play(anim_name, 0.3)
+
+
+static func smooth_factor(rate: float, delta: float) -> float:
+	return 1.0 - exp(-rate * maxf(delta, 0.0))
+
+
+## Trễ (hysteresis) walk↔idle: bắt đầu đi khi > WALK_START_SPEED, dừng khi < WALK_STOP_SPEED.
+static func next_moving(moving: bool, speed: float) -> bool:
+	return speed > WALK_STOP_SPEED if moving else speed > WALK_START_SPEED
+
+
+static func walk_anim_scale(speed: float) -> float:
+	return clampf(speed / WALK_ANIM_SPEED, WALK_ANIM_SCALE_MIN, WALK_ANIM_SCALE_MAX)
 
 
 static func flat_distance(a: Vector3, b: Vector3) -> float:

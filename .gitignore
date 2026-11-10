@@ -84,3 +84,4 @@ logs/
 .env.*
 *.tar.gz
 *.pt
+.claude/

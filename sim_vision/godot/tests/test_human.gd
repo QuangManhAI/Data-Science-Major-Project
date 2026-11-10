@@ -72,3 +72,39 @@ func test_walks_without_waypoints_stays_idle() -> void:
 	add_child_autofree(human)
 	await wait_physics_frames(5)
 	assert_eq(human.global_position, Vector3.ZERO)
+
+
+func test_walk_clip_is_in_place() -> void:
+	var anim: Animation = load("res://assets/models/human_m06/anims/walk.res")
+	var i: int = anim.find_track(^"Skeleton3D:Bip01", Animation.TYPE_POSITION_3D)
+	var n: int = anim.track_get_key_count(i)
+	var drift: Vector3 = anim.track_get_key_value(i, n - 1) - anim.track_get_key_value(i, 0)
+	assert_lt(Vector2(drift.x, drift.z).length(), 0.01, "root motion đã gỡ ➔ không giật về đầu mỗi vòng lặp")
+
+
+func test_walk_anim_scale_matches_ground_speed() -> void:
+	assert_almost_eq(Human.walk_anim_scale(Human.WALK_ANIM_SPEED), 1.0, 1e-4)
+	assert_almost_eq(Human.walk_anim_scale(0.5), 0.5 / Human.WALK_ANIM_SPEED, 1e-4)
+	assert_eq(Human.walk_anim_scale(0.0), Human.WALK_ANIM_SCALE_MIN)
+	assert_eq(Human.walk_anim_scale(10.0), Human.WALK_ANIM_SCALE_MAX)
+
+
+func test_moving_hysteresis() -> void:
+	assert_false(Human.next_moving(false, 0.09), "chưa đủ nhanh để bắt đầu đi")
+	assert_true(Human.next_moving(false, 0.2))
+	assert_true(Human.next_moving(true, 0.09), "đang đi, tốc độ giảm nhẹ ➔ vẫn walk (không nháy)")
+	assert_false(Human.next_moving(true, 0.03))
+
+
+func test_walking_syncs_cadence_and_turns_smoothly() -> void:
+	var human := HumanScene.instantiate() as Human
+	human.walks = true
+	human.waypoints = [Vector3(0, 0, 0), Vector3(3, 0, 0)] as Array[Vector3]
+	add_child_autofree(human)
+	await wait_physics_frames(3)
+	assert_lt(absf(human.rotation.y - PI / 2), PI / 2 - 0.05, "đang xoay dần, chưa quay ngoắt")
+	await wait_seconds(1.0)
+	assert_almost_eq(human.rotation.y, PI / 2, 0.05, "đã quay hẳn về hướng đi +X")
+	var anim := human.get_node("AnimationPlayer") as AnimationPlayer
+	assert_eq(anim.current_animation, "human/walk")
+	assert_almost_eq(anim.speed_scale, Human.WALK_SPEED / Human.WALK_ANIM_SPEED, 0.05, "nhịp chân khớp 0.5 m/s")

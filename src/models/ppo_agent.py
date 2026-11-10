@@ -20,6 +20,7 @@ from torch.distributions import Normal
 OBS_DIM = 31
 OBS_DIM_HYBRID = 37
 OBS_DIM_PURE_VISION = 29
+OBS_DIM_PURE_VISION_V2 = 21
 ACT_DIM = 2
 V_MAX = 0.8
 OMEGA_MAX = 1.2

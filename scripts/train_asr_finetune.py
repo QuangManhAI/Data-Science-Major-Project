@@ -453,7 +453,8 @@ def main() -> None:
     ap.add_argument("--seed", type=int, default=42)
     args = ap.parse_args()
     global DATA
-    DATA = ROOT / "data" / "processed" / args.data
+    data_p = Path(args.data)
+    DATA = data_p if data_p.is_dir() else (ROOT / "data" / "processed" / args.data)
 
     run = setup_run(args)
     random.seed(args.seed)

@@ -16,6 +16,8 @@ var _depth_rays: Array[RayCast3D] = []
 ## Người đang được theo dõi (bệnh nhân mục tiêu / đang dẫn): pixel depth trong box YOLO của họ bị che,
 ## vì họ là mục tiêu chứ không phải vật cản (khớp HospitalPureVisionV2Env.depth_rays).
 var depth_ignore: CollisionObject3D = null
+## Tay giao tiếp (chỉ hướng / vẫy), xem robot_arms.gd.
+var arms: RobotArms = null
 
 # Camera depth (RGB-D / depth ước lượng trên robot thật): 15 tia ngang trong HFOV camera, tầm 4 m.
 # Khớp DEPTH_* trong src/training/hospital_env_pure_vision_v2.py
@@ -44,6 +46,18 @@ func _ready() -> void:
 	_viewport.size = Vector2i(Config.IMG_W, Config.IMG_H)
 	_setup_lidar_fan()
 	_setup_depth_fan()
+	_setup_arms()
+
+
+func _setup_arms() -> void:
+	if arms != null:
+		return
+	arms = RobotArms.new()
+	add_child(arms)
+	# Camera robot (ảnh cho YOLO) không render tay của chính nó.
+	var cam := _viewport.get_node_or_null(^"RobotCamera") as Camera3D
+	if cam != null:
+		cam.cull_mask &= ~RobotArms.VISUAL_LAYER
 
 
 func _setup_lidar_fan() -> void:

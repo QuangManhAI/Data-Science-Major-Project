@@ -152,7 +152,7 @@ func build_log_row(r: Dictionary, error: String) -> Dictionary:
 
 
 func _on_talk_started(clip_id: String) -> void:
-	if main != null and (main.is_task_busy() or Main.is_dialogue_state(main.state)):
+	if main != null and ((main.is_task_busy() and not main.accepts_patient_turn()) or Main.is_dialogue_state(main.state)):
 		return
 	print("[ESCORT_DEBUG] >>> NPC talk started: clip_id='%s', robot_state=%s" % [clip_id, Config.state_name(main.state)])
 	if main.state == Config.RobotState.ARRIVED or main.state in [Config.RobotState.APPROACH, Config.RobotState.SEARCH]:
@@ -314,7 +314,7 @@ func register_npc(other_npc: Npc) -> void:
 		return
 	_registered_npcs.append(other_npc)
 	other_npc.talk_started.connect(func(clip_id: String) -> void:
-		if main != null and (main.is_task_busy() or Main.is_dialogue_state(main.state)):
+		if main != null and ((main.is_task_busy() and not main.accepts_patient_turn()) or Main.is_dialogue_state(main.state)):
 			return
 		if active_npc != null and active_npc != other_npc and Main.is_dialogue_state(main.state):
 			return

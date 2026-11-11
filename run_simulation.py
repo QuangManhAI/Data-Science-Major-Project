@@ -262,6 +262,14 @@ def main() -> None:
         help="Patients strictly request escort to hospital clinic rooms across Floors 1, 2, and 3",
     )
     parser.add_argument(
+        "--lag-prob",
+        dest="lag_prob",
+        type=float,
+        default=None,
+        help="Probability (0-1) that the escorted patient falls behind once per escort, to exercise robot reminders / "
+             "'continue?' questions (docs/UPGRADE_HRI_PLAN.md). Default in Godot: 0.5",
+    )
+    parser.add_argument(
         "--no-yolo",
         "--disconnect-yolo",
         dest="no_yolo",
@@ -453,6 +461,8 @@ def main() -> None:
     if args.escort_only:
         extra_godot_args.append("--escort-only")
         log("[Launcher] Escort Only Mode active: Patients strictly request escort to clinic rooms across Floors 1-3.")
+    if args.lag_prob is not None:
+        extra_godot_args.append(f"--lag-prob={args.lag_prob}")
     if extra_godot_args:
         godot_cmd.append("--")
         godot_cmd.extend(extra_godot_args)

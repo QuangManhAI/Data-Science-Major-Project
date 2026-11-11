@@ -72,6 +72,26 @@ const ELEV_ROBOT_SPEED: float = 0.7      # m/s khi vào / ra thang máy
 const ELEV_PATIENT_SPEED: float = 0.75
 const ELEV_PATIENT_DELAY_S: float = 0.6  # bệnh nhân bước theo sau robot
 var _after_thanks: Callable = Callable()
+
+# --- Tương tác khi dẫn đường (docs/UPGRADE_HRI_PLAN.md mục A–C) ---
+const PATIENT_LAG_PROB: float = 0.5               # xác suất bệnh nhân tụt lại một lần trong ca (mô phỏng); --lag-prob=x
+const LAG_START_RANGE_S: Vector2 = Vector2(6.0, 20.0)
+const LAG_DURATION_RANGE_S: Vector2 = Vector2(6.0, 30.0)
+const REMIND_HEED_PROB: float = 0.6               # nghe nhắc thì bước tiếp ngay
+const ANSWER_WEIGHTS: Dictionary = {"tiep_tuc": 0.7, "dung_lai": 0.2, "cam_on": 0.1}   # trả lời "có dẫn tiếp không"
+const GOAL_ANNOUNCE_MAX_M: float = 7.0
+const GOAL_ANNOUNCE_MIN_M: float = 2.0
+const GOAL_ANNOUNCE_MAX_ANGLE: float = deg_to_rad(100.0)
+const HOLD_TURN_GAIN: float = 1.8
+var patient_lag_prob: float = PATIENT_LAG_PROB
+var announcer: RobotAnnouncer = null
+var escort_monitor: EscortMonitor = EscortMonitor.new()
+var _ask_pending: bool = false
+var _escort_t: float = 0.0
+var _lag_at_s: float = -1.0
+var _lag_dur_s: float = 0.0
+var _goal_announced_key: String = ""
+var _after_line: Dictionary = {}   # key câu thoại ➔ Callable gọi khi robot nói xong câu đó
 @onready var robot: Robot = $Robot
 @onready var vision: VisionClient = $VisionClient
 @onready var overlay: ViewOverlay = $UI/ViewOverlay
@@ -100,6 +120,8 @@ func _ready() -> void:
 			escort_only_mode = true
 		elif arg in ["--all-intents", "--all_intents"]:
 			all_intents_flag = true
+		elif arg.begins_with("--lag-prob="):
+			patient_lag_prob = clampf(arg.get_slice("=", 1).to_float(), 0.0, 1.0)
 	if use_rl_controller and not all_intents_flag:
 		escort_only_mode = true
 	if use_rl_controller:
@@ -148,6 +170,7 @@ func _ready() -> void:
 	_setup_hospital_npcs()
 	if escort_only_mode:
 		_apply_escort_only_mode()
+	_setup_announcer()
 	reset_positions()
 	_update_viewer_camera()
 	_setup_hospital_ambience()
@@ -188,6 +211,7 @@ func trigger_test_escort(dest_key: String = "") -> void:
 	if active_escorted_patient != null and active_escorted_patient.has_method("set_state"):
 		active_escorted_patient.set_state(HospitalNpc.State.ESCORTED)
 	_rl_bridge.begin_post_dialogue_task("guide", target, fl, active_escorted_patient)
+	_begin_escort_hri()
 	_task_elapsed_s = 0.0
 	_task_best_dist = -1.0
 	state = Config.RobotState.APPROACH
@@ -297,6 +321,8 @@ func _physics_process(delta: float) -> void:
 		var esc_p: CharacterBody3D = active_escorted_patient if has_escort else human
 		var d_tether: float = Human.flat_distance(robot.global_position, esc_p.global_position)
 		var d_patient_goal: float = Human.flat_distance(esc_p.global_position, _rl_bridge.goal_position) if has_escort else 0.0
+		if has_escort and not _is_in_elevator_transit:
+			_update_escort_hri(esc_p, d_tether, delta)
 
 		# Tự động mở cửa thang máy khi robot tiến lại gần (d <= 3.2m)
 		if _rl_bridge.goal_key in ["thang_may", "thang_may_t2", "thang_may_t3"]:
@@ -326,13 +352,10 @@ func _physics_process(delta: float) -> void:
 				esc_p.set_meta("helped", true)
 			active_escorted_patient = null
 			var cur_floor: int = Room.get_floor(robot.global_position)
-			# Bệnh nhân nói lời cảm ơn bằng clip thật ➔ robot nghe (STT/NLU) và đáp (TTS); xong lượt mới về / reset.
-			if has_escort and _start_thanks_turn(esc_p):
-				_after_thanks = _finish_escort.bind(cur_floor)
+			# Robot chỉ vào phòng và báo đã tới; nói xong bệnh nhân mới cảm ơn.
+			if has_escort and _announce_arrival(esc_p, cur_floor):
 				return
-			if dialogue != null and dialogue.has_method("show_subtitle"):
-				dialogue.show_subtitle("Bệnh nhân", "Cảm ơn robot, tôi đã tới nơi khám!", 4.0)
-			_finish_escort(cur_floor)
+			_thanks_or_finish(esc_p if has_escort else null, cur_floor)
 			return
 		if not _policy_active():
 			robot.set_command(0.0, 0.0)
@@ -367,7 +390,7 @@ func _physics_process(delta: float) -> void:
 			overlay.set_status("LỖI: Mất kết nối tới RL Policy Server (ws://127.0.0.1:8768)!")
 			push_error("[Main] ERROR: RL Policy Server is disconnected or inactive! Robot halted (rule-based fallback disabled).")
 			return
-	if _policy_active():
+	if _policy_active() and not _escort_holding():
 		_step_policy(delta)
 
 
@@ -573,7 +596,7 @@ func _step_policy(delta: float) -> void:
 
 
 func _on_policy_action(v: float, omega: float, phase: int) -> void:
-	if not _policy_active() or Main.is_dialogue_state(state) or _is_in_elevator_transit:
+	if not _policy_active() or Main.is_dialogue_state(state) or _is_in_elevator_transit or _escort_holding():
 		return
 	if _is_search_phase():
 		if state == Config.RobotState.ARRIVED:
@@ -597,6 +620,12 @@ func _on_dialogue_turn_completed(row: Dictionary) -> void:
 		print("[ESCORT_DEBUG] >>> Thanks turn done: heard='%s', intent=%s, error='%s'" % [
 			row.get("hyp_text", ""), row.get("intent_pred", ""), row.get("error", "")])
 		return
+	if _ask_pending:
+		_ask_pending = false
+		print("[ESCORT_DEBUG] >>> Continue? answer: heard='%s', intent=%s, error='%s'" % [
+			row.get("hyp_text", ""), row.get("intent_pred", ""), row.get("error", "")])
+		_on_continue_answer(str(row.get("intent_pred", "")) if str(row.get("error", "")) == "" else "")
+		return
 
 	if escort_only_mode and act != "guide":
 		act = "guide"
@@ -619,6 +648,8 @@ func _on_dialogue_turn_completed(row: Dictionary) -> void:
 		if active_escorted_patient != null and active_escorted_patient.has_method("set_state"):
 			active_escorted_patient.set_state(HospitalNpc.State.ESCORTED)
 		_rl_bridge.begin_post_dialogue_task(act, target_key, fl, active_escorted_patient)
+		if act == "guide":
+			_begin_escort_hri()
 		_task_elapsed_s = 0.0  # đích đổi từ bệnh nhân sang phòng / nhân viên
 		_task_best_dist = -1.0
 		if not Main.is_dialogue_state(state):
@@ -647,6 +678,8 @@ func _execute_elevator_transit(from_floor: int, to_floor: int, with_patient: boo
 		return
 	_is_in_elevator_transit = true
 	robot.set_command(0.0, 0.0)
+	if with_patient and announcer != null:
+		announcer.say("elevator_enter")
 
 	var station_from: ElevatorStation = room.get_elevator_station(from_floor) if room != null else null
 	var station_to: ElevatorStation = room.get_elevator_station(to_floor) if room != null else null
@@ -758,6 +791,9 @@ func _execute_elevator_transit(from_floor: int, to_floor: int, with_patient: boo
 			_rl_bridge.goal_key = _rl_bridge.final_target_key
 			_rl_bridge.goal_position = room.get_room_waypoint(_rl_bridge.final_target_key)
 			overlay.set_status("Đã đến Tầng %d, tiếp tục tới: %s" % [to_floor, _rl_bridge.goal_key])
+			if announcer != null:
+				announcer.say("elevator_exit", {"floor": to_floor})
+			escort_monitor.far_s = 0.0
 		else:
 			_rl_bridge.task_phase = RLEnvBridgeScript.TaskPhase.SEARCH_PATIENT
 			_rl_bridge.goal_key = "patient"
@@ -991,6 +1027,7 @@ func reset_positions(is_task_transition: bool = false) -> void:
 	_task_elapsed_s = 0.0
 	_task_best_dist = -1.0
 	_arrived_wait_s = 0.0
+	_reset_escort_hri()
 	var prev_pat: CharacterBody3D = active_escorted_patient
 	if active_escorted_patient != null and active_escorted_patient.has_method("end_escort"):
 		active_escorted_patient.end_escort()
@@ -1415,3 +1452,260 @@ func set_ambience_enabled(on: bool) -> void:
 		if is_instance_valid(p):
 			p.set("stream_paused", not on)
 	overlay.set_status("Tiếng ồn bệnh viện: %s (phím M)" % ("bật" if on else "tắt"))
+
+
+# ===================== Tương tác khi dẫn đường (docs/UPGRADE_HRI_PLAN.md mục A–C) =====================
+
+func _setup_announcer() -> void:
+	if announcer != null:
+		return
+	announcer = RobotAnnouncer.new()
+	announcer.name = "RobotAnnouncer"
+	announcer.tts = get_node_or_null(^"TtsClient") as TtsClient
+	announcer.voice = robot.get_node_or_null(^"Head/Voice") as RobotVoice
+	announcer.subtitle = get_node_or_null(^"UI/Subtitle") as Subtitle
+	announcer.is_busy = func() -> bool: return Main.is_dialogue_state(state)
+	add_child(announcer)
+	announcer.line_started.connect(_on_line_started)
+	announcer.line_finished.connect(_on_line_finished)
+
+
+## DialogueManager hỏi: có nhận lượt nói của bệnh nhân đang được dẫn không (trả lời "có dẫn tiếp không").
+func accepts_patient_turn() -> bool:
+	return _ask_pending
+
+
+func _escort_holding() -> bool:
+	return active_escorted_patient != null and _rl_bridge != null \
+			and _rl_bridge.task_phase == RLEnvBridgeScript.TaskPhase.GUIDE_ESCORT and escort_monitor.hold_robot()
+
+
+## Bắt đầu ca dẫn: đặt lại giám sát, lên lịch bệnh nhân tụt lại (mô phỏng), robot mời đi theo.
+func _begin_escort_hri() -> void:
+	_reset_escort_hri()
+	var p: CharacterBody3D = active_escorted_patient
+	if p == null:
+		return
+	if _rng.randf() < patient_lag_prob:
+		_lag_at_s = _rng.randf_range(LAG_START_RANGE_S.x, LAG_START_RANGE_S.y)
+		_lag_dur_s = _rng.randf_range(LAG_DURATION_RANGE_S.x, LAG_DURATION_RANGE_S.y)
+	if announcer != null:
+		announcer.say("start")
+
+
+func _reset_escort_hri() -> void:
+	escort_monitor.reset()
+	_ask_pending = false
+	_escort_t = 0.0
+	_lag_at_s = -1.0
+	_goal_announced_key = ""
+	_after_line.clear()
+	if active_escorted_patient != null:
+		active_escorted_patient.set_meta("escort_hold_s", 0.0)
+	if announcer != null:
+		announcer.cancel()
+	if robot != null and robot.arms != null:
+		robot.arms.lower()
+
+
+func _update_escort_hri(p: CharacterBody3D, d_tether: float, delta: float) -> void:
+	_escort_t += delta
+	if _lag_at_s >= 0.0 and _escort_t >= _lag_at_s:
+		_lag_at_s = -1.0
+		p.set_meta("escort_hold_s", _lag_dur_s)
+		print("[ESCORT_HRI] t=%.1fs bệnh nhân dừng lại %.1fs (mô phỏng tụt lại)" % [_escort_t, _lag_dur_s])
+	if Main.is_dialogue_state(state):
+		return
+	var seen: bool = has_line_of_sight(robot, p)
+	for ev: String in escort_monitor.step(d_tether, seen, delta):
+		_on_escort_event(ev, p, d_tether)
+	if escort_monitor.hold_robot():
+		# Đứng chờ, quay mặt về phía bệnh nhân (camera nhìn thấy họ, cử chỉ hướng về họ).
+		var to: Vector3 = p.global_position - robot.global_position
+		var err: float = wrapf(atan2(-to.x, -to.z) - robot.rotation.y, -PI, PI)
+		var w: float = clampf(HOLD_TURN_GAIN * err, -Config.OMEGA_MAX, Config.OMEGA_MAX) if absf(err) > 0.12 else 0.0
+		robot.set_command(0.0, w)
+		state = Config.RobotState.APPROACH
+	elif escort_monitor.state == EscortMonitor.State.OK:
+		_maybe_announce_goal()
+
+
+func _on_escort_event(ev: String, p: CharacterBody3D, d_tether: float) -> void:
+	print("[ESCORT_HRI] t=%.1fs %s (tether=%.2fm, nhắc=%d, hỏi=%d)" % [_escort_t, ev, d_tether, escort_monitor.reminds, escort_monitor.asks])
+	match ev:
+		"remind", "remind_again":
+			_say(ev)
+			robot.arms.wave(2.0)
+			var hold: float = float(p.get_meta("escort_hold_s", 0.0))
+			if hold > 1.0 and _rng.randf() < REMIND_HEED_PROB:
+				p.set_meta("escort_hold_s", 1.0)       # nghe nhắc ➔ bước tiếp
+		"resumed":
+			_say("continue_ok")
+			robot.arms.point_at(_leg_target(_rl_bridge.goal_position) + Vector3(0, 1.0, 0), 2.5)
+		"ask_continue":
+			_say_then("ask_continue", {}, _start_answer_turn.bind(p))
+		"give_up":
+			_end_escort_declined(p)
+
+
+## Robot nói xong câu hỏi ➔ bệnh nhân trả lời bằng clip thật (tiep_tuc / dung_lai / cam_on) ➔ STT ➔ PhoBERT.
+func _start_answer_turn(p: CharacterBody3D) -> void:
+	if p == null or p != active_escorted_patient or dialogue == null:
+		return
+	var intent: String = _pick_weighted(ANSWER_WEIGHTS)
+	var p_npc: Npc = (p.get_npc() if p.has_method("get_npc") else p.get_node_or_null(^"Npc")) as Npc
+	if p_npc != null:
+		dialogue.register_npc(p_npc)
+		_ask_pending = true
+		var clip: String = p_npc.say_intent(intent)
+		if clip != "" and Main.is_dialogue_state(state):
+			print("[ESCORT_HRI] bệnh nhân trả lời bằng clip '%s' (kịch bản: %s)" % [clip, intent])
+			return
+		_ask_pending = false
+		if clip != "":
+			p_npc.reset()
+	# Không phát được clip ➔ coi như không nghe được câu trả lời.
+	_on_continue_answer("")
+
+
+func _on_continue_answer(intent: String) -> void:
+	var p: CharacterBody3D = active_escorted_patient
+	var res: String = escort_monitor.answer(intent)
+	print("[ESCORT_HRI] intent trả lời='%s' ➔ %s" % [intent, res])
+	if p == null:
+		return
+	match res:
+		"continue":
+			p.set_meta("escort_hold_s", 0.0)
+			robot.arms.point_at(_leg_target(_rl_bridge.goal_position) + Vector3(0, 1.0, 0), 2.5)
+		"rest":
+			p.set_meta("escort_hold_s", EscortMonitor.REST_WAIT_S * _rng.randf_range(0.4, 1.3))
+		"ask_again":
+			_say_then("ask_again", {}, _start_answer_turn.bind(p))
+		"end":
+			_end_escort_declined(p)
+
+
+## Bệnh nhân không muốn dẫn tiếp / không trả lời: chào, thả bệnh nhân, robot về / tìm người kế tiếp.
+func _end_escort_declined(p: CharacterBody3D) -> void:
+	var cur_floor: int = Room.get_floor(robot.global_position)
+	print("[ESCORT_HRI] kết thúc ca dẫn theo ý bệnh nhân (tầng %d)" % cur_floor)
+	if p != null:
+		p.set_meta("escort_hold_s", 0.0)
+		p.set_meta("helped", true)
+		if p.has_method("end_escort"):
+			p.end_escort()
+	active_escorted_patient = null
+	_rl_bridge.task_phase = RLEnvBridgeScript.TaskPhase.SEARCH_PATIENT
+	robot.set_command(0.0, 0.0)
+	state = Config.RobotState.ARRIVED
+	overlay.set_status("Bệnh nhân không cần dẫn tiếp")
+	_say_then("stop_ok", {}, _finish_escort.bind(cur_floor))
+
+
+## Tới nơi: chỉ vào phòng + "Đã tới … rồi ạ", nói xong bệnh nhân cảm ơn. Không nói được ➔ false.
+func _announce_arrival(p: CharacterBody3D, cur_floor: int) -> bool:
+	if announcer == null:
+		return false
+	var place: String = announcer.place_name(_rl_bridge.goal_key)
+	if place == "" or not announcer.say("arrive", {"place": place}):
+		return false
+	robot.arms.point_at(_rl_bridge.goal_position + Vector3(0, 1.0, 0), 3.5)
+	robot.set_command(0.0, 0.0)
+	state = Config.RobotState.ARRIVED
+	_after_line["arrive"] = _thanks_or_finish.bind(p, cur_floor)
+	return true
+
+
+func _thanks_or_finish(p: CharacterBody3D, cur_floor: int) -> void:
+	# Bệnh nhân nói lời cảm ơn bằng clip thật ➔ robot nghe (STT/NLU) và đáp (TTS); xong lượt mới về / reset.
+	if p != null and _start_thanks_turn(p):
+		_after_thanks = _finish_escort.bind(cur_floor)
+		return
+	if dialogue != null and dialogue.has_method("show_subtitle"):
+		dialogue.show_subtitle("Bệnh nhân", "Cảm ơn robot, tôi đã tới nơi khám!", 4.0)
+	_finish_escort(cur_floor)
+
+
+## Đích chặng hiện tại lọt vào tầm nhìn (≤ 7 m, phía trước) ➔ chỉ tay + "Phòng … ở phía trước bên phải ạ", một lần mỗi đích.
+func _maybe_announce_goal() -> void:
+	if announcer == null or _rl_bridge == null:
+		return
+	var key: String = _rl_bridge.goal_key
+	if key == "" or key == _goal_announced_key:
+		return
+	var gp: Vector3 = _rl_bridge.goal_position
+	var d: float = Human.flat_distance(robot.global_position, gp)
+	if d > GOAL_ANNOUNCE_MAX_M or d < GOAL_ANNOUNCE_MIN_M or not _point_visible(gp + Vector3(0, 1.0, 0)):
+		return
+	var local: Vector3 = robot.to_local(gp)
+	var ang: float = atan2(local.x, -local.z)
+	if absf(ang) > GOAL_ANNOUNCE_MAX_ANGLE:
+		return
+	var place: String = announcer.place_name(key)
+	if place == "":
+		return
+	_goal_announced_key = key
+	var line: String = Main.goal_side_line(ang)
+	_say(line, {"place": place})
+	robot.arms.point_at(gp + Vector3(0, 1.0, 0), 4.0)
+
+
+static func goal_side_line(angle_rad: float) -> String:
+	if absf(angle_rad) < deg_to_rad(25.0):
+		return "goal_ahead"
+	return "goal_right" if angle_rad > 0.0 else "goal_left"
+
+
+## Tia từ đầu robot tới điểm `world_pos` không bị tường / đồ vật chắn (bỏ qua robot và bệnh nhân).
+func _point_visible(world_pos: Vector3) -> bool:
+	var space := get_world_3d().direct_space_state
+	if space == null:
+		return true
+	var q := PhysicsRayQueryParameters3D.create(robot.global_position + Vector3(0, 1.2, 0), world_pos)
+	var ex: Array[RID] = [robot.get_rid()]
+	if active_escorted_patient != null:
+		ex.append(active_escorted_patient.get_rid())
+	q.exclude = ex
+	return space.intersect_ray(q).is_empty()
+
+
+func _say(key: String, args: Dictionary = {}) -> bool:
+	return announcer != null and announcer.say(key, args)
+
+
+## Nói câu `key` rồi gọi `then`; không nói được ➔ gọi `then` ngay.
+func _say_then(key: String, args: Dictionary, then: Callable) -> void:
+	if _say(key, args):
+		_after_line[key] = then
+	else:
+		then.call()
+
+
+func _on_line_started(key: String) -> void:
+	if key == "start" and _rl_bridge != null and robot.arms != null:
+		var tgt: Vector3 = _leg_target(_rl_bridge.goal_position) + Vector3(0, 1.0, 0)
+		if _point_visible(tgt):
+			robot.arms.point_at(tgt, 3.0)
+		else:
+			robot.arms.wave(1.6)
+
+
+func _on_line_finished(key: String) -> void:
+	if _after_line.has(key):
+		var cb: Callable = _after_line[key]
+		_after_line.erase(key)
+		if cb.is_valid():
+			cb.call()
+
+
+func _pick_weighted(weights: Dictionary) -> String:
+	var total: float = 0.0
+	for k: String in weights:
+		total += float(weights[k])
+	var r: float = _rng.randf() * total
+	for k: String in weights:
+		r -= float(weights[k])
+		if r <= 0.0:
+			return k
+	return str(weights.keys()[0])

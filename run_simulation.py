@@ -270,6 +270,13 @@ def main() -> None:
              "'continue?' questions (docs/UPGRADE_HRI_PLAN.md). Default in Godot: 0.5",
     )
     parser.add_argument(
+        "--no-face-paste",
+        dest="no_face_paste",
+        action="store_true",
+        help="Do not paste real face photos on NPC heads (sim_vision/godot/scripts/npc_face.gd); default pastes them "
+             "when sim_vision/godot/assets/textures/npc_faces/ exists",
+    )
+    parser.add_argument(
         "--no-yolo",
         "--disconnect-yolo",
         dest="no_yolo",
@@ -461,6 +468,8 @@ def main() -> None:
     if args.escort_only:
         extra_godot_args.append("--escort-only")
         log("[Launcher] Escort Only Mode active: Patients strictly request escort to clinic rooms across Floors 1-3.")
+    if args.no_face_paste:
+        extra_godot_args.append("--no-face-paste")
     if args.lag_prob is not None:
         extra_godot_args.append(f"--lag-prob={args.lag_prob}")
     if extra_godot_args:

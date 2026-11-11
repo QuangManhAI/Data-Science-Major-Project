@@ -79,3 +79,29 @@ func test_wave_then_stops() -> void:
 	for i: int in 10:
 		robot.arms._process(0.05)
 	assert_false(robot.arms.is_waving())
+
+
+func test_arm_never_reaches_across_body() -> void:
+	var left_target := Vector3(-1.0, -0.2, -0.5)                      # trước, bên trái
+	var r: Vector3 = RobotArms.clamp_point_dir(left_target, RobotArms.Side.RIGHT)
+	assert_gte(atan2(r.x, -r.z), -RobotArms.INWARD_YAW_RAD - 1e-4, "tay phải không quét sang trái qua thân")
+	var l: Vector3 = RobotArms.clamp_point_dir(Vector3(1.0, -0.2, -0.5), RobotArms.Side.LEFT)
+	assert_lte(atan2(l.x, -l.z), RobotArms.INWARD_YAW_RAD + 1e-4)
+
+
+func test_side_switch_with_hysteresis() -> void:
+	assert_eq(RobotArms.side_for_yaw(deg_to_rad(-5.0), RobotArms.Side.RIGHT), RobotArms.Side.RIGHT, "lệch chút ➔ giữ tay")
+	assert_eq(RobotArms.side_for_yaw(deg_to_rad(-40.0), RobotArms.Side.RIGHT), RobotArms.Side.LEFT, "sang hẳn trái ➔ đổi tay")
+	assert_eq(RobotArms.side_for_yaw(deg_to_rad(5.0), RobotArms.Side.LEFT), RobotArms.Side.LEFT)
+	assert_eq(RobotArms.side_for_yaw(deg_to_rad(40.0), RobotArms.Side.LEFT), RobotArms.Side.RIGHT)
+
+
+func test_point_switches_arm_when_robot_turns() -> void:
+	var robot := _robot()
+	var target := Vector3(2.0, 0.5, -2.0)       # trước-phải
+	robot.arms.point_at(target)
+	robot.arms._process(0.05)
+	assert_eq(robot.arms.pointing_side(), RobotArms.Side.RIGHT)
+	robot.rotation.y = deg_to_rad(-90.0)        # robot quay phải 90° ➔ đích giờ ở trước-trái
+	robot.arms._process(0.05)
+	assert_eq(robot.arms.pointing_side(), RobotArms.Side.LEFT, "đổi tay, không vươn tay phải qua thân")

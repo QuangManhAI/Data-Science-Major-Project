@@ -52,13 +52,13 @@ Nguyên tắc chung: **không đổi observation 21-D của policy RL** ➔ khô
 - [ ] C4. Log + eval: số lần nhắc, số lần hỏi, kết quả, thời gian chờ (thêm vào `scripts/eval_godot_escort.py`).
 
 ### D. Nhận diện đúng người (mặt + quần áo + dáng)
-- [ ] D1. Mặt NPC: texture mặt **do AI tạo** (người không tồn tại, không dùng ảnh người thật); đa dạng màu áo / quần.
-- [ ] D2. Thử model pretrained **chưa chỉnh gì**: phát hiện mặt (SCRFD/RetinaFace), embedding mặt (ArcFace),
+- [x] D1. (Bỏ) NPC là avatar Microsoft Rocketbox (MIT) scan người thật, mặt đã thật sẵn, 10 ngoại hình không trùng nhau. Ghi chú cũ: Mặt NPC: texture mặt **do AI tạo** (người không tồn tại, không dùng ảnh người thật); đa dạng màu áo / quần.
+- [x] D2. Thử model pretrained **chưa chỉnh gì**: phát hiện mặt (SCRFD/RetinaFace), embedding mặt (ArcFace),
       ReID toàn thân (OSNet). Chụp frame từ camera robot trong Godot, đo tỉ lệ nhận đúng theo khoảng cách.
       **Kết quả kém thì dừng ở đây và báo lại**, không tích hợp mù.
-- [ ] D3. Ghi nhớ lúc đón (APPROACH/hội thoại): lưu embedding mặt + thân, chỉ trong RAM, xóa khi kết thúc ca.
-- [ ] D4. Lúc dẫn: chọn box khớp embedding thay cho "conf cao nhất"; khớp quá thấp ➔ coi như mất dấu (đưa vào C1).
-- [ ] D5. Cảnh đông (3–4 bệnh nhân gần nhau): đo tỉ lệ bám nhầm người trước và sau.
+- [x] D3. Ghi nhớ lúc đón (APPROACH/hội thoại): lưu embedding mặt + thân, chỉ trong RAM, xóa khi kết thúc ca.
+- [x] D4. Lúc dẫn: chọn box khớp embedding thay cho "conf cao nhất"; khớp quá thấp ➔ coi như mất dấu (đưa vào C1).
+- [x] D5. Cảnh đông (3–4 bệnh nhân gần nhau): đo tỉ lệ bám nhầm người trước và sau.
 
 ### E. Báo cáo
 - [ ] E1. Cập nhật tài liệu, bảng số liệu trước/sau cho báo cáo đồ án.
@@ -70,7 +70,33 @@ Nguyên tắc chung: **không đổi observation 21-D của policy RL** ➔ khô
   ca 2 nhắc 2 lần ➔ bệnh nhân tự theo kịp ➔ dẫn tiếp ➔ tới nơi. Mọi câu robot nói đều trúng cache TTS (~1 ms).
 - Lỗi tìm được khi chạy thật và đã sửa: bệnh nhân đã quay lại gần (1.4 m) nhưng tia nhìn bị che ➔ robot vẫn hỏi.
   Giờ ở gần coi như theo kịp; mất dấu chỉ đếm khi đang xa.
-- Còn lại: C4 (số liệu eval), báo rẽ khi đích chưa nhìn thấy, D, E.
+- Còn lại: C4 (số liệu eval), báo rẽ khi đích chưa nhìn thấy, D3–D5, E.
+- D2 xong: `sim_vision/python/identity/` (YuNet + SFace + OSNet MSMT17, tải bằng `python -m identity.download_models`),
+  ảnh chụp bằng `sim_vision/godot/tools/capture_identity.gd` (1120 frame), đo bằng `python -m identity.eval_capture`.
+  Box người lấy từ YOLO của robot (Tuấn, v6). Kết quả (`sim_vision/reports/identity_eval.md`):
+  - YOLO thấy người 90–100% ở 1–6 m; YuNet thấy mặt (nhìn trước) 90–100% tới 4 m, 57% ở 5 m, 15% ở 6 m.
+  - Ghi nhớ 1 frame nhìn thẳng: chọn đúng người trong 10 người 94% lúc dẫn (quay lưng, 1–3 m), nhưng với ngưỡng
+    ≤ 1% nhận nhầm người lạ thì chỉ 62% frame được chấp nhận ➔ robot sẽ tưởng mất dấu liên tục.
+  - Ghi nhớ thêm 1 frame lưng (lúc bệnh nhân vừa quay đi theo robot): đúng 99%, chấp nhận 88% lúc dẫn.
+  - Mặt gần như không thêm độ chính xác (toàn thân đã ~100% ở hướng trước); OSNet x0_25 ngang x1_0 mà nhẹ hơn 4 lần.
+  - Hạn chế bộ test: 1 hành lang, ánh sáng cố định, 10 người ăn mặc rất khác nhau ➔ kết quả lạc quan.
+  - Chỉ giữ YuNet (0.23 MB, chỉ lúc ghi nhớ) + OSNet x0.25 (0.2 M tham số, ~30 ms/người CPU); bỏ SFace, OSNet x1.0.
+- D3–D5 xong:
+  - `yolo_server` gắn embedding OSNet vào box patient khi frame có `reid` ("enroll" thêm cờ mặt YuNet), không lưu gì.
+  - Godot `scripts/patient_identity.gd`: ghi nhớ lúc nói chuyện (3 mẫu, có mặt) hoặc bù 5 s đầu ca; bám bằng
+    ngoại hình ➔ bám liên tục theo vị trí box ➔ cự ly gần (box cắt); học thêm góc nhìn chỉ khi trong khung không có
+    bệnh nhân khác. Bệnh nhân khác đổi nhãn thành vật cản trước khi vào policy ➔ không train lại PPO.
+  - Camera sau (`robot.tscn` RearViewport, chỉ render khi dẫn, 10 Hz, không vào policy): camera trước chỉ thấy
+    bệnh nhân ~31–60% thời gian dẫn; thêm camera sau ➔ 60–91%.
+  - Giám sát nhắc/hỏi dùng khoảng cách ước lượng từ camera (fallback vị trí thật nếu server không có ReID).
+  - Giao diện: ô camera mới (2 ô trước/sau, tiêu đề + trạng thái không đè ảnh, box "đang dẫn" xanh lá).
+  - Mô phỏng thật, 5 lượt (sau khi sửa): robot thấy bệnh nhân 51–94% thời gian; nhầm người khi bệnh nhân đang trong
+    khung 0–9% số frame khớp (lượt xấu nhất 8/91) so với cách cũ conf-max 1–49%; nhắc ≤ 2 lần/lượt, không kẹt.
+  - Lỗi đã gặp và sửa: ngưỡng bám 0.5 nhận người lạ (trung vị người lạ 0.54); bệnh nhân sát robot (box cắt) không
+    nhận ra ➔ robot đứng chờ ~40 s; học mẫu dày và học nhầm khi có người lạ trong khung; lượt đầu không ghi nhớ
+    được vì YOLO chưa sẵn sàng.
+  - Còn lại: hai bên hông robot (giữa FOV trước và sau) vẫn là điểm mù; ngưỡng ADD_SIM 0.86 / ENROLL_MAX_CX 0.42
+    vừa chỉnh sau lần chạy cuối, mới qua test, chưa chạy lại mô phỏng.
 
 ## Thứ tự làm
 A ➔ B ➔ C ➔ D ➔ E. A, B, C chỉ là Godot + câu thoại, rủi ro thấp. D là phần nặng nhất và có rủi ro kỹ thuật thật

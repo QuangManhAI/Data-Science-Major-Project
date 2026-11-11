@@ -93,3 +93,7 @@ sim_vision/godot/assets/sounds/monitor_beep.wav
 # Giọng thu thật (có trẻ em) lấy từ MinIO của Major_BE_FE — không commit
 voices_quangbinh_nhatrang/
 voices_quangbinh_nhatrang.zip
+
+# Ảnh mặt người nổi tiếng VN (fptudsc/face-celeb-vietnamese) + mặt NPC cắt ra: chỉ dùng thử nghiệm nội bộ, không commit
+/data/faces_vn/
+/sim_vision/godot/assets/textures/npc_faces/

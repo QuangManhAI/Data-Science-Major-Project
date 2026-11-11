@@ -84,6 +84,9 @@ const GOAL_ANNOUNCE_MIN_M: float = 2.0
 const GOAL_ANNOUNCE_MAX_ANGLE: float = deg_to_rad(100.0)
 const HOLD_TURN_GAIN: float = 1.8
 var patient_lag_prob: float = PATIENT_LAG_PROB
+## Dán ảnh mặt người thật lên đầu NPC (npc_face.gd) khi có texture trong assets/textures/npc_faces/; --no-face-paste tắt.
+var face_paste: bool = true
+const FACE_LOOK_ALIASES: Dictionary = {"medical_m01": "medical_doctor", "medical_f01": "medical_nurse"}
 var announcer: RobotAnnouncer = null
 var escort_monitor: EscortMonitor = EscortMonitor.new()
 var _ask_pending: bool = false
@@ -92,6 +95,31 @@ var _lag_at_s: float = -1.0
 var _lag_dur_s: float = 0.0
 var _goal_announced_key: String = ""
 var _after_line: Dictionary = {}   # key câu thoại ➔ Callable gọi khi robot nói xong câu đó
+
+# --- Nhận diện đúng bệnh nhân bằng camera (docs/UPGRADE_HRI_PLAN.md D3–D4) ---
+const ESCORT_GRACE_S: float = 4.0                 # đầu ca: bệnh nhân đang vòng ra phía trước robot, chưa xét tụt lại
+const ENROLL_WAIT_S: float = 4.0                  # chưa ghi nhớ được mặt ➔ đứng chờ tối đa chừng này, nhờ nhìn về robot
+const SPEAKER_TURN_GAIN: float = 2.0
+const ID_SEEN_S: float = 0.5                      # khớp trong 0.5 s gần nhất ➔ đang thấy
+const ID_ASSUME_FAR_S: float = 4.0                # không thấy quá 4 s ➔ coi như đã xa (lúc rẽ bệnh nhân hay ra khỏi khung 1–3 s)
+const SEARCH_TURN_OMEGA: float = 0.6
+const ROBOT_CAM_HFOV: float = 2.0 * atan(tan(deg_to_rad(35.0)) * 4.0 / 3.0)   # FOV dọc 70°, 4:3 ➔ ngang ~86°
+var identity: PatientIdentity = PatientIdentity.new()
+var _reid_supported: bool = false                 # yolo_server có trả embedding (có model, không --no-reid)
+var _id_det: Dictionary = {}                      # box của bệnh nhân mình trong frame mới nhất ({} = không thấy)
+var _id_seen_s: float = -INF
+var _id_dist_m: float = 1.0
+var _id_est_pos: Vector3 = Vector3.ZERO           # vị trí ước lượng từ camera lần cuối thấy
+var _id_stats: Dictionary = {}                    # số liệu D5 (log)
+const REAR_CAPTURE_HZ: float = 10.0
+var rear_vision: VisionClient = null              # camera sau (chỉ khi dẫn đường)
+var _latest_rear_dets: Array = []
+var _id_rear_det: Dictionary = {}
+var _asked_look: bool = false
+var _enroll_misses: int = 0                       # frame lúc nói chuyện có box patient mà không ghi nhớ được
+var _enroll_reasons: Dictionary = {}
+const FACE_CROP_EVERY_MS: int = 66                # ô "MẶT": cắt mặt đang thấy ~15 lần / giây
+var _last_face_crop_ms: int = -100000
 @onready var robot: Robot = $Robot
 @onready var vision: VisionClient = $VisionClient
 @onready var overlay: ViewOverlay = $UI/ViewOverlay
@@ -120,6 +148,8 @@ func _ready() -> void:
 			escort_only_mode = true
 		elif arg in ["--all-intents", "--all_intents"]:
 			all_intents_flag = true
+		elif arg in ["--no-face-paste", "--no_face_paste"]:
+			face_paste = false
 		elif arg.begins_with("--lag-prob="):
 			patient_lag_prob = clampf(arg.get_slice("=", 1).to_float(), 0.0, 1.0)
 	if use_rl_controller and not all_intents_flag:
@@ -152,6 +182,7 @@ func _ready() -> void:
 		_rng.randomize()
 	vision.setup(robot.get_camera_viewport())
 	overlay.set_viewport(robot.get_camera_viewport())
+	_setup_rear_vision()
 	vision.detections_received.connect(_on_detections)
 	vision.connection_changed.connect(_on_connection_changed)
 	_start_ms = Time.get_ticks_msec()
@@ -171,6 +202,8 @@ func _ready() -> void:
 	if escort_only_mode:
 		_apply_escort_only_mode()
 	_setup_announcer()
+	if face_paste:
+		_apply_face_paste()
 	reset_positions()
 	_update_viewer_camera()
 	_setup_hospital_ambience()
@@ -225,6 +258,7 @@ func _process(delta: float) -> void:
 		camera_orbit_angle -= CAMERA_ORBIT_SPEED * delta
 	_update_viewer_camera()
 	_update_inspection_panel()
+	_update_vision_modes()
 	# Quá LOST_TIMEOUT_S không có kết quả mới (nhưng vẫn kết nối) ➔ coi như không thấy ai.
 	var now: int = Time.get_ticks_msec()
 	if Main.is_dialogue_state(state):
@@ -242,6 +276,8 @@ func _physics_process(delta: float) -> void:
 		return
 	if _is_in_elevator_transit:
 		return
+	if Main.is_dialogue_state(state):
+		_face_speaker()
 
 	# Số liệu đánh giá (scripts/eval_godot_escort.py): khoảng trống nhỏ nhất (LiDAR, m) và số frame robot va vào
 	# tường / đồ đạc kể từ dòng log trước — đo mỗi physics frame để không sót cú quẹt ngắn.
@@ -350,6 +386,7 @@ func _physics_process(delta: float) -> void:
 				esc_p.end_escort()
 			if has_escort:
 				esc_p.set_meta("helped", true)
+				_log_id_stats("tới nơi")
 			active_escorted_patient = null
 			var cur_floor: int = Room.get_floor(robot.global_position)
 			# Robot chỉ vào phòng và báo đã tới; nói xong bệnh nhân mới cảm ơn.
@@ -521,7 +558,8 @@ func _step_policy(delta: float) -> void:
 	# Parse multi-class YOLO detections for patient channel
 	var yolo_feat: Array = []
 	var best_patient_det: Dictionary = {}
-	for d_var: Variant in _latest_yolo_dets:
+	var policy_dets: Array = _policy_dets()
+	for d_var: Variant in policy_dets:
 		var d: Dictionary = d_var as Dictionary
 		var cid: int = int(d.get("class_id", -1))
 		var cname: String = str(d.get("class_name", ""))
@@ -590,7 +628,7 @@ func _step_policy(delta: float) -> void:
 		pat_pos if search else _leg_target(_rl_bridge.goal_position),
 		_rl_bridge.patients_helped,
 		yolo_feat,
-		_latest_yolo_dets,
+		policy_dets,
 		robot.get_depth_readings()
 	)
 
@@ -1028,6 +1066,9 @@ func reset_positions(is_task_transition: bool = false) -> void:
 	_task_best_dist = -1.0
 	_arrived_wait_s = 0.0
 	_reset_escort_hri()
+	identity.reset()
+	_id_det = {}
+	overlay.set_remembered_face(null)
 	var prev_pat: CharacterBody3D = active_escorted_patient
 	if active_escorted_patient != null and active_escorted_patient.has_method("end_escort"):
 		active_escorted_patient.end_escort()
@@ -1205,14 +1246,16 @@ func build_log_row(frame_id: int, dets: Array, cmd: Dictionary, infer_ms: float,
 
 func _on_detections(frame_id: int, dets: Array, infer_ms: float) -> void:
 	_latest_yolo_dets = dets
+	_update_identity(dets)
 	var now: int = Time.get_ticks_msec()
 	_last_result_ms = now
 	if not dets.is_empty():
 		_last_seen_ms = now
 	var cmd: Dictionary
 	if Main.is_dialogue_state(state):
-		cmd = {"state": state, "v": 0.0, "omega": 0.0, "target": {}}
-		robot.set_command(0.0, 0.0)
+		# Đứng yên nhưng vẫn quay về phía người đang nói (_face_speaker trong _physics_process).
+		cmd = {"state": state, "v": 0.0, "omega": robot.omega, "target": {}}
+		robot.set_command(0.0, robot.omega)
 	elif _rl_bridge != null and _rl_bridge.task_phase in [RLEnvBridgeScript.TaskPhase.GUIDE_ESCORT, RLEnvBridgeScript.TaskPhase.CALL_STAFF]:
 		var cur_cmd: Vector2 = robot.get_command() if robot.has_method("get_command") else Vector2(robot.v, robot.omega)
 		cmd = {"state": state, "v": cur_cmd.x, "omega": cur_cmd.y, "target": {}}
@@ -1222,6 +1265,8 @@ func _on_detections(frame_id: int, dets: Array, infer_ms: float) -> void:
 	else:
 		cmd = _apply(_controller.step(state, dets, _time_since_seen_s(now)))
 	overlay.show_detections(dets, _display_state_name(), _connected)
+	overlay.show_faces(vision.last_faces, rear_vision.last_faces if rear_vision != null and rear_vision.enabled else [])
+	_update_face_panel(now)
 	if inspection_panel != null and inspection_panel.is_open:
 		inspection_panel.update_vision(dets)
 	if logger != null:
@@ -1254,6 +1299,11 @@ static func is_dialogue_state(s: int) -> bool:
 
 ## Gọi bởi DialogueManager. Trạng thái hội thoại ➔ dừng robot. Về ARRIVED ➔ controller chạy lại ở frame sau.
 func set_dialogue_state(s: int) -> void:
+	if s == Config.RobotState.LISTEN and not Main.is_dialogue_state(state) and active_escorted_patient == null:
+		identity.reset()                 # người mới nói chuyện ➔ ghi nhớ lại từ đầu
+		overlay.set_remembered_face(null)
+		_enroll_misses = 0
+		_enroll_reasons = {}
 	state = s
 	_arrived_wait_s = 0.0
 	if Main.is_dialogue_state(s):
@@ -1477,12 +1527,24 @@ func accepts_patient_turn() -> bool:
 
 func _escort_holding() -> bool:
 	return active_escorted_patient != null and _rl_bridge != null \
-			and _rl_bridge.task_phase == RLEnvBridgeScript.TaskPhase.GUIDE_ESCORT and escort_monitor.hold_robot()
+			and _rl_bridge.task_phase == RLEnvBridgeScript.TaskPhase.GUIDE_ESCORT \
+			and (escort_monitor.hold_robot() or _waiting_enroll())
+
+
+## Đầu ca dẫn mà chưa ghi nhớ được mặt (server có ReID) ➔ đứng lại, quay về phía bệnh nhân, nhờ họ nhìn về robot.
+func _waiting_enroll() -> bool:
+	return _reid_supported and not identity.is_enrolled() and _escort_t <= ENROLL_WAIT_S
 
 
 ## Bắt đầu ca dẫn: đặt lại giám sát, lên lịch bệnh nhân tụt lại (mô phỏng), robot mời đi theo.
 func _begin_escort_hri() -> void:
 	_reset_escort_hri()
+	_id_stats = _new_id_stats()
+	_id_seen_s = _now_s()            # vừa nói chuyện xong, đang thấy
+	_id_dist_m = 1.5
+	if active_escorted_patient != null:
+		_id_est_pos = active_escorted_patient.global_position
+	print("[ESCORT_ID] bắt đầu dẫn: %d mẫu ghi nhớ (hụt %d frame: %s), reid=%s" % [identity.templates.size(), _enroll_misses, _enroll_reasons, _reid_supported])
 	var p: CharacterBody3D = active_escorted_patient
 	if p == null:
 		return
@@ -1495,6 +1557,7 @@ func _begin_escort_hri() -> void:
 
 func _reset_escort_hri() -> void:
 	escort_monitor.reset()
+	_asked_look = false
 	_ask_pending = false
 	_escort_t = 0.0
 	_lag_at_s = -1.0
@@ -1510,20 +1573,42 @@ func _reset_escort_hri() -> void:
 
 func _update_escort_hri(p: CharacterBody3D, d_tether: float, delta: float) -> void:
 	_escort_t += delta
+	_record_coverage(p, delta)
 	if _lag_at_s >= 0.0 and _escort_t >= _lag_at_s:
 		_lag_at_s = -1.0
 		p.set_meta("escort_hold_s", _lag_dur_s)
 		print("[ESCORT_HRI] t=%.1fs bệnh nhân dừng lại %.1fs (mô phỏng tụt lại)" % [_escort_t, _lag_dur_s])
-	if Main.is_dialogue_state(state):
+	if _waiting_enroll():
+		if not _asked_look:
+			_asked_look = true
+			_say("look_at_me")
+			print("[ESCORT_ID] chưa ghi nhớ được mặt ➔ nhờ bệnh nhân nhìn về robot")
+		_turn_towards(p.global_position)
 		return
-	var seen: bool = has_line_of_sight(robot, p)
-	for ev: String in escort_monitor.step(d_tether, seen, delta):
-		_on_escort_event(ev, p, d_tether)
+	if Main.is_dialogue_state(state) or _escort_t < ESCORT_GRACE_S:
+		return
+	var vis: bool = _vision_tether()
+	var seen: bool
+	var dist: float
+	if vis:
+		# Robot thật: chỉ biết bệnh nhân qua camera (box khớp người đã ghi nhớ).
+		var unseen: float = _now_s() - _id_seen_s
+		seen = unseen <= ID_SEEN_S
+		dist = _id_dist_m if unseen <= ID_ASSUME_FAR_S else maxf(_id_dist_m, EscortMonitor.FAR_M + 0.5)
+	else:
+		# Không có ReID (yolo_server --no-reid / thiếu model) ➔ dùng vị trí thật trong sim.
+		seen = has_line_of_sight(robot, p)
+		dist = d_tether
+	for ev: String in escort_monitor.step(dist, seen, delta):
+		_on_escort_event(ev, p, dist)
 	if escort_monitor.hold_robot():
 		# Đứng chờ, quay mặt về phía bệnh nhân (camera nhìn thấy họ, cử chỉ hướng về họ).
-		var to: Vector3 = p.global_position - robot.global_position
+		var target: Vector3 = _id_est_pos if vis else p.global_position
+		var to: Vector3 = target - robot.global_position
 		var err: float = wrapf(atan2(-to.x, -to.z) - robot.rotation.y, -PI, PI)
 		var w: float = clampf(HOLD_TURN_GAIN * err, -Config.OMEGA_MAX, Config.OMEGA_MAX) if absf(err) > 0.12 else 0.0
+		if vis and w == 0.0 and not seen:
+			w = SEARCH_TURN_OMEGA        # đã quay về chỗ thấy lần cuối mà không có ai ➔ quay tìm
 		robot.set_command(0.0, w)
 		state = Config.RobotState.APPROACH
 	elif escort_monitor.state == EscortMonitor.State.OK:
@@ -1590,6 +1675,7 @@ func _on_continue_answer(intent: String) -> void:
 func _end_escort_declined(p: CharacterBody3D) -> void:
 	var cur_floor: int = Room.get_floor(robot.global_position)
 	print("[ESCORT_HRI] kết thúc ca dẫn theo ý bệnh nhân (tầng %d)" % cur_floor)
+	_log_id_stats("bệnh nhân dừng")
 	if p != null:
 		p.set_meta("escort_hold_s", 0.0)
 		p.set_meta("helped", true)
@@ -1709,3 +1795,354 @@ func _pick_weighted(weights: Dictionary) -> String:
 		if r <= 0.0:
 			return k
 	return str(weights.keys()[0])
+
+
+# ===================== Nhận diện đúng bệnh nhân (docs/UPGRADE_HRI_PLAN.md D3–D5) =====================
+
+func _now_s() -> float:
+	return Time.get_ticks_msec() / 1000.0
+
+
+## Client YOLO thứ hai cho camera sau: chỉ chạy khi đang dẫn, 10 Hz, frame nào cũng có ReID.
+## Kết quả chỉ dùng để nhận ra / đo khoảng cách bệnh nhân, không đưa vào policy.
+func _setup_rear_vision() -> void:
+	if rear_vision != null or not robot.has_method("get_rear_viewport"):
+		return
+	rear_vision = VisionClient.new()
+	rear_vision.name = "RearVisionClient"
+	rear_vision.enabled = false
+	rear_vision.capture_hz = REAR_CAPTURE_HZ
+	rear_vision.reid_every_n = 1
+	add_child(rear_vision)
+	rear_vision.setup(robot.get_rear_viewport())
+	rear_vision.detections_received.connect(_on_rear_detections)
+	overlay.set_rear_viewport(robot.get_rear_viewport())
+
+
+func _update_vision_modes() -> void:
+	vision.reid_mode = _wanted_reid_mode()
+	var escorting: bool = active_escorted_patient != null
+	if rear_vision != null:
+		rear_vision.enabled = escorting
+		rear_vision.reid_mode = "track" if escorting else ""
+	if robot.has_method("set_rear_camera_enabled") and robot.is_rear_camera_enabled() != escorting:
+		robot.set_rear_camera_enabled(escorting)
+		if not escorting:
+			_latest_rear_dets = []
+			_id_rear_det = {}
+		overlay.set_rear_active(escorting)
+
+
+## "enroll" khi đang nói chuyện với một bệnh nhân (chưa dẫn ai), "track" khi đang dẫn, "" còn lại (không tốn ReID).
+func _wanted_reid_mode() -> String:
+	if active_escorted_patient != null:
+		return "track"
+	if Main.is_dialogue_state(state):
+		return "enroll"
+	return ""
+
+
+## Giám sát khoảng cách theo camera (thật) thay vì vị trí trong sim: cần server có ReID và đã ghi nhớ được người.
+func _vision_tether() -> bool:
+	return _reid_supported and identity.is_enrolled()
+
+
+func _check_reid_support(dets: Array) -> void:
+	if _reid_supported:
+		return
+	for dv: Variant in dets:
+		if (dv as Dictionary).has("emb"):
+			_reid_supported = true
+			return
+
+
+func _update_identity(dets: Array) -> void:
+	_check_reid_support(dets)
+	var now: float = _now_s()
+	_id_det = {}
+	match vision.reid_mode:
+		"enroll":
+			var spk: CharacterBody3D = get_active_speaking_patient()
+			if identity.enroll_from(dets, now, true, _speaker_cx(spk) if spk != null else -1.0):
+				if identity.n_enroll == 1:
+					_remember_face_crop(PatientIdentity.box_of_last(identity, dets))
+				print("[ESCORT_ID] ghi nhớ mẫu %d (lúc nói chuyện): %s" % [identity.n_enroll,
+						_template_truth(get_active_speaking_patient(), PatientIdentity.box_of_last(identity, dets), false)])
+			elif _has_enroll_frame(dets) and identity.last_reject != "":
+				_enroll_misses += 1
+				_enroll_reasons[identity.last_reject] = int(_enroll_reasons.get(identity.last_reject, 0)) + 1
+		"track":
+			# Chưa ghi nhớ được lúc nói chuyện ➔ robot đứng chờ (ENROLL_WAIT_S), quay về phía bệnh nhân; vẫn chỉ ghi nhớ
+			# khi thấy mặt ở đúng hướng người đó (bỏ kiểu ghi nhớ bù "người to nhất giữa khung": hay nhầm người).
+			if not identity.is_enrolled() and _escort_t <= ENROLL_WAIT_S and active_escorted_patient != null \
+					and identity.enroll_from(dets, now, true, _speaker_cx(active_escorted_patient)):
+				_remember_face_crop(PatientIdentity.box_of_last(identity, dets))
+				print("[ESCORT_ID] ghi nhớ đầu ca dẫn (thấy mặt): %s" % _template_truth(active_escorted_patient, PatientIdentity.box_of_last(identity, dets), false))
+			var n_t: int = identity.templates.size()
+			var r: Dictionary = identity.match(dets, now, "front")
+			if not r.is_empty():
+				_id_det = r["det"]
+				_on_identity_seen(_id_det, false, now)
+				if identity.templates.size() != n_t or identity.templates_changed:
+					print("[ESCORT_ID] học thêm mẫu (trước, %s %.2f): %s" % [r["how"], r["score"], _template_truth(active_escorted_patient, _id_det, false)])
+			_record_id_stats(dets, _id_det, "front")
+	overlay.set_tracked(_id_det, _id_rear_det)
+
+
+func _on_rear_detections(_frame_id: int, dets: Array, _infer_ms: float) -> void:
+	_latest_rear_dets = dets
+	_check_reid_support(dets)
+	_id_rear_det = {}
+	if active_escorted_patient != null:
+		var now: float = _now_s()
+		var n_t: int = identity.templates.size()
+		var r: Dictionary = identity.match(dets, now, "rear")
+		if not r.is_empty():
+			_id_rear_det = r["det"]
+			_on_identity_seen(_id_rear_det, true, now)
+			if identity.templates.size() != n_t or identity.templates_changed:
+				print("[ESCORT_ID] học thêm mẫu (sau, %s %.2f): %s" % [r["how"], r["score"], _template_truth(active_escorted_patient, _id_rear_det, true)])
+		_record_id_stats(dets, _id_rear_det, "rear")
+	overlay.show_rear_detections(dets)
+	overlay.show_faces(vision.last_faces, rear_vision.last_faces)
+	overlay.set_tracked(_id_det, _id_rear_det)
+
+
+func _on_identity_seen(det: Dictionary, rear: bool, now: float) -> void:
+	_id_seen_s = now
+	var b: Dictionary = PatientIdentity.box_of(det)
+	_id_dist_m = clampf(1.20 / maxf(float(b["h"]), 0.05), 0.5, 8.0)   # như tether của policy
+	_id_est_pos = _det_world_pos(b["cx"], _id_dist_m, rear)
+
+
+## Frame ghi nhớ có box patient kèm embedding (để đếm lần ghi nhớ hụt: không thấy mặt / lệch khung).
+static func _has_enroll_frame(dets: Array) -> bool:
+	for dv: Variant in dets:
+		var d: Dictionary = dv
+		if PatientIdentity.is_patient(d) and d.has("emb"):
+			return true
+	return false
+
+
+## Ước lượng vị trí người từ tâm box (góc ngang trong FOV camera) và khoảng cách. Camera sau nhìn ngược lại.
+func _det_world_pos(cx: float, dist_m: float, rear: bool = false) -> Vector3:
+	var a: float = atan((cx * 2.0 - 1.0) * tan(ROBOT_CAM_HFOV * 0.5))    # > 0: bên phải của camera
+	var yaw: float = robot.rotation.y
+	var fwd := Vector3(-sin(yaw), 0.0, -cos(yaw))
+	var right := Vector3(cos(yaw), 0.0, -sin(yaw))
+	if rear:
+		fwd = -fwd
+		right = -right
+	return robot.global_position + (fwd * cos(a) + right * sin(a)) * dist_m
+
+
+## Box đưa cho policy RL: khi đang dẫn và nhận diện được, chỉ box của bệnh nhân mình giữ lớp `patient`;
+## bệnh nhân khác thành vật cản (class 100) ➔ policy không bám nhầm người, không phải train lại.
+func _policy_dets() -> Array:
+	if active_escorted_patient == null or not _vision_tether():
+		return _latest_yolo_dets
+	var out: Array = []
+	for dv: Variant in _latest_yolo_dets:
+		var d: Dictionary = dv
+		if PatientIdentity.is_patient(d) and not is_same(d, _id_det):
+			var o: Dictionary = d.duplicate()
+			o.erase("emb")
+			o["class_id"] = 100
+			o["class_name"] = "patient_other"
+			out.append(o)
+		else:
+			out.append(d)
+	return out
+
+
+func _new_id_stats() -> Dictionary:
+	var cam := func() -> Dictionary:
+		return {"frames": 0, "visible": 0, "matched": 0, "wrong_other": 0, "missed": 0, "base_frames": 0, "base_wrong_other": 0}
+	return {"t": 0.0, "t_seen": 0.0, "t_gt": 0.0, "t_gt_front": 0.0, "front": cam.call(), "rear": cam.call()}
+
+
+## Toạ độ chuẩn hoá của bệnh nhân thật trong ảnh camera (chiếu vị trí thật); không thấy ➔ (-1, -1).
+func _gt_uv(p: CharacterBody3D, rear: bool) -> Vector2:
+	var cam: Camera3D = robot.get_rear_camera() if rear else robot.get_camera_viewport().get_node(^"RobotCamera") as Camera3D
+	var world: Vector3 = p.global_position + Vector3(0, 0.9, 0)
+	if cam.is_position_behind(world) or not has_line_of_sight(robot, p):
+		return Vector2(-1, -1)
+	var px: Vector2 = cam.unproject_position(world)
+	var uv := Vector2(px.x / float(Config.IMG_W), px.y / float(Config.IMG_H))
+	return uv if uv.x >= 0.0 and uv.x <= 1.0 and uv.y >= 0.0 and uv.y <= 1.0 else Vector2(-1, -1)
+
+
+## Chẩn đoán: box `d` có chứa người `p` thật không ("đúng người" / "NHẦM người" / "không rõ").
+func _template_truth(p: CharacterBody3D, d: Dictionary, rear: bool) -> String:
+	if p == null or d.is_empty():
+		return "không rõ"
+	var uv: Vector2 = _gt_uv(p, rear)
+	if uv.x < 0.0:
+		return "không rõ (người thật ngoài khung)"
+	return "đúng người" if Main._uv_in(uv, d) else "NHẦM người"
+
+
+static func _uv_in(uv: Vector2, d: Dictionary) -> bool:
+	return uv.x >= float(d["x1"]) and uv.x <= float(d["x2"]) and uv.y >= float(d["y1"]) and uv.y <= float(d["y2"])
+
+
+## Số liệu D5 mỗi frame: chọn nhầm người khác khi bệnh nhân thật đang trong khung? So với cách cũ (box patient conf cao nhất).
+func _record_id_stats(dets: Array, matched: Dictionary, cam_key: String) -> void:
+	var p: CharacterBody3D = active_escorted_patient
+	if p == null or _id_stats.is_empty():
+		return
+	var s: Dictionary = _id_stats[cam_key]
+	s["frames"] += 1
+	var uv: Vector2 = _gt_uv(p, cam_key == "rear")
+	var visible: bool = uv.x >= 0.0
+	if visible:
+		s["visible"] += 1
+	if not matched.is_empty():
+		s["matched"] += 1
+		if visible and not Main._uv_in(uv, matched):
+			s["wrong_other"] += 1
+	elif visible:
+		s["missed"] += 1
+	var base: Dictionary = {}
+	for dv: Variant in dets:
+		var d: Dictionary = dv
+		if PatientIdentity.is_patient(d) and (base.is_empty() or float(d["conf"]) > float(base["conf"])):
+			base = d
+	if not base.is_empty():
+		s["base_frames"] += 1
+		if visible and not Main._uv_in(uv, base):
+			s["base_wrong_other"] += 1
+
+
+## Mỗi frame vật lý khi đang dẫn: robot có "thấy" bệnh nhân không, so với lúc bệnh nhân thật nằm trong tầm camera.
+func _record_coverage(p: CharacterBody3D, delta: float) -> void:
+	if _id_stats.is_empty():
+		return
+	_id_stats["t"] += delta
+	if _now_s() - _id_seen_s <= ID_SEEN_S:
+		_id_stats["t_seen"] += delta
+	var in_front: bool = _gt_uv(p, false).x >= 0.0
+	if in_front:
+		_id_stats["t_gt_front"] += delta
+	if in_front or _gt_uv(p, true).x >= 0.0:
+		_id_stats["t_gt"] += delta
+
+
+func _log_id_stats(tag: String) -> void:
+	if _id_stats.is_empty():
+		return
+	var s: Dictionary = _id_stats
+	var t: float = maxf(float(s["t"]), 1e-3)
+	print("[ESCORT_ID] %s: %.0fs | bệnh nhân trong tầm camera trước %.0f%%, trước+sau %.0f%% | robot thấy (khớp) %.0f%% | mẫu=%d, ghi nhớ hụt=%d" % [
+		tag, t, 100.0 * s["t_gt_front"] / t, 100.0 * s["t_gt"] / t, 100.0 * s["t_seen"] / t,
+		identity.templates.size(), _enroll_misses])
+	for k: String in ["front", "rear"]:
+		var c: Dictionary = s[k]
+		print("[ESCORT_ID]   %s: frames=%d visible=%d matched=%d nhầm_người=%d bỏ_sót=%d | cũ(conf max): chọn=%d nhầm_người=%d" % [
+			k, c["frames"], c["visible"], c["matched"], c["wrong_other"], c["missed"], c["base_frames"], c["base_wrong_other"]])
+
+
+## Gắn mặt cho mọi NPC có texture (chờ 2 frame để xương có tư thế). Trả số NPC được gắn.
+func _apply_face_paste() -> int:
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var targets: Array = []
+	if human != null:
+		targets.append([human, "human_m06"])
+	var furn: Node = room.get_node_or_null(^"Furniture") if room != null else null
+	if furn != null:
+		for c: Node in furn.get_children():
+			if c is HospitalNpc:
+				var look: String = str((c as HospitalNpc).tex_dir).get_base_dir().get_file()
+				targets.append([c, FACE_LOOK_ALIASES.get(look, look)])
+	var n: int = 0
+	for t: Array in targets:
+		if NpcFace.attach(t[0], NpcFace.load_face(t[1])) != null:
+			n += 1
+	print("[FacePaste] dán mặt người thật cho %d/%d NPC%s" % [n, targets.size(),
+			"" if n > 0 else " (không có texture: chạy sim_vision/python -m identity.make_npc_faces)"])
+	return n
+
+
+
+# ===================== Ô "MẶT" bên trái camera trước =====================
+
+## Vùng cắt quanh box mặt (toạ độ chuẩn hoá) trong ảnh cỡ `size`: rộng thêm 30%, tỉ lệ 4:5, kẹp trong ảnh.
+static func face_crop_rect(face: Dictionary, size: Vector2i) -> Rect2i:
+	var cx: float = (float(face["x1"]) + float(face["x2"])) * 0.5 * size.x
+	var cy: float = (float(face["y1"]) + float(face["y2"])) * 0.5 * size.y
+	var w: float = maxf((float(face["x2"]) - float(face["x1"])) * size.x, (float(face["y2"]) - float(face["y1"])) * size.y * 0.8) * 1.3
+	var h: float = w * 1.25
+	var r := Rect2i(int(round(cx - w * 0.5)), int(round(cy - h * 0.5)), maxi(int(round(w)), 2), maxi(int(round(h)), 2))
+	return r.intersection(Rect2i(Vector2i.ZERO, size))
+
+
+func _crop_camera(face: Dictionary) -> Texture2D:
+	var img: Image = robot.get_camera_viewport().get_texture().get_image()
+	if img == null or img.is_empty():
+		return null
+	var r: Rect2i = Main.face_crop_rect(face, img.get_size())
+	if r.size.x < 2 or r.size.y < 2:
+		return null
+	return ImageTexture.create_from_image(img.get_region(r))
+
+
+func _update_face_panel(now_ms: int) -> void:
+	if now_ms - _last_face_crop_ms < FACE_CROP_EVERY_MS:
+		return
+	_last_face_crop_ms = now_ms
+	var faces: Array = vision.last_faces.duplicate()
+	faces.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return (a["x2"] - a["x1"]) * (a["y2"] - a["y1"]) > (b["x2"] - b["x1"]) * (b["y2"] - b["y1"]))
+	var items: Array = []
+	for f: Dictionary in faces.slice(0, ViewOverlay.LIVE_FACES_MAX):
+		var t: Texture2D = _crop_camera(f)
+		if t != null:
+			items.append({"tex": t, "conf": f["conf"]})
+	overlay.set_live_faces(items)
+
+
+## Lúc ghi nhớ: cắt mặt nằm trong nửa trên box bệnh nhân vừa ghi nhớ ➔ hiện ở ô "ghi nhớ".
+func _remember_face_crop(det: Dictionary) -> void:
+	if det.is_empty():
+		return
+	for f: Dictionary in vision.last_faces:
+		var fx: float = (float(f["x1"]) + float(f["x2"])) * 0.5
+		var fy: float = (float(f["y1"]) + float(f["y2"])) * 0.5
+		if fx >= float(det["x1"]) and fx <= float(det["x2"]) and fy >= float(det["y1"]) \
+				and fy <= float(det["y1"]) + 0.5 * (float(det["y2"]) - float(det["y1"])):
+			var t: Texture2D = _crop_camera(f)
+			if t != null:
+				overlay.set_remembered_face(t)
+			return
+
+
+
+# ===================== Quay về phía người đang nói (bước 1, bản luật trước khi có RL V3) =====================
+
+## Hướng giọng nói ➔ quay tại chỗ (v = 0). Ngoài đời hướng lấy từ micro mảng (DOA); trong sim lấy vị trí NPC đang nói.
+func _face_speaker() -> void:
+	var spk: CharacterBody3D = get_active_speaking_patient()
+	if spk == null:
+		robot.set_command(0.0, 0.0)
+		return
+	_turn_towards(spk.global_position)
+
+
+func _turn_towards(target: Vector3) -> void:
+	var to: Vector3 = target - robot.global_position
+	var err: float = wrapf(atan2(-to.x, -to.z) - robot.rotation.y, -PI, PI)
+	robot.set_command(0.0, clampf(SPEAKER_TURN_GAIN * err, -Config.OMEGA_MAX, Config.OMEGA_MAX) if absf(err) > 0.08 else 0.0)
+
+
+## Hướng người `p` chiếu lên ảnh camera trước (tâm ngang 0..1); ngoài tầm nhìn ➔ -1 (chưa ghi nhớ, chờ robot quay).
+func _speaker_cx(p: Node3D) -> float:
+	var local: Vector3 = robot.to_local(p.global_position)
+	return Main.bearing_to_cx(atan2(local.x, -local.z))
+
+
+static func bearing_to_cx(a: float) -> float:
+	var half: float = ROBOT_CAM_HFOV * 0.5
+	if absf(a) > half * 0.9:
+		return -1.0
+	return 0.5 + 0.5 * tan(a) / tan(half)

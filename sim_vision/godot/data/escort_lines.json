@@ -13,15 +13,30 @@
     "ask_continue": "Anh chị có muốn tôi dẫn đường tiếp không ạ?",
     "ask_again": "Tôi chưa nghe rõ, anh chị có muốn tôi dẫn tiếp không ạ?",
     "continue_ok": "Vâng, mời anh chị đi tiếp theo tôi ạ.",
-    "stop_ok": "Vâng, khi nào cần anh chị cứ gọi tôi nhé."
+    "stop_ok": "Vâng, khi nào cần anh chị cứ gọi tôi nhé.",
+    "look_at_me": "Anh chị nhìn về phía tôi một chút nhé."
   },
   "places": {
-    "thang_may": "Thang máy", "thang_may_t2": "Thang máy", "thang_may_t3": "Thang máy",
-    "cap_cuu": "Khoa cấp cứu", "nha_thuoc": "Nhà thuốc", "tiep_don": "Quầy tiếp đón", "ghe_cho": "Khu ghế chờ",
-    "nha_ve_sinh": "Nhà vệ sinh", "wc_t2": "Nhà vệ sinh", "wc_t3": "Nhà vệ sinh",
-    "hanh_lang": "Hành lang", "hanh_lang_t2": "Hành lang", "hanh_lang_t3": "Hành lang",
-    "sanh_t2": "Sảnh tầng hai", "sanh_t3": "Sảnh tầng ba",
+    "thang_may": "Thang máy",
+    "thang_may_t2": "Thang máy",
+    "thang_may_t3": "Thang máy",
+    "cap_cuu": "Khoa cấp cứu",
+    "nha_thuoc": "Nhà thuốc",
+    "tiep_don": "Quầy tiếp đón",
+    "ghe_cho": "Khu ghế chờ",
+    "nha_ve_sinh": "Nhà vệ sinh",
+    "wc_t2": "Nhà vệ sinh",
+    "wc_t3": "Nhà vệ sinh",
+    "hanh_lang": "Hành lang",
+    "hanh_lang_t2": "Hành lang",
+    "hanh_lang_t3": "Hành lang",
+    "sanh_t2": "Sảnh tầng hai",
+    "sanh_t3": "Sảnh tầng ba",
     "staff": "Nhân viên y tế"
   },
-  "floors": [1, 2, 3]
+  "floors": [
+    1,
+    2,
+    3
+  ]
 }

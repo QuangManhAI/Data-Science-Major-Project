@@ -39,11 +39,15 @@ var omega: float:
 
 
 @onready var _viewport: SubViewport = $CameraViewport
+## Camera sau (docs/UPGRADE_HRI_PLAN.md D): chỉ để thấy bệnh nhân đi phía sau / tụt lại khi dẫn đường.
+## Không đưa vào policy RL (policy train với camera trước). Tắt render khi không dẫn đường.
+@onready var _rear_viewport: SubViewport = $RearViewport
 @onready var _front_ray: RayCast3D = $FrontRay
 
 
 func _ready() -> void:
 	_viewport.size = Vector2i(Config.IMG_W, Config.IMG_H)
+	_rear_viewport.size = Vector2i(Config.IMG_W, Config.IMG_H)
 	_setup_lidar_fan()
 	_setup_depth_fan()
 	_setup_arms()
@@ -55,9 +59,9 @@ func _setup_arms() -> void:
 	arms = RobotArms.new()
 	add_child(arms)
 	# Camera robot (ảnh cho YOLO) không render tay của chính nó.
-	var cam := _viewport.get_node_or_null(^"RobotCamera") as Camera3D
-	if cam != null:
-		cam.cull_mask &= ~RobotArms.VISUAL_LAYER
+	for c: Node in [_viewport.get_node_or_null(^"RobotCamera"), _rear_viewport.get_node_or_null(^"RearCamera")]:
+		if c is Camera3D:
+			(c as Camera3D).cull_mask &= ~RobotArms.VISUAL_LAYER
 
 
 func _setup_lidar_fan() -> void:
@@ -155,6 +159,22 @@ func get_command() -> Vector2:
 
 func get_camera_viewport() -> SubViewport:
 	return get_node(^"CameraViewport") as SubViewport  # dùng được cả trước _ready
+
+
+func get_rear_viewport() -> SubViewport:
+	return get_node(^"RearViewport") as SubViewport
+
+
+func get_rear_camera() -> Camera3D:
+	return get_node(^"RearViewport/RearCamera") as Camera3D
+
+
+func set_rear_camera_enabled(on: bool) -> void:
+	get_rear_viewport().render_target_update_mode = SubViewport.UPDATE_ALWAYS if on else SubViewport.UPDATE_DISABLED
+
+
+func is_rear_camera_enabled() -> bool:
+	return get_rear_viewport().render_target_update_mode == SubViewport.UPDATE_ALWAYS
 
 
 ## Khoảng cách từ đầu raycast phía trước tới vật cản; không chạm ➔ INF.

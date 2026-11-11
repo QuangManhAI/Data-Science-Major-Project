@@ -13,6 +13,10 @@ const UPPER_LEN: float = 0.24
 const FORE_LEN: float = 0.22
 const ARM_RADIUS: float = 0.032
 const MAX_YAW_RAD: float = deg_to_rad(110.0)    # không chỉ ra sau lưng
+## Mỗi tay chỉ được vươn vào phía trong thân chừng này: quá nữa thì cánh tay quét qua (chìm vào) thân robot.
+const INWARD_YAW_RAD: float = deg_to_rad(12.0)
+## Đổi tay khi đích lệch sang phía bên kia quá chừng này (tránh đổi qua đổi lại khi đích ở ngay phía trước).
+const SWITCH_YAW_RAD: float = deg_to_rad(15.0)
 const PITCH_MIN_RAD: float = deg_to_rad(-30.0)
 const PITCH_MAX_RAD: float = deg_to_rad(-4.0)   # luôn hơi chúc xuống: tay không giơ lên trước camera
 const REST_ELBOW_RAD: float = deg_to_rad(28.0)
@@ -104,17 +108,32 @@ static func choose_side(local_dir: Vector3) -> int:
 	return Side.RIGHT if local_dir.x >= 0.0 else Side.LEFT
 
 
-## Hướng chỉ (hệ robot) sau khi kẹp góc: yaw trong ±MAX_YAW_RAD, pitch trong [PITCH_MIN, PITCH_MAX].
-static func clamp_point_dir(local_dir: Vector3) -> Vector3:
+## Hướng chỉ (hệ robot) sau khi kẹp góc: pitch trong [PITCH_MIN, PITCH_MAX]; yaw trong ±MAX_YAW_RAD, và với một tay
+## cụ thể (side ≠ NONE) thì không vươn vào trong thân quá INWARD_YAW_RAD (tay phải: yaw ≥ −INWARD; tay trái: ≤ +INWARD).
+static func clamp_point_dir(local_dir: Vector3, side: int = Side.NONE) -> Vector3:
 	var horiz: float = Vector2(local_dir.x, local_dir.z).length()
 	var yaw: float = atan2(local_dir.x, -local_dir.z) if horiz > 1e-6 else 0.0
 	yaw = clampf(yaw, -MAX_YAW_RAD, MAX_YAW_RAD)
+	if side == Side.RIGHT:
+		yaw = maxf(yaw, -INWARD_YAW_RAD)
+	elif side == Side.LEFT:
+		yaw = minf(yaw, INWARD_YAW_RAD)
 	var pitch: float = clampf(atan2(local_dir.y, maxf(horiz, 1e-6)), PITCH_MIN_RAD, PITCH_MAX_RAD)
 	return Vector3(sin(yaw) * cos(pitch), sin(pitch), -cos(yaw) * cos(pitch))
 
 
-static func point_quat(local_dir: Vector3) -> Quaternion:
-	return Basis.looking_at(clamp_point_dir(local_dir), Vector3.UP).get_rotation_quaternion()
+static func point_quat(local_dir: Vector3, side: int = Side.NONE) -> Quaternion:
+	return Basis.looking_at(clamp_point_dir(local_dir, side), Vector3.UP).get_rotation_quaternion()
+
+
+## Tay nên dùng cho đích có góc `yaw` (so với hướng trước robot, > 0 bên phải), giữ tay hiện tại nếu đích chưa sang
+## hẳn phía bên kia (SWITCH_YAW_RAD).
+static func side_for_yaw(yaw: float, current: int) -> int:
+	if current == Side.RIGHT and yaw > -SWITCH_YAW_RAD:
+		return Side.RIGHT
+	if current == Side.LEFT and yaw < SWITCH_YAW_RAD:
+		return Side.LEFT
+	return Side.RIGHT if yaw >= 0.0 else Side.LEFT
 
 
 ## Chỉ vào một điểm trong thế giới (theo dõi điểm đó khi robot đang đi). duration_s = 0 ➔ giữ đến lower().
@@ -160,6 +179,10 @@ func _process(delta: float) -> void:
 	if _wave_left_s > 0.0:
 		_wave_left_s -= delta
 		_wave_t += delta
+	if _point_side != Side.NONE:
+		# Robot đi / quay ➔ đích có thể sang phía bên kia: đổi tay thay vì vươn tay quét qua thân.
+		var to: Vector3 = to_local(_point_world) - Vector3(0.0, SHOULDER_Y, 0.0)
+		_point_side = RobotArms.side_for_yaw(atan2(to.x, -to.z), _point_side)
 	var k: float = 1.0 - exp(-TURN_RATE * delta)
 	for side: int in [Side.LEFT, Side.RIGHT]:
 		var sh: Node3D = _shoulders[side]
@@ -167,7 +190,7 @@ func _process(delta: float) -> void:
 		var target_sh: Quaternion = rest_quat(side)
 		var target_el: Quaternion = Quaternion(Vector3.RIGHT, REST_ELBOW_RAD)
 		if side == _point_side:
-			target_sh = point_quat(_local_dir_from_shoulder(_point_world, side))
+			target_sh = point_quat(_local_dir_from_shoulder(_point_world, side), side)
 			target_el = Quaternion.IDENTITY
 		elif side == Side.RIGHT and _wave_left_s > 0.0:
 			# Vẫy: cánh tay giơ ngang sang bên, cẳng tay dựng lên và lắc qua lại.

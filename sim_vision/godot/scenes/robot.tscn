@@ -217,6 +217,18 @@ render_target_update_mode = 4
 fov = 70.0
 near = 0.05
 
+[node name="RearCameraMount" type="RemoteTransform3D" parent="."]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 0, 1.2, 0.16)
+remote_path = NodePath("../RearViewport/RearCamera")
+
+[node name="RearViewport" type="SubViewport" parent="."]
+size = Vector2i(640, 480)
+render_target_update_mode = 0
+
+[node name="RearCamera" type="Camera3D" parent="RearViewport"]
+fov = 70.0
+near = 0.05
+
 [node name="FrontRay" type="RayCast3D" parent="."]
 position = Vector3(0, 0.3, -0.25)
 target_position = Vector3(0, 0, -1)

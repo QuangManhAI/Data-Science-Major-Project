@@ -246,6 +246,13 @@ def main() -> None:
         help="PPO checkpoint (.pt) served by rl_policy_server.py on port 8768 (default: experiments/checkpoints/PPOHospital-PureVisionV2_best.pt, pure vision 29-D, no LiDAR)",
     )
     parser.add_argument(
+        "--policy",
+        choices=["v2", "v3"],
+        default=None,
+        help="Shortcut for --rl-checkpoint: v2 = PPOHospital-PureVisionV2_best.pt (driving only, interaction by rules), "
+             "v3 = PPOHospital-EngageV3_best.pt (learned facing / head tilt / asking, docs/RL_V3_DESIGN.md)",
+    )
+    parser.add_argument(
         "--solo-patient",
         "--solo_patient",
         "--solo",
@@ -317,7 +324,7 @@ def main() -> None:
 
     args = parser.parse_args(clean_argv)
     if args.controller is None:
-        args.controller = "rl" if args.rl_checkpoint else "fsm"
+        args.controller = "rl" if (args.rl_checkpoint or args.policy) else "fsm"
 
     # Register exit hooks
     atexit.register(cleanup)
@@ -404,6 +411,9 @@ def main() -> None:
         rl_f, rl_log_path = get_log_handle("rl_policy_server", enable_file_logging, log_dir)
         log_info = f" (logging to {rl_log_path.name})" if rl_log_path else ""
         rl_cmd = [str(py_exe), "rl_policy_server.py", "--trace"]
+        if args.policy and not args.rl_checkpoint:
+            name = {"v2": "PPOHospital-PureVisionV2_best.pt", "v3": "PPOHospital-EngageV3_best.pt"}[args.policy]
+            args.rl_checkpoint = str(REPO_ROOT / "experiments" / "checkpoints" / name)
         if args.rl_checkpoint:
             rl_cmd += ["--checkpoint", str(Path(args.rl_checkpoint).resolve())]
         log(f"[Launcher] Starting RL policy server on port 8768 ({args.rl_checkpoint or 'default checkpoint'}){log_info}...")

@@ -19,6 +19,14 @@ var depth_ignore: CollisionObject3D = null
 ## Tay giao tiếp (chỉ hướng / vẫy), xem robot_arms.gd.
 var arms: RobotArms = null
 
+## Đầu ngẩng / cúi (RL V3, docs/RL_V3_DESIGN.md): camera trước ngẩng theo đầu. Khớp HospitalEngageV3Env:
+## −15° (cúi) .. +30° (ngẩng), tối đa 60°/s. head_tilt > 0 là ngẩng lên.
+const HEAD_TILT_DOWN: float = deg_to_rad(15.0)
+const HEAD_TILT_UP: float = deg_to_rad(30.0)
+const HEAD_TILT_RATE: float = deg_to_rad(60.0)
+var head_tilt: float = 0.0
+var head_tilt_target: float = 0.0
+
 # Camera depth (RGB-D / depth ước lượng trên robot thật): 15 tia ngang trong HFOV camera, tầm 4 m.
 # Khớp DEPTH_* trong src/training/hospital_env_pure_vision_v2.py
 const DEPTH_NUM_RAYS: int = 15
@@ -185,7 +193,30 @@ func front_obstacle_distance() -> float:
 	return _front_ray.global_position.distance_to(_front_ray.get_collision_point())
 
 
+## Mục tiêu góc đầu từ hành động chuẩn hoá a ∈ [−1, 1] (a > 0 ngẩng tới 30°, a < 0 cúi tới 15°).
+func set_head_tilt_action(a: float) -> void:
+	a = clampf(a, -1.0, 1.0)
+	head_tilt_target = a * (HEAD_TILT_UP if a > 0.0 else HEAD_TILT_DOWN)
+
+
+## Góc đầu chuẩn hoá như quan sát V3: −1 = cúi 15°, 0 = ngang, 1 = ngẩng 30°.
+func get_head_tilt_norm() -> float:
+	return head_tilt / HEAD_TILT_UP if head_tilt >= 0.0 else head_tilt / HEAD_TILT_DOWN
+
+
+func _apply_head_tilt(delta: float) -> void:
+	var step: float = HEAD_TILT_RATE * delta
+	head_tilt = clampf(head_tilt + clampf(head_tilt_target - head_tilt, -step, step), -HEAD_TILT_DOWN, HEAD_TILT_UP)
+	var head := get_node_or_null(^"Head") as Node3D
+	if head != null:
+		head.rotation.x = head_tilt
+	var mount := get_node_or_null(^"CameraMount") as Node3D
+	if mount != null:
+		mount.rotation.x = head_tilt          # +X: camera nhìn −Z ngẩng lên
+
+
 func _physics_process(delta: float) -> void:
+	_apply_head_tilt(delta)
 	# Không còn thao tác "lùi + xoay" hardcode khi kẹt (D-071): policy V2 thấy tường/vật cản qua depth
 	# và tự xoay tại chỗ (v = 0, omega != 0) giống hệt môi trường huấn luyện.
 	rotation.y += _omega * delta

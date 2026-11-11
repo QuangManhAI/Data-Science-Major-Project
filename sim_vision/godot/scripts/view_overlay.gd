@@ -43,7 +43,8 @@ var _rear_dets: Array = []
 var _faces: Array = []
 var _rear_faces: Array = []
 var _remembered_face: Texture2D = null
-var _live_faces: Array = []          # [{tex: Texture2D, conf: float}]
+var _live_faces: Array = []          # [{tex: Texture2D, conf: float, mine: int}] mine: 1 đang dắt, 0 người khác, -1 chưa rõ
+var _rear_live_faces: Array = []
 var _tracked: Dictionary = {}
 var _rear_tracked: Dictionary = {}
 var _rear_active: bool = false
@@ -90,6 +91,11 @@ func _make_view(n: String) -> TextureRect:
 
 func face_panel_rect() -> Rect2:
 	return Rect2(0, 0, FACE_W, sector_rect().end.y)
+
+
+## Ô mặt camera sau (cạnh ô camera sau, chỉ khi đang dẫn): mặt đang thấy ở sau lưng, có phải người đang dắt không.
+func rear_face_panel_rect() -> Rect2:
+	return Rect2(0, rear_header_rect().position.y, FACE_W, HEADER_H + rear_image_rect().size.y)
 
 
 func front_header_rect() -> Rect2:
@@ -156,6 +162,7 @@ func set_rear_active(active: bool) -> void:
 		if not active:
 			_rear_dets = []
 			_rear_faces = []
+			_rear_live_faces = []
 			_rear_tracked = {}
 		_layout()
 
@@ -185,8 +192,9 @@ func set_remembered_face(tex: Texture2D) -> void:
 
 
 ## Mặt đang thấy ở camera trước: [{tex, conf}], to nhất trước.
-func set_live_faces(items: Array) -> void:
+func set_live_faces(items: Array, rear_items: Array = []) -> void:
 	_live_faces = items.slice(0, LIVE_FACES_MAX)
+	_rear_live_faces = rear_items.slice(0, LIVE_FACES_MAX)
 	_redraw()
 
 
@@ -360,6 +368,7 @@ func _on_canvas_draw() -> void:
 		if _rear_active:
 			_draw_dets(font, _rear_dets, rear_image_rect(), _rear_tracked, true)
 			_draw_faces(_rear_faces, rear_image_rect())
+			_draw_rear_face_panel(font)
 			_canvas.draw_rect(rear_image_rect(), Color(1, 1, 1, 0.15), false, 1.0)
 	# Thanh dưới: trạng thái + kết nối
 	var fr: Rect2 = footer_rect()
@@ -455,7 +464,31 @@ func _draw_face_panel(font: Font) -> void:
 	for i: int in LIVE_FACES_MAX:
 		var tr := Rect2(r.position.x + PAD + i * (tw + PAD), y + 16.0, tw, minf(tw * 1.25, r.end.y - y - 20.0))
 		var it: Dictionary = _live_faces[i] if i < _live_faces.size() else {}
-		_draw_thumb(font, tr, it.get("tex"), FACE_COLOR, "%.0f%%" % (100.0 * float(it.get("conf", 0.0))) if not it.is_empty() else "")
+		_draw_live_thumb(font, tr, it)
+
+
+## Mặt đang thấy ở camera sau: viền xanh + "đang dắt" nếu mặt nằm trong box ReID khớp bệnh nhân, "khác" nếu không.
+func _draw_rear_face_panel(font: Font) -> void:
+	var r: Rect2 = rear_face_panel_rect()
+	_canvas.draw_rect(Rect2(r.position + Vector2(0, HEADER_H), Vector2(r.size.x, r.size.y - HEADER_H)), PANEL_BG)
+	_draw_header(font, Rect2(r.position, Vector2(r.size.x, HEADER_H)), "MẶT · SAU", "", MUTED_COLOR)
+	var y: float = r.position.y + HEADER_H + 4.0
+	_canvas.draw_string(font, Vector2(r.position.x + PAD, y + 11.0), "đang thấy (%d)" % _rear_faces.size(),
+			HORIZONTAL_ALIGNMENT_LEFT, -1, 11, MUTED_COLOR)
+	var th: float = (r.end.y - (y + 16.0) - 3.0 * PAD) / 2.0
+	for i: int in LIVE_FACES_MAX:
+		var tr := Rect2(r.position.x + PAD, y + 16.0 + i * (th + PAD), r.size.x - 2.0 * PAD, th)
+		_draw_live_thumb(font, tr, _rear_live_faces[i] if i < _rear_live_faces.size() else {})
+
+
+func _draw_live_thumb(font: Font, r: Rect2, it: Dictionary) -> void:
+	if it.is_empty():
+		_draw_thumb(font, r, null, FACE_COLOR, "")
+		return
+	var mine: int = int(it.get("mine", -1))
+	var col: Color = BOX_COLOR_TRACKED if mine == 1 else FACE_COLOR
+	var tag: String = " · đang dắt" if mine == 1 else (" · khác" if mine == 0 else "")
+	_draw_thumb(font, r, it.get("tex"), col, "%.0f%%%s" % [100.0 * float(it.get("conf", 0.0)), tag])
 
 
 func _draw_thumb(font: Font, r: Rect2, tex: Texture2D, col: Color, caption: String) -> void:

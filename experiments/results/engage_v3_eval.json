@@ -1,0 +1,28 @@
+{
+ "rules": {
+  "return": 32.29755699989223,
+  "helped": 3.033333333333333,
+  "collisions": 11.833333333333334,
+  "escort_speed": 0.3556905346460448,
+  "all_served_rate": 0.26666666666666666,
+  "enroll_rate": 1.0,
+  "face_frac": 0.9491375497567448,
+  "asks_per_ep": 3.6333333333333333,
+  "wasted_asks_per_ep": 0.0,
+  "callers_gave_up_per_ep": 0.5666666666666667,
+  "aborted_per_ep": 0.0
+ },
+ "learned": {
+  "return": 97.33553078079949,
+  "helped": 5.166666666666667,
+  "collisions": 0.0,
+  "escort_speed": 0.4631434056019333,
+  "all_served_rate": 0.7666666666666667,
+  "enroll_rate": 0.9877300613496932,
+  "face_frac": 0.7919907807548257,
+  "asks_per_ep": 8.433333333333334,
+  "wasted_asks_per_ep": 3.7333333333333334,
+  "callers_gave_up_per_ep": 0.13333333333333333,
+  "aborted_per_ep": 0.0
+ }
+}

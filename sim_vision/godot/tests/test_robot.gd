@@ -236,3 +236,23 @@ func test_face_crop_rect_inside_image() -> void:
 	assert_gt(r.size.x, int(0.05 * 640), "rộng hơn box mặt")
 	var edge: Rect2i = Main.face_crop_rect({"x1": 0.97, "y1": 0.0, "x2": 1.0, "y2": 0.05}, Vector2i(640, 480))
 	assert_true(Rect2i(0, 0, 640, 480).encloses(edge), "sát mép ➔ kẹp trong ảnh")
+
+
+
+func test_head_tilt_moves_camera_and_is_rate_limited() -> void:
+	var robot := RobotScene.instantiate() as Robot
+	add_child_autofree(robot)
+	robot.set_head_tilt_action(1.0)
+	robot._apply_head_tilt(0.1)
+	assert_almost_eq(robot.head_tilt, Robot.HEAD_TILT_RATE * 0.1, 1e-5, "giới hạn 60°/s")
+	for i: int in 20:
+		robot._apply_head_tilt(0.1)
+	assert_almost_eq(robot.head_tilt, Robot.HEAD_TILT_UP, 1e-5)
+	assert_almost_eq(robot.get_head_tilt_norm(), 1.0, 1e-5)
+	await wait_physics_frames(2)
+	var cam := robot.get_camera_viewport().get_node("RobotCamera") as Camera3D
+	assert_gt((-cam.global_basis.z).y, 0.4, "camera ngẩng lên theo đầu")
+	robot.set_head_tilt_action(-1.0)
+	for i: int in 20:
+		robot._apply_head_tilt(0.1)
+	assert_almost_eq(robot.get_head_tilt_norm(), -1.0, 1e-5)

@@ -5,6 +5,8 @@ extends Node
 ## Main quay về controller cũ khi chưa kết nối.
 
 signal action_received(v: float, omega: float, phase: int)
+## Policy V3 (docs/RL_V3_DESIGN.md): góc đầu mục tiêu [−1, 1] và có hỏi "Cần tôi giúp gì không ạ?" không.
+signal engage_received(tilt: float, ask: bool)
 signal sectors_received(sectors: Array)
 signal connection_changed(connected: bool)
 
@@ -48,7 +50,7 @@ func _set_connected(value: bool) -> void:
 ## Gửi một bước quan sát; bỏ qua nếu bước trước chưa có trả lời (không dồn hàng đợi).
 func send_state(robot_pos: Vector3, robot_yaw: float, v: float, omega: float, lidar: PackedFloat32Array,
 		patient_pos: Vector3, phase: int, goal_pos: Vector3, task_id: int, yolo: Array = [], dets: Array = [],
-		depth: PackedFloat32Array = PackedFloat32Array()) -> void:
+		depth: PackedFloat32Array = PackedFloat32Array(), v3: Dictionary = {}) -> void:
 	if not _connected or _waiting:
 		return
 	var msg: Dictionary = {
@@ -64,6 +66,8 @@ func send_state(robot_pos: Vector3, robot_yaw: float, v: float, omega: float, li
 		msg["dets"] = dets
 	if not depth.is_empty():
 		msg["depth"] = Array(depth)  # V2: 15 khoảng cách depth (m) trong HFOV camera
+	if not v3.is_empty():
+		msg["v3"] = v3               # V3: tiếng nói / mặt / góc đầu / hỏi / đang nói chuyện
 	if _ws.send_text(JSON.stringify(msg)) == OK:
 		_waiting = true
 		_next_id += 1
@@ -77,4 +81,6 @@ func _handle_message(text: String) -> void:
 		return
 	if data.has("sectors") and data["sectors"] is Array:
 		sectors_received.emit(data["sectors"])
+	if data.has("tilt"):
+		engage_received.emit(float(data["tilt"]), bool(data.get("ask", false)))
 	action_received.emit(float(data["v"]), float(data["omega"]), int(data.get("phase", 0)))

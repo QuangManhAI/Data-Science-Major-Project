@@ -14,7 +14,8 @@
     "ask_again": "Tôi chưa nghe rõ, anh chị có muốn tôi dẫn tiếp không ạ?",
     "continue_ok": "Vâng, mời anh chị đi tiếp theo tôi ạ.",
     "stop_ok": "Vâng, khi nào cần anh chị cứ gọi tôi nhé.",
-    "look_at_me": "Anh chị nhìn về phía tôi một chút nhé."
+    "look_at_me": "Anh chị nhìn về phía tôi một chút nhé.",
+    "ask_help": "Cần tôi giúp gì không ạ?"
   },
   "places": {
     "thang_may": "Thang máy",

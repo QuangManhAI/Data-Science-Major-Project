@@ -167,6 +167,7 @@ func _ready() -> void:
 		_policy.name = "RLPolicyClient"
 		add_child(_policy)
 		_policy.action_received.connect(_on_policy_action)
+		_policy.engage_received.connect(_on_policy_engage)
 		_policy.sectors_received.connect(overlay.set_visual_sectors)
 		if inspection_panel != null:
 			_policy.sectors_received.connect(inspection_panel.update_visual_sectors)
@@ -276,8 +277,8 @@ func _physics_process(delta: float) -> void:
 		return
 	if _is_in_elevator_transit:
 		return
-	if Main.is_dialogue_state(state):
-		_face_speaker()
+	if Main.is_dialogue_state(state) and (not policy_v3 or _escort_holding()):
+		_face_speaker()                   # luật (baseline V2); V3 tự học việc này, trừ lúc giữ dẫn (policy không chạy)
 
 	# Số liệu đánh giá (scripts/eval_godot_escort.py): khoảng trống nhỏ nhất (LiDAR, m) và số frame robot va vào
 	# tường / đồ đạc kể từ dòng log trước — đo mỗi physics frame để không sót cú quẹt ngắn.
@@ -552,7 +553,8 @@ func has_line_of_sight(from_node: Node3D, to_node: Node3D) -> bool:
 ## PPO lái robot ở mọi pha ngoài hội thoại; gửi trạng thái mỗi STEP_DT_S như dt lúc train.
 ## Pha tìm bệnh nhân: tới ≤ PATIENT_ENGAGE_DIST_M ➔ ARRIVED, dừng chờ NPC bắt đầu hội thoại.
 func _step_policy(delta: float) -> void:
-	if Main.is_dialogue_state(state):
+	var in_dialogue: bool = Main.is_dialogue_state(state)
+	if in_dialogue and not policy_v3:
 		return
 
 	# Parse multi-class YOLO detections for patient channel
@@ -574,7 +576,7 @@ func _step_policy(delta: float) -> void:
 		var conf: float = float(best_patient_det.get("conf", 0.9))
 		yolo_feat = [1.0, yolo_cx, yolo_h, conf]
 
-	if _is_search_phase():
+	if _is_search_phase() and not in_dialogue:
 		var closest_info: Dictionary = get_closest_available_patient()
 		var candidate_pat: CharacterBody3D = closest_info.get("patient") as CharacterBody3D
 		var d_human: float = float(closest_info.get("dist", 999.0))
@@ -629,11 +631,15 @@ func _step_policy(delta: float) -> void:
 		_rl_bridge.patients_helped,
 		yolo_feat,
 		policy_dets,
-		robot.get_depth_readings()
+		robot.get_depth_readings(),
+		_v3_features()
 	)
 
 
 func _on_policy_action(v: float, omega: float, phase: int) -> void:
+	if policy_v3 and Main.is_dialogue_state(state) and _policy_active() and not _is_in_elevator_transit:
+		robot.set_command(0.0, omega)    # V3 tự quay về người đang nói (không đi khi đang nói chuyện)
+		return
 	if not _policy_active() or Main.is_dialogue_state(state) or _is_in_elevator_transit or _escort_holding():
 		return
 	if _is_search_phase():
@@ -1962,9 +1968,9 @@ func _new_id_stats() -> Dictionary:
 
 
 ## Toạ độ chuẩn hoá của bệnh nhân thật trong ảnh camera (chiếu vị trí thật); không thấy ➔ (-1, -1).
-func _gt_uv(p: CharacterBody3D, rear: bool) -> Vector2:
+func _gt_uv(p: CharacterBody3D, rear: bool, height_m: float = 0.9) -> Vector2:
 	var cam: Camera3D = robot.get_rear_camera() if rear else robot.get_camera_viewport().get_node(^"RobotCamera") as Camera3D
-	var world: Vector3 = p.global_position + Vector3(0, 0.9, 0)
+	var world: Vector3 = p.global_position + Vector3(0, height_m, 0)
 	if cam.is_position_behind(world) or not has_line_of_sight(robot, p):
 		return Vector2(-1, -1)
 	var px: Vector2 = cam.unproject_position(world)
@@ -1976,10 +1982,16 @@ func _gt_uv(p: CharacterBody3D, rear: bool) -> Vector2:
 func _template_truth(p: CharacterBody3D, d: Dictionary, rear: bool) -> String:
 	if p == null or d.is_empty():
 		return "không rõ"
-	var uv: Vector2 = _gt_uv(p, rear)
-	if uv.x < 0.0:
-		return "không rõ (người thật ngoài khung)"
-	return "đúng người" if Main._uv_in(uv, d) else "NHẦM người"
+	# Hông / ngực / mặt: robot ngẩng đầu nhìn mặt người đứng gần ➔ hông có thể nằm dưới đáy ảnh.
+	var any_visible: bool = false
+	for h: float in [0.9, 1.3, 1.55]:
+		var uv: Vector2 = _gt_uv(p, rear, h)
+		if uv.x < 0.0:
+			continue
+		any_visible = true
+		if Main._uv_in(uv, d):
+			return "đúng người"
+	return "NHẦM người" if any_visible else "không rõ (người thật ngoài khung)"
 
 
 static func _uv_in(uv: Vector2, d: Dictionary) -> bool:
@@ -2077,8 +2089,9 @@ static func face_crop_rect(face: Dictionary, size: Vector2i) -> Rect2i:
 	return r.intersection(Rect2i(Vector2i.ZERO, size))
 
 
-func _crop_camera(face: Dictionary) -> Texture2D:
-	var img: Image = robot.get_camera_viewport().get_texture().get_image()
+func _crop_camera(face: Dictionary, rear: bool = false) -> Texture2D:
+	var vp: SubViewport = robot.get_rear_viewport() if rear else robot.get_camera_viewport()
+	var img: Image = vp.get_texture().get_image()
 	if img == null or img.is_empty():
 		return null
 	var r: Rect2i = Main.face_crop_rect(face, img.get_size())
@@ -2091,30 +2104,58 @@ func _update_face_panel(now_ms: int) -> void:
 	if now_ms - _last_face_crop_ms < FACE_CROP_EVERY_MS:
 		return
 	_last_face_crop_ms = now_ms
-	var faces: Array = vision.last_faces.duplicate()
+	var rear_on: bool = rear_vision != null and rear_vision.enabled
+	overlay.set_live_faces(_live_face_items(vision.last_faces, _id_det, false),
+			_live_face_items(rear_vision.last_faces, _id_rear_det, true) if rear_on else [])
+
+
+## Ô mặt: các mặt lớn nhất, mỗi mặt gắn "đang dắt" (1) nếu là mặt của box ReID đang khớp bệnh nhân, "khác" (0) nếu
+## đang dẫn mà không phải, -1 khi không dẫn ai.
+func _live_face_items(faces_in: Array, tracked_det: Dictionary, rear: bool) -> Array:
+	var faces: Array = faces_in.duplicate()
 	faces.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
 		return (a["x2"] - a["x1"]) * (a["y2"] - a["y1"]) > (b["x2"] - b["x1"]) * (b["y2"] - b["y1"]))
+	var mine_face: Dictionary = Main.face_in_box(faces, tracked_det)
+	var escorting: bool = active_escorted_patient != null
 	var items: Array = []
 	for f: Dictionary in faces.slice(0, ViewOverlay.LIVE_FACES_MAX):
-		var t: Texture2D = _crop_camera(f)
+		var t: Texture2D = _crop_camera(f, rear)
 		if t != null:
-			items.append({"tex": t, "conf": f["conf"]})
-	overlay.set_live_faces(items)
+			items.append({"tex": t, "conf": f["conf"], "mine": (1 if f == mine_face and not mine_face.is_empty() else 0) if escorting else -1})
+	return items
 
 
 ## Lúc ghi nhớ: cắt mặt nằm trong nửa trên box bệnh nhân vừa ghi nhớ ➔ hiện ở ô "ghi nhớ".
 func _remember_face_crop(det: Dictionary) -> void:
-	if det.is_empty():
+	var f: Dictionary = Main.face_in_box(vision.last_faces, det)
+	if f.is_empty():
 		return
-	for f: Dictionary in vision.last_faces:
+	var t: Texture2D = _crop_camera(f)
+	if t != null:
+		overlay.set_remembered_face(t)
+
+
+## Mặt của người trong box `det`: tâm mặt nằm trong nửa trên box, gần đỉnh-giữa box nhất (box chồng nhau thì không
+## lấy nhầm mặt người đứng sau). Không có ➔ {}.
+static func face_in_box(faces: Array, det: Dictionary) -> Dictionary:
+	if det.is_empty():
+		return {}
+	var x1: float = float(det["x1"])
+	var x2: float = float(det["x2"])
+	var y1: float = float(det["y1"])
+	var y2: float = float(det["y2"])
+	var best: Dictionary = {}
+	var best_d: float = INF
+	for f: Dictionary in faces:
 		var fx: float = (float(f["x1"]) + float(f["x2"])) * 0.5
 		var fy: float = (float(f["y1"]) + float(f["y2"])) * 0.5
-		if fx >= float(det["x1"]) and fx <= float(det["x2"]) and fy >= float(det["y1"]) \
-				and fy <= float(det["y1"]) + 0.5 * (float(det["y2"]) - float(det["y1"])):
-			var t: Texture2D = _crop_camera(f)
-			if t != null:
-				overlay.set_remembered_face(t)
-			return
+		if fx < x1 or fx > x2 or fy < y1 or fy > y1 + 0.5 * (y2 - y1):
+			continue
+		var d: float = Vector2(fx - 0.5 * (x1 + x2), (fy - y1) * 0.5).length()
+		if d < best_d:
+			best_d = d
+			best = f
+	return best
 
 
 
@@ -2146,3 +2187,130 @@ static func bearing_to_cx(a: float) -> float:
 	if absf(a) > half * 0.9:
 		return -1.0
 	return 0.5 + 0.5 * tan(a) / tan(half)
+
+
+
+# ===================== RL V3: quan sát tương tác + hành động ngẩng đầu / hỏi (docs/RL_V3_DESIGN.md) =====================
+
+const ASK_RANGE_M: float = 2.5
+const ASK_CENTRE_CX: float = 0.3
+const ASK_COOLDOWN_S: float = 3.0
+## true khi policy server trả hành động V3 (tilt, ask) ➔ luật quay về người nói tắt, policy chạy cả lúc nói chuyện.
+var policy_v3: bool = false
+var _last_ask_s: float = -INF
+
+
+func _on_policy_engage(tilt: float, ask: bool) -> void:
+	if not policy_v3:
+		policy_v3 = true
+		print("[V3] policy V3: tự quay / ngẩng đầu / hỏi (luật quay về người nói tắt)")
+	robot.set_head_tilt_action(tilt)
+	if ask:
+		_robot_ask()
+
+
+## Người đang nói: NPC trong lượt hội thoại, hoặc NPC đang phát clip (gọi robot / bắt đầu nói). Null nếu im lặng.
+func _current_speaker() -> CharacterBody3D:
+	if Main.is_dialogue_state(state):
+		return get_active_speaking_patient()
+	for p: CharacterBody3D in _all_people():
+		var n: Npc = _npc_of(p)
+		if n != null and n.state in [Npc.NOTICE, Npc.TALK]:
+			return p
+	return null
+
+
+func _all_people() -> Array[CharacterBody3D]:
+	var out: Array[CharacterBody3D] = []
+	if human != null:
+		out.append(human)
+	var furn: Node = room.get_node_or_null(^"Furniture") if room != null else null
+	if furn != null:
+		for c: Node in furn.get_children():
+			if c is HospitalNpc and (c as HospitalNpc).visible:
+				out.append(c as CharacterBody3D)
+	return out
+
+
+func _npc_of(p: Node) -> Npc:
+	return (p.get_npc() if p.has_method("get_npc") else p.get_node_or_null(^"Npc")) as Npc
+
+
+func _v3_features() -> Dictionary:
+	var out: Dictionary = {"tilt": robot.get_head_tilt_norm(), "since_ask_s": _now_s() - _last_ask_s,
+			"dialogue": Main.is_dialogue_state(state)}
+	var spk: CharacterBody3D = _current_speaker()
+	var expect_cx: float = -1.0
+	if spk != null:
+		var local: Vector3 = robot.to_local(spk.global_position)
+		var bearing: float = atan2(local.x, -local.z)            # + = bên phải (như DOA của micro mảng)
+		out["voice"] = [1.0, bearing]
+		expect_cx = Main.bearing_to_cx(bearing)
+	# Mặt: của người đang nói (gần hướng giọng nói), không thì mặt gần giữa khung nhất.
+	var best: Dictionary = {}
+	var best_score: float = INF
+	var faces: Array = [] if (spk != null and expect_cx < 0.0) else vision.last_faces   # người nói ngoài khung ➔ không thấy mặt họ
+	for f: Dictionary in faces:
+		var cx: float = (float(f["x1"]) + float(f["x2"])) * 0.5
+		var sc: float = absf(cx - expect_cx) if expect_cx >= 0.0 else absf(cx - 0.5)
+		if expect_cx >= 0.0 and sc > 0.15:
+			continue
+		if sc < best_score:
+			best_score = sc
+			best = f
+	if not best.is_empty():
+		var owner: CharacterBody3D = _face_owner(best)
+		var known: float = 1.0 if owner != null and owner.get_meta("helped", false) else 0.0
+		out["face"] = [1.0, (float(best["x1"]) + float(best["x2"])) * 0.5 - 0.5,
+				(float(best["y1"]) + float(best["y2"])) * 0.5 - 0.5, float(best["y2"]) - float(best["y1"]), known]
+	return out
+
+
+## Người có mặt `face` (camera trước): đầu thật chiếu lên ảnh gần tâm mặt nhất. Sim thay cho bộ nhớ ReID / mặt của
+## những người robot đã giúp (robot thật: so embedding với gallery người đã gặp).
+func _face_owner(face: Dictionary) -> CharacterBody3D:
+	var c := Vector2((float(face["x1"]) + float(face["x2"])) * 0.5, (float(face["y1"]) + float(face["y2"])) * 0.5)
+	var tol: float = maxf(0.08, float(face["y2"]) - float(face["y1"]))
+	var best: CharacterBody3D = null
+	var best_d: float = INF
+	for p: CharacterBody3D in _all_people():
+		var seated: bool = p.get("is_seated") == true
+		var uv: Vector2 = _gt_uv(p, false, 1.2 if seated else 1.6)
+		if uv.x < 0.0:
+			continue
+		var d: float = uv.distance_to(c)
+		if d < tol and d < best_d:
+			best_d = d
+			best = p
+	return best
+
+
+## Hành động "hỏi": robot nói câu hỏi + vẫy tay; người gần giữa khung trong ASK_RANGE_M (nghe thấy) quay lại và nói.
+func _robot_ask() -> void:
+	if Main.is_dialogue_state(state) or is_task_busy() or _now_s() - _last_ask_s < ASK_COOLDOWN_S:
+		return
+	_last_ask_s = _now_s()
+	var target: CharacterBody3D = null
+	var best: float = INF
+	for p: CharacterBody3D in _all_people():
+		var local: Vector3 = robot.to_local(p.global_position)
+		var d: float = Vector2(local.x, local.z).length()
+		var cx: float = Main.bearing_to_cx(atan2(local.x, -local.z))
+		if d > ASK_RANGE_M or cx < 0.0 or absf(cx - 0.5) > ASK_CENTRE_CX or p.get_meta("helped", false):
+			continue
+		if absf(cx - 0.5) < best and has_line_of_sight(robot, p):
+			best = absf(cx - 0.5)
+			target = p
+	print("[V3] robot hỏi \"Cần tôi giúp gì không ạ?\" ➔ %s" % (target.name if target != null else "không có ai"))
+	if robot.arms != null:
+		robot.arms.wave(1.5)
+	_say_then("ask_help", {}, _ask_answered.bind(target))
+
+
+func _ask_answered(target: CharacterBody3D) -> void:
+	if target == null or Main.is_dialogue_state(state) or is_task_busy():
+		return
+	var n: Npc = _npc_of(target)
+	if n != null and n.state == Npc.IDLE and n.robot != null:
+		current_target_patient = target
+		n._notice()                       # quay về robot rồi nói yêu cầu (luồng hội thoại thường)

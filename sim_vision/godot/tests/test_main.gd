@@ -85,26 +85,28 @@ func test_camera_mode_cycles_and_toggles_ceiling() -> void:
 	# 1. Ban đầu là FOLLOW (ở độ cao trong phòng < 3.2m trần nhà), trần nhà hiện để đúng không gian và không bị chói sáng
 	assert_eq(main.camera_mode, Main.CameraMode.FOLLOW)
 	assert_not_null(main.ceiling_mesh)
-	assert_true(main.ceiling_mesh.visible, "Trần nhà phải hiện ở FOLLOW")
+	assert_true(RenderLayers.is_viewer_visible(main.ceiling_mesh as VisualInstance3D), "Trần nhà phải hiện ở FOLLOW")
 	assert_true(main.viewer_camera.global_position.y <= 2.8, "Camera FOLLOW phải ở dưới trần nhà")
 
 	# 2. Đổi sang TOP_DOWN ➔ trần nhà tự ẩn để quan sát toàn bộ mặt bằng, góc nhìn vừa vặn (Y=13.0)
 	main.camera_mode = Main.CameraMode.TOP_DOWN
 	main._update_viewer_camera()
-	assert_false(main.ceiling_mesh.visible, "Trần nhà phải ẩn ở TOP_DOWN")
+	assert_false(RenderLayers.is_viewer_visible(main.ceiling_mesh as VisualInstance3D), "Trần nhà phải ẩn ở TOP_DOWN")
+	var ceil_vi := main.ceiling_mesh as VisualInstance3D
+	assert_true(ceil_vi.visible and ceil_vi.layers == RenderLayers.ROBOT_ONLY, "camera robot vẫn thấy trần")
 	assert_almost_eq(main.viewer_camera.global_position.y, 13.0, 0.1)
 
 	# 3. Đổi sang LOBBY ➔ trần nhà hiện lại, camera ở sảnh lễ tân
 	main.camera_mode = Main.CameraMode.LOBBY
 	main._update_viewer_camera()
-	assert_true(main.ceiling_mesh.visible, "Trần nhà phải hiện ở LOBBY")
+	assert_true(RenderLayers.is_viewer_visible(main.ceiling_mesh as VisualInstance3D), "Trần nhà phải hiện ở LOBBY")
 	assert_almost_eq(main.viewer_camera.global_position.x, -4.0, 0.1)
 	assert_almost_eq(main.viewer_camera.global_position.z, 7.8, 0.1)
 
 	# 4. Quay lại FOLLOW ➔ vị trí và tầm nhìn chuẩn, trần nhà vẫn hiện
 	main.camera_mode = Main.CameraMode.FOLLOW
 	main._update_viewer_camera()
-	assert_true(main.ceiling_mesh.visible, "Trần nhà giữ hiện khi về FOLLOW")
+	assert_true(RenderLayers.is_viewer_visible(main.ceiling_mesh as VisualInstance3D), "Trần nhà giữ hiện khi về FOLLOW")
 
 
 func test_wall_transparency_when_occluded() -> void:
@@ -126,13 +128,22 @@ func test_wall_transparency_when_occluded() -> void:
 
 	assert_gt(main._occluding_walls.size(), 0, "Tường chắn giữa camera và robot phải được phát hiện")
 	var wall: MeshInstance3D = main._occluding_walls[0]
-	assert_not_null(wall.material_override, "Tường chắn phải được gán material_override trong suốt")
-	var mat: StandardMaterial3D = wall.material_override as StandardMaterial3D
+	assert_null(wall.material_override, "tường thật giữ nguyên vật liệu đặc")
+	assert_eq(wall.layers, RenderLayers.ROBOT_ONLY, "tường thật chỉ còn camera robot render")
+	var ghost := wall.get_node_or_null(^"ViewerGhost") as MeshInstance3D
+	assert_not_null(ghost, "người xem thấy bản tường trong suốt")
+	assert_eq(ghost.layers, RenderLayers.VIEWER_ONLY)
+	var mat: StandardMaterial3D = ghost.material_override as StandardMaterial3D
 	assert_eq(mat.transparency, BaseMaterial3D.TRANSPARENCY_ALPHA)
 	assert_almost_eq(mat.albedo_color.a, 0.22, 0.01)
+	for cam: Camera3D in [main.robot.get_camera_viewport().get_node(^"RobotCamera") as Camera3D, main.robot.get_rear_camera()]:
+		assert_true(cam.cull_mask & RenderLayers.ROBOT_ONLY != 0, "camera robot thấy tường đặc")
+		assert_eq(cam.cull_mask & RenderLayers.VIEWER_ONLY, 0, "camera robot không thấy tường trong suốt")
+	assert_eq(main.viewer_camera.cull_mask & RenderLayers.ROBOT_ONLY, 0, "người xem không thấy tường đặc")
 
 	# Camera di chuyển vào cùng phòng (-7.0, 1.5, -4.0) ➔ không còn vật cản
 	main.viewer_camera.global_position = Vector3(-7.0, 1.5, -4.0)
 	main._update_wall_transparency()
 	assert_eq(main._occluding_walls.size(), 0, "Không còn tường chắn khi camera nhìn trực tiếp")
-	assert_null(wall.material_override, "material_override của tường phải được xóa")
+	assert_eq(wall.layers & RenderLayers.ROBOT_ONLY, 0, "tường trả về layer cũ")
+	assert_eq(wall.get_node_or_null(^"ViewerGhost"), null, "bỏ bản trong suốt")

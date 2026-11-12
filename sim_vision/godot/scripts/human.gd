@@ -119,6 +119,14 @@ func end_escort() -> void:
 
 func _physics_process(delta: float) -> void:
 	_update_locomotion(delta)
+	# Đang nói chuyện với robot (kể cả lúc được dẫn / đang ngồi): nhìn về robot để robot thấy mặt.
+	var npc: Node = get_node_or_null(^"Npc")
+	if npc != null and ("state" in npc) and npc.state in [Npc.NOTICE, Npc.TALK, Npc.WAIT_REPLY] \
+			and robot_ref != null and is_instance_valid(robot_ref) and not npc.is_turning():
+		velocity = Vector3.ZERO
+		face_yaw(atan2(robot_ref.global_position.x - global_position.x,
+				robot_ref.global_position.z - global_position.z), delta)
+		return
 	if _escorted:
 		return
 	if pardon_enabled and robot_ref != null and is_instance_valid(robot_ref):

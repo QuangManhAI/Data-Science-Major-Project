@@ -249,18 +249,22 @@ const PATIENT_NPC_HALF_M: float = 0.25
 @onready var _robot_dock: Node3D = get_node_or_null(^"Entrance/RobotDock")
 
 
-## Ẩn hoặc hiện trần nhà (hữu ích cho camera nhìn từ trên xuống TOP_DOWN kiểu RimWorld).
+## Ẩn hoặc hiện trần nhà với người xem (camera TOP_DOWN kiểu RimWorld). Camera robot vẫn luôn thấy trần.
 func set_ceiling_visible(v: bool) -> void:
+	for c: MeshInstance3D in _ceilings():
+		RenderLayers.set_viewer_visible(c, v)
+
+
+func _ceilings() -> Array[MeshInstance3D]:
+	var out: Array[MeshInstance3D] = []
 	if _ceiling != null:
-		_ceiling.visible = v
-	if _floor2_node != null:
-		var c2: MeshInstance3D = _floor2_node.get_node_or_null(^"Shell/Ceiling")
-		if c2 != null:
-			c2.visible = v
-	if _floor3_node != null:
-		var c3: MeshInstance3D = _floor3_node.get_node_or_null(^"Shell/Ceiling")
-		if c3 != null:
-			c3.visible = v
+		out.append(_ceiling)
+	for fl: Node3D in [_floor2_node, _floor3_node]:
+		if fl != null:
+			var c: MeshInstance3D = fl.get_node_or_null(^"Shell/Ceiling")
+			if c != null:
+				out.append(c)
+	return out
 
 
 ## Xác định tầng (1, 2 hoặc 3) dựa trên tọa độ X
@@ -305,7 +309,7 @@ func get_free_position_on_floor(floor_num: int, min_clearance: float, rng: Rando
 
 
 func is_ceiling_visible() -> bool:
-	return _ceiling != null and _ceiling.visible
+	return _ceiling != null and RenderLayers.is_viewer_visible(_ceiling)
 
 
 ## Điểm ngẫu nhiên trên sàn (y = 0) trong Sảnh chính + Hành lang trung tâm,

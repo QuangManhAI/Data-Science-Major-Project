@@ -1,0 +1,43 @@
+{
+  "_doc": "Câu robot tự nói khi dẫn đường (docs/UPGRADE_HRI_PLAN.md mục B). Nguồn duy nhất cho Godot (robot_announcer.gd) và pregen TTS (sim_vision/python/voice/escort_lines.py). {place} lấy từ places, {floor} là số tầng.",
+  "lines": {
+    "start": "Mời anh chị đi theo tôi. Anh chị nhớ luôn đi gần tôi nhé.",
+    "goal_ahead": "{place} ở ngay phía trước ạ.",
+    "goal_left": "{place} ở phía trước, bên trái ạ.",
+    "goal_right": "{place} ở phía trước, bên phải ạ.",
+    "elevator_enter": "Mời anh chị vào thang máy cùng tôi ạ.",
+    "elevator_exit": "Đến tầng {floor} rồi, mời anh chị đi tiếp theo tôi ạ.",
+    "arrive": "Đã tới {place} rồi ạ.",
+    "remind": "Anh chị ơi, đi gần tôi một chút nhé, tôi đợi anh chị ạ.",
+    "remind_again": "Anh chị cứ đi từ từ, tôi đứng đợi ở đây ạ.",
+    "ask_continue": "Anh chị có muốn tôi dẫn đường tiếp không ạ?",
+    "ask_again": "Tôi chưa nghe rõ, anh chị có muốn tôi dẫn tiếp không ạ?",
+    "continue_ok": "Vâng, mời anh chị đi tiếp theo tôi ạ.",
+    "stop_ok": "Vâng, khi nào cần anh chị cứ gọi tôi nhé.",
+    "look_at_me": "Anh chị nhìn về phía tôi một chút nhé.",
+    "ask_help": "Cần tôi giúp gì không ạ?"
+  },
+  "places": {
+    "thang_may": "Thang máy",
+    "thang_may_t2": "Thang máy",
+    "thang_may_t3": "Thang máy",
+    "cap_cuu": "Khoa cấp cứu",
+    "nha_thuoc": "Nhà thuốc",
+    "tiep_don": "Quầy tiếp đón",
+    "ghe_cho": "Khu ghế chờ",
+    "nha_ve_sinh": "Nhà vệ sinh",
+    "wc_t2": "Nhà vệ sinh",
+    "wc_t3": "Nhà vệ sinh",
+    "hanh_lang": "Hành lang",
+    "hanh_lang_t2": "Hành lang",
+    "hanh_lang_t3": "Hành lang",
+    "sanh_t2": "Sảnh tầng hai",
+    "sanh_t3": "Sảnh tầng ba",
+    "staff": "Nhân viên y tế"
+  },
+  "floors": [
+    1,
+    2,
+    3
+  ]
+}

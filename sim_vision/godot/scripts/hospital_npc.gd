@@ -283,10 +283,8 @@ func end_escort() -> void:
 
 func _physics_process(delta: float) -> void:
 	_update_locomotion(delta)
-	if current_state == State.ESCORTED:
-		return
-
-	# Đang tương tác hội thoại với robot (NOTICE, TALK, WAIT_REPLY) -> lập tức dừng bước, ngưng timer, hướng về robot
+	# Đang tương tác hội thoại với robot (NOTICE, TALK, WAIT_REPLY) -> dừng bước, ngưng timer, nhìn về robot.
+	# Cả lúc đang được dẫn (trả lời "đi tiếp không?") và lúc ngồi: robot phải thấy mặt người đang nói với nó.
 	if _npc != null and ("state" in _npc) and (_npc.state in [NpcScript.NOTICE, NpcScript.TALK, NpcScript.WAIT_REPLY]):
 		velocity = Vector3.ZERO
 		if robot_ref != null and is_instance_valid(robot_ref) and not _npc.is_turning():
@@ -294,6 +292,8 @@ func _physics_process(delta: float) -> void:
 			if to_r.length() > 0.05:
 				var target_yaw: float = atan2(to_r.x, to_r.z)
 				rotation.y = lerp_angle(rotation.y, target_yaw, minf(1.0, 10.0 * delta))
+		return
+	if current_state == State.ESCORTED:
 		return
 
 	# Xử lý nhường đường (Pardon) khi robot lại gần

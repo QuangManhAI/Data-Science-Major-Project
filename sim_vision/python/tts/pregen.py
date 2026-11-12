@@ -1,4 +1,5 @@
-"""Sinh sẵn giọng nói cho mọi câu trả lời có thể có (G21): nlu.policy.all_responses() ➔ cache TTS.
+"""Sinh sẵn giọng nói cho mọi câu robot có thể nói (G21): nlu.policy.all_responses() + câu dẫn đường
+(voice.escort_lines, docs/UPGRADE_HRI_PLAN.md mục B) ➔ cache TTS.
 
 Chạy (venv có vieneu): .venv-tts/bin/python -m tts.pregen [--voice "Ngọc Huyền"]
 """
@@ -39,8 +40,10 @@ def main(argv: list[str] | None = None) -> int:
         print(f"ERROR: voice '{args.voice}' không có: {engine.voices()}", file=sys.stderr)
         return 1
     from nlu.policy import all_responses
+    from voice.escort_lines import escort_texts
 
-    r = pregen(Synthesizer(engine, TtsCache(config.TTS_CACHE_DIR)), all_responses(), args.voice)
+    texts = all_responses() + [t for t in escort_texts() if t not in set(all_responses())]
+    r = pregen(Synthesizer(engine, TtsCache(config.TTS_CACHE_DIR)), texts, args.voice)
     print(f"{r['n']} câu, {r['misses']} sinh mới (trung bình {r['mean_miss_ms']:.0f} ms), {r['hits']} có sẵn; "
           f"tổng {r['total_s']:.1f} s")
     return 0

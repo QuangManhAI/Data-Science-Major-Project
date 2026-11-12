@@ -362,6 +362,16 @@ static func step_escorted_patient(patient: CharacterBody3D, robot_pos: Vector3, 
 		trail.append(robot_pos)
 		while trail.size() > 200:
 			trail.remove_at(0)
+	# Bệnh nhân đang dừng lại (nghỉ chân / tụt lại, xem main._update_escort_hri): đứng yên, không tính là kẹt.
+	var hold: float = float(patient.get_meta("escort_hold_s", 0.0))
+	if hold > 0.0:
+		patient.set_meta("escort_hold_s", maxf(0.0, hold - delta))
+		_follow_vel = Vector3.ZERO
+		_follow_moving = false
+		_patient_stuck_s = 0.0
+		_progress_best = INF
+		patient.escort_stop()
+		return
 	var fwd_now := Vector3(-sin(robot_yaw), 0.0, -cos(robot_yaw))
 	if _follow_heading == Vector3.ZERO:
 		_follow_heading = fwd_now

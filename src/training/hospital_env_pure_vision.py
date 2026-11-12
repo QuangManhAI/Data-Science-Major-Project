@@ -644,6 +644,15 @@ class HospitalPureVisionEnv(HospitalVisualShiftEnv):
 
         return np.nan_to_num(obs, nan=0.0, posinf=1.0, neginf=-1.0).astype(np.float32)
 
+    def _engagement_ready(self, pat_seen: float, pat_h: float, d_phys: float) -> bool:
+        """APPROACH ➔ GUIDE_ESCORT khi tới đủ gần bệnh nhân. V3 (hospital_env_engage_v3.py) ghi đè: chỉ sau khi
+        robot đã đối mặt / hỏi / nói chuyện xong."""
+        return (
+            pat_h >= TARGET_BOX_H
+            or d_phys <= PATIENT_TALK_DIST_M_VIS
+            or (pat_seen > 0.5 and pat_h >= 0.38 and d_phys <= 2.2)
+        )
+
     def step(self, action: np.ndarray) -> tuple[np.ndarray, float, bool, dict[str, Any]]:
         # Free search step penalty
         free_search_penalty = (
@@ -685,11 +694,7 @@ class HospitalPureVisionEnv(HospitalVisualShiftEnv):
         if self.task_phase == TaskPhase.APPROACH_PATIENT and self.active_patient_idx is not None:
             pat_seen, pat_cx, pat_h, _ = self._compute_yolo_det()
             d_phys = math.hypot(self.patient_x - self.robot_x, self.patient_z - self.robot_z)
-            if (
-                pat_h >= TARGET_BOX_H
-                or d_phys <= PATIENT_TALK_DIST_M_VIS
-                or (pat_seen > 0.5 and pat_h >= 0.38 and d_phys <= 2.2)
-            ):
+            if self._engagement_ready(pat_seen, pat_h, d_phys):
                 resolved = resolve_destination_key(
                     self.scenario_action,
                     self.scenario_slot,

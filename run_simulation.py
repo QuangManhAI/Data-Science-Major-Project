@@ -246,6 +246,13 @@ def main() -> None:
         help="PPO checkpoint (.pt) served by rl_policy_server.py on port 8768 (default: experiments/checkpoints/PPOHospital-PureVisionV2_best.pt, pure vision 29-D, no LiDAR)",
     )
     parser.add_argument(
+        "--policy",
+        choices=["v2", "v3"],
+        default=None,
+        help="Shortcut for --rl-checkpoint: v2 = PPOHospital-PureVisionV2_best.pt (driving only, interaction by rules), "
+             "v3 = PPOHospital-EngageV3_best.pt (learned facing / head tilt / asking, docs/RL_V3_DESIGN.md)",
+    )
+    parser.add_argument(
         "--solo-patient",
         "--solo_patient",
         "--solo",
@@ -260,6 +267,21 @@ def main() -> None:
         dest="escort_only",
         action="store_true",
         help="Patients strictly request escort to hospital clinic rooms across Floors 1, 2, and 3",
+    )
+    parser.add_argument(
+        "--lag-prob",
+        dest="lag_prob",
+        type=float,
+        default=None,
+        help="Probability (0-1) that the escorted patient falls behind once per escort, to exercise robot reminders / "
+             "'continue?' questions (docs/UPGRADE_HRI_PLAN.md). Default in Godot: 0.5",
+    )
+    parser.add_argument(
+        "--no-face-paste",
+        dest="no_face_paste",
+        action="store_true",
+        help="Do not paste real face photos on NPC heads (sim_vision/godot/scripts/npc_face.gd); default pastes them "
+             "when sim_vision/godot/assets/textures/npc_faces/ exists",
     )
     parser.add_argument(
         "--no-yolo",
@@ -302,7 +324,7 @@ def main() -> None:
 
     args = parser.parse_args(clean_argv)
     if args.controller is None:
-        args.controller = "rl" if args.rl_checkpoint else "fsm"
+        args.controller = "rl" if (args.rl_checkpoint or args.policy) else "fsm"
 
     # Register exit hooks
     atexit.register(cleanup)
@@ -389,6 +411,9 @@ def main() -> None:
         rl_f, rl_log_path = get_log_handle("rl_policy_server", enable_file_logging, log_dir)
         log_info = f" (logging to {rl_log_path.name})" if rl_log_path else ""
         rl_cmd = [str(py_exe), "rl_policy_server.py", "--trace"]
+        if args.policy and not args.rl_checkpoint:
+            name = {"v2": "PPOHospital-PureVisionV2_best.pt", "v3": "PPOHospital-EngageV3_best.pt"}[args.policy]
+            args.rl_checkpoint = str(REPO_ROOT / "experiments" / "checkpoints" / name)
         if args.rl_checkpoint:
             rl_cmd += ["--checkpoint", str(Path(args.rl_checkpoint).resolve())]
         log(f"[Launcher] Starting RL policy server on port 8768 ({args.rl_checkpoint or 'default checkpoint'}){log_info}...")
@@ -453,6 +478,10 @@ def main() -> None:
     if args.escort_only:
         extra_godot_args.append("--escort-only")
         log("[Launcher] Escort Only Mode active: Patients strictly request escort to clinic rooms across Floors 1-3.")
+    if args.no_face_paste:
+        extra_godot_args.append("--no-face-paste")
+    if args.lag_prob is not None:
+        extra_godot_args.append(f"--lag-prob={args.lag_prob}")
     if extra_godot_args:
         godot_cmd.append("--")
         godot_cmd.extend(extra_godot_args)

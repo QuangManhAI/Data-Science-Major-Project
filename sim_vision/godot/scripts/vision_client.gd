@@ -8,6 +8,21 @@ signal detections_received(frame_id: int, dets: Array, infer_ms: float)
 signal connection_changed(connected: bool)
 
 const OUTBOUND_BUFFER: int = 1 << 22  # 4 MB; mặc định 64 KB nhỏ hơn 1 ảnh base64
+## Nhận diện bệnh nhân (docs/UPGRADE_HRI_PLAN.md D3–D4): frame nào cũng có `reid` ➔ server gắn embedding OSNet vào box
+## patient (MPS ~9 ms cho 1–3 người) ➔ ReID cùng tần số camera (30 Hz). Muốn nhẹ hơn thì tăng lên 2–3.
+const REID_EVERY_N: int = 1
+const EMB_DIM: int = 512
+
+## Camera sau dùng client thứ hai: tắt khi không dẫn đường, chụp thưa hơn, frame nào cũng có `reid`.
+var enabled: bool = true
+## Xin server box mặt (YuNet, ~4 ms/frame) để hiển thị nét đứt trên ô camera. Kết quả frame mới nhất: last_faces.
+var want_faces: bool = true
+var last_faces: Array = []
+var capture_hz: float = Config.CAPTURE_HZ
+var reid_every_n: int = REID_EVERY_N
+
+## "" = tắt, "enroll" = đang nói chuyện (ghi nhớ, có kiểm tra mặt), "track" = đang dẫn đường. Main đặt.
+var reid_mode: String = ""
 
 var url: String = Config.WS_URL
 
@@ -39,9 +54,9 @@ func _process(delta: float) -> void:
 	if state == WebSocketPeer.STATE_CLOSED \
 			and (_last_attempt_ms < 0 or now - _last_attempt_ms >= int(Config.RECONNECT_S * 1000.0)):
 		_try_connect(now)
-	if _connected and _viewport != null:
+	if _connected and _viewport != null and enabled:
 		_capture_accum += delta
-		var period: float = 1.0 / Config.CAPTURE_HZ
+		var period: float = 1.0 / capture_hz
 		if _capture_accum >= period:
 			_capture_accum = fmod(_capture_accum, period)
 			_send_frame(now)
@@ -77,6 +92,10 @@ func _send_frame(now: int) -> void:
 		"type": "frame", "frame_id": _next_id, "width": img.get_width(), "height": img.get_height(),
 		"jpeg_b64": Marshalls.raw_to_base64(img.save_jpg_to_buffer(Config.JPEG_QUALITY)),
 	}
+	if reid_mode != "" and _next_id % maxi(reid_every_n, 1) == 0:
+		msg["reid"] = reid_mode
+	if want_faces:
+		msg["faces"] = true
 	var err: Error = _ws.send_text(JSON.stringify(msg))
 	if err != OK:
 		_set_connected(false)
@@ -105,6 +124,7 @@ func handle_message(text: String, now_ms: int) -> void:
 		return
 	_last_id = frame_id
 	_drop_expired(now_ms)
+	last_faces = r["faces"]
 	detections_received.emit(frame_id, r["dets"], r["infer_ms"])
 
 
@@ -125,7 +145,7 @@ static func is_fresh(frame_id: int, last_id: int, sent_at_ms: int, now_ms: int) 
 ## Parse message server theo Mục 2.2.
 ## Trả {ok, frame_id, dets, infer_ms, error}; detection sai bị bỏ riêng từng cái.
 static func parse_message(text: String) -> Dictionary:
-	var out: Dictionary = {"ok": false, "frame_id": -1, "dets": [], "infer_ms": 0.0, "error": ""}
+	var out: Dictionary = {"ok": false, "frame_id": -1, "dets": [], "infer_ms": 0.0, "error": "", "faces": []}
 	# JSON.parse_string in lỗi engine khi chuỗi hỏng; JSON.parse chỉ trả mã lỗi.
 	var json := JSON.new()
 	var msg: Variant = json.data if json.parse(text) == OK else null
@@ -172,7 +192,21 @@ static func parse_message(text: String) -> Dictionary:
 				item["class_id"] = int(dd["class_id"])
 			if dd.has("class_name"):
 				item["class_name"] = str(dd["class_name"])
+			if dd.get("emb_b64") is String:
+				var emb: PackedFloat32Array = Marshalls.base64_to_raw(dd["emb_b64"]).to_float32_array()
+				if emb.size() == EMB_DIM:
+					item["emb"] = emb
+			if dd.get("face") is bool:
+				item["face"] = dd["face"]
 			dets.append(item)
+	var faces: Array = []
+	if m.get("faces") is Array:
+		for f: Variant in m["faces"]:
+			if VisionClient.is_valid_detection(f):
+				var ff := f as Dictionary
+				faces.append({"x1": float(ff["x1"]), "y1": float(ff["y1"]), "x2": float(ff["x2"]), "y2": float(ff["y2"]),
+						"conf": float(ff["conf"])})
+	out["faces"] = faces
 	out["ok"] = true
 	out["dets"] = dets
 	out["infer_ms"] = float(m["infer_ms"])

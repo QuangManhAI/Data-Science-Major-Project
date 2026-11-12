@@ -35,6 +35,22 @@ def _is_int(value: Any) -> bool:
 
 def parse_frame(text: str | bytes) -> tuple[int, np.ndarray]:
     """Parse message `frame`, trả `(frame_id, ảnh BGR)`. Lỗi ➔ ProtocolError."""
+    frame_id, img, _ = parse_frame_opts(text)
+    return frame_id, img
+
+
+def wants_faces(text: str | bytes) -> bool:
+    """Frame có `"faces": true` ➔ server trả thêm box mặt (YuNet) để hiển thị. Lỗi parse ➔ False."""
+    try:
+        msg = json.loads(text)
+    except (json.JSONDecodeError, UnicodeDecodeError, TypeError):
+        return False
+    return isinstance(msg, dict) and msg.get("faces") is True
+
+
+def parse_frame_opts(text: str | bytes) -> tuple[int, np.ndarray, str]:
+    """Như parse_frame, thêm trường tùy chọn `reid` ("enroll" / "track" / "" — docs/UPGRADE_HRI_PLAN.md D3–D4).
+    Giá trị lạ ➔ "" (bỏ qua, không lỗi)."""
     try:
         msg = json.loads(text)
     except (json.JSONDecodeError, UnicodeDecodeError, TypeError):
@@ -72,16 +88,21 @@ def parse_frame(text: str | bytes) -> tuple[int, np.ndarray]:
         raise ProtocolError("invalid jpeg", frame_id)
     if img.shape[1] != msg["width"] or img.shape[0] != msg["height"]:
         raise ProtocolError("size mismatch", frame_id)
-    return frame_id, img
+    reid = msg.get("reid", "")
+    return frame_id, img, reid if reid in ("enroll", "track") else ""
 
 
-def build_detections(frame_id: int, detections: list[dict[str, float]], infer_ms: float) -> str:
-    return json.dumps({
+def build_detections(frame_id: int, detections: list[dict[str, float]], infer_ms: float,
+                     faces: list[dict[str, float]] | None = None) -> str:
+    msg = {
         "type": "detections",
         "frame_id": frame_id,
         "infer_ms": round(float(infer_ms), 1),
         "detections": detections,
-    })
+    }
+    if faces is not None:
+        msg["faces"] = faces
+    return json.dumps(msg)
 
 
 def build_error(frame_id: int | None, message: str) -> str:

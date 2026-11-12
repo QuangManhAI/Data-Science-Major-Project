@@ -14,6 +14,7 @@ import asyncio
 import json
 import logging
 import math
+import os
 import sys
 from pathlib import Path
 
@@ -54,6 +55,9 @@ from src.training.hospital_env_pure_vision_v2 import (  # noqa: E402
     remap_v1_obs,
     tether_features,
 )
+from src.training.hospital_env_engage_v3 import DOA_HOLDS_MEMORY, OBS_DIM_V3, VOICE_MEMORY_S  # noqa: E402
+
+V3_DIMS = (31, 32, OBS_DIM_V3)   # 31 = trước "mặt đã gặp"; 32 = trước "nhớ hướng giọng nói"
 from src.training.hospital_env_vision import (  # noqa: E402
     PUBLIC_PATROL_WAYPOINTS,
     HospitalVisualShiftEnv,
@@ -75,7 +79,7 @@ class PolicyRunner:
         self.lidar_source = lidar_source
         self.trace = trace
         self.n_steps = 0
-        if self.obs_dim in (29, OBS_DIM_V2):
+        if self.obs_dim in (29, OBS_DIM_V2, *V3_DIMS):
             self.env = HospitalPureVisionEnv(curriculum_stage=1, env_mode="solo")
         else:
             self.env = HospitalVisualShiftEnv(curriculum_stage=1, env_mode="solo")
@@ -113,6 +117,8 @@ class PolicyRunner:
         env.patient_x, env.patient_z = (float(t) for t in msg["patient"])
 
         phase = int(msg["phase"])
+        # V3: đang nói chuyện ➔ giữ pha APPROACH như lúc train (YOLO mất box người sát robot không đổi sang SEARCH)
+        in_dialogue = bool((msg.get("v3") or {}).get("dialogue"))
         task_id = int(msg.get("task_id", 0))
         if task_id != self.task_id:
             self.task_id = task_id
@@ -134,7 +140,7 @@ class PolicyRunner:
         # =========================================================================
         # 1. PURE VISION MODE (29-D, ZERO LIDAR)
         # =========================================================================
-        if self.obs_dim in (29, OBS_DIM_V2):
+        if self.obs_dim in (29, OBS_DIM_V2, *V3_DIMS):
             obs = env._get_obs()
 
             # Parse multi-class YOLO detections from Godot
@@ -212,8 +218,9 @@ class PolicyRunner:
                     obs[18] = math.sin(angle_vis)
                     obs[19] = math.cos(angle_vis)
                     self.last_vis_goal = (obs[17], obs[18], obs[19])
-                elif env.task_phase == TaskPhase.APPROACH_PATIENT and self.lost_det_frames < 10:
+                elif (env.task_phase == TaskPhase.APPROACH_PATIENT and self.lost_det_frames < 10) or in_dialogue:
                     self.lost_det_frames += 1
+                    env.task_phase = TaskPhase.APPROACH_PATIENT
                     obs[13:17] = 0.0
                     obs[14] = 1.0
                     obs[17], obs[18], obs[19] = self.last_vis_goal
@@ -313,8 +320,9 @@ class PolicyRunner:
                     obs[26] = math.sin(angle_vis)
                     obs[27] = math.cos(angle_vis)
                     self.last_vis_goal = (obs[25], obs[26], obs[27])
-                elif env.task_phase == TaskPhase.APPROACH_PATIENT and self.lost_det_frames < 10:
+                elif (env.task_phase == TaskPhase.APPROACH_PATIENT and self.lost_det_frames < 10) or in_dialogue:
                     self.lost_det_frames += 1
+                    env.task_phase = TaskPhase.APPROACH_PATIENT
                     obs[21:25] = 0.0
                     obs[22] = 1.0
                     obs[25], obs[26], obs[27] = self.last_vis_goal
@@ -339,15 +347,22 @@ class PolicyRunner:
                     obs[26] = math.sin(angle_goal)
                     obs[27] = math.cos(angle_goal)
 
-        if self.obs_dim == OBS_DIM_V2:
+        if self.obs_dim in (OBS_DIM_V2, *V3_DIMS):
             obs = self._to_v2(obs, msg)
+        if self.obs_dim in V3_DIMS:
+            obs = np.concatenate([obs, v3_features(msg.get("v3", {}), hold_doa=DOA_HOLDS_MEMORY and self.obs_dim >= 35)[: self.obs_dim - OBS_DIM_V2]]).astype(np.float32)
 
         # Forward through Actor network
         with torch.no_grad():
             action, _, _, _ = self.agent.get_action_and_value(
                 torch.as_tensor(obs, dtype=torch.float32).unsqueeze(0), deterministic=True
             )
-        a_v, a_omega = (float(t) for t in action[0])
+        a_all = [float(t) for t in action[0]]
+        if OBS_DUMP_PATH:                       # debug sim-to-sim: quan sát thật Godot gửi (so với lúc train)
+            with open(OBS_DUMP_PATH, "a", encoding="utf-8") as f:
+                f.write(json.dumps({"step": self.n_steps, "obs": [round(float(o), 4) for o in obs],
+                                    "a": [round(t, 4) for t in a_all]}) + "\n")
+        a_v, a_omega = a_all[0], a_all[1]
         max_v = ESCORT_WALK_SPEED if env.task_phase == TaskPhase.GUIDE_ESCORT else V_MAX
         v_out = float(np.clip((a_v + 1.0) * 0.5 * max_v, 0.0, max_v))
         omega_out = float(np.clip(a_omega * OMEGA_MAX, -OMEGA_MAX, OMEGA_MAX))
@@ -363,15 +378,53 @@ class PolicyRunner:
                 flush=True,
             )
 
-        return {
+        reply = {
             "type": "rl_action",
             "id": msg.get("id", -1),
             "v": v_out,
             "omega": omega_out,
-            "a": [a_v, a_omega],
+            "a": a_all,
             "phase": int(env.task_phase),
             "sectors": self.last_sectors,
         }
+        if len(a_all) >= 4:   # V3: đầu ngẩng / cúi (mục tiêu, [-1, 1]) và hỏi "Cần tôi giúp gì không ạ?"
+            reply["tilt"] = float(np.clip(a_all[2], -1.0, 1.0))
+            reply["ask"] = bool(a_all[3] > 0.5)
+        return reply
+
+
+OBS_DUMP_PATH = os.environ.get("RL_OBS_DUMP", "")
+
+
+def v3_features(v3: dict, hold_doa: bool = DOA_HOLDS_MEMORY) -> np.ndarray:
+    """10 quan sát tương tác của V3 (docs/RL_V3_DESIGN.md) từ Godot:
+    voice [active, bearing_rad (+ phải)], face [seen, cx, cy, size] (cx, cy ∈ −0.5..0.5), tilt (−1..1),
+    since_ask_s, dialogue (0/1); face[4] = mặt đó là người đã gặp (đã giúp / đã từ chối);
+    voice_mem [valid, bearing_rad (+ phải, đã xoay theo odometry), age_s] = hướng giọng nói nghe lần cuối.
+    hold_doa: lúc im lặng, ô DOA giữ hướng đã nhớ (thử ở vòng 8, kém hơn ➔ tắt, theo DOA_HOLDS_MEMORY)."""
+    voice = list(v3.get("voice", [0.0, 0.0])) + [0.0, 0.0]
+    face = list(v3.get("face", [0.0, 0.0, 0.0, 0.0, 0.0])) + [0.0] * 5
+    active = 1.0 if float(voice[0]) > 0.5 else 0.0
+    ang = float(voice[1])
+    mem = list(v3.get("voice_mem", [0.0, 0.0, 99.0])) + [0.0, 0.0, 99.0]
+    mem_ok = float(mem[0]) > 0.5 and float(mem[2]) <= VOICE_MEMORY_S
+    mem_ang = float(mem[1])
+    if active:
+        doa = (math.sin(ang), math.cos(ang))
+    elif hold_doa and mem_ok:
+        doa = (math.sin(mem_ang), math.cos(mem_ang))
+    else:
+        doa = (0.0, 0.0)
+    return np.array([
+        active, doa[0], doa[1],
+        1.0 if float(face[0]) > 0.5 else 0.0, float(face[1]), float(face[2]), float(face[3]),
+        float(np.clip(v3.get("tilt", 0.0), -1.0, 1.0)),
+        float(np.clip(float(v3.get("since_ask_s", 99.0)) / 5.0, 0.0, 1.0)),
+        1.0 if v3.get("dialogue") else 0.0,
+        1.0 if float(face[0]) > 0.5 and float(face[4]) > 0.5 else 0.0,
+        math.sin(mem_ang) if mem_ok else 0.0, math.cos(mem_ang) if mem_ok else 0.0,
+        float(mem[2]) / VOICE_MEMORY_S if mem_ok else 1.0,
+    ], dtype=np.float32)
 
 
 def depth_from_msg(msg: dict) -> np.ndarray:
@@ -394,10 +447,12 @@ def load_agent(checkpoint: Path) -> PPOHospitalAgent:
     # Dynamic observation dimension detection
     first_weight = state_dict.get("actor_backbone.0.weight")
     in_dim = first_weight.shape[1] if first_weight is not None else OBS_DIM_PURE_VISION
-    agent = PPOHospitalAgent(obs_dim=in_dim, act_dim=ACT_DIM)
+    mean_w = state_dict.get("actor_mean.weight")
+    act_dim = mean_w.shape[0] if mean_w is not None else ACT_DIM
+    agent = PPOHospitalAgent(obs_dim=in_dim, act_dim=act_dim)
     agent.load_state_dict(state_dict)
     agent.eval()
-    log.info("Loaded checkpoint %s (in_dim=%d, episode=%s)", checkpoint, in_dim, ckpt.get("episode", "?"))
+    log.info("Loaded checkpoint %s (in_dim=%d, act_dim=%d, episode=%s)", checkpoint, in_dim, act_dim, ckpt.get("episode", "?"))
     return agent
 
 

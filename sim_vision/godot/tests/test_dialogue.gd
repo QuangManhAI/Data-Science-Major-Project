@@ -276,7 +276,10 @@ func test_robot_held_still_in_dialogue_states() -> void:
 		main.robot.set_command(0.3, 0.3)
 		main._on_detections(1, [big_left], 20.0)
 		assert_eq(main.state, s, Config.state_name(s))
-		assert_eq(main.robot.get_command(), Vector2.ZERO, Config.state_name(s))
+		assert_eq(main.robot.get_command().x, 0.0, "%s: không đi" % Config.state_name(s))
+		main._face_speaker()
+		assert_true(main.get_active_speaking_patient() != null or main.robot.get_command() == Vector2.ZERO,
+				"%s: không có người nói ➔ đứng yên; có ➔ chỉ quay về phía họ" % Config.state_name(s))
 	main.state = S.ARRIVED
 	main._on_detections(2, [big_left], 20.0)
 	assert_ne(main.robot.get_command(), Vector2.ZERO, "ARRIVED ➔ controller chạy lại")
@@ -304,3 +307,11 @@ func test_reset_clears_dialogue() -> void:
 	assert_eq(dm.npc.state, Npc.IDLE)
 	dm._on_transcript(_transcript(dm.utt_id))
 	assert_eq(main.state, S.SEARCH, "transcript của lượt trước reset bị bỏ")
+
+
+
+func test_bearing_to_cx() -> void:
+	assert_almost_eq(Main.bearing_to_cx(0.0), 0.5, 1e-6, "ngay trước ➔ giữa ảnh")
+	assert_gt(Main.bearing_to_cx(deg_to_rad(20.0)), 0.6, "bên phải ➔ nửa phải ảnh")
+	assert_lt(Main.bearing_to_cx(deg_to_rad(-20.0)), 0.4)
+	assert_eq(Main.bearing_to_cx(deg_to_rad(120.0)), -1.0, "sau lưng ➔ ngoài tầm nhìn")

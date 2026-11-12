@@ -34,7 +34,9 @@ from src.training.hospital_env import TaskPhase, floor_of
 from src.training.hospital_env_pure_vision_v2 import HospitalPureVisionV2Env, OBS_DIM_V2
 from src.training.hospital_env_vision import TARGET_BOX_H
 
-OBS_DIM_V3 = 32
+OBS_DIM_V3 = 35
+DOA_HOLDS_MEMORY = False         # round 8 tried o[22:24] = remembered direction while silent: worse, off
+VOICE_MEMORY_S = 10.0             # remembered voice direction (odometry-rotated) is dropped after this
 ACT_DIM_V3 = 4
 
 # --- head / camera pitch ---
@@ -130,6 +132,7 @@ class HospitalEngageV3Env(HospitalPureVisionV2Env):
                          "dialogue_steps": 0}
         self.last_face: dict[str, float] | None = None
         self.last_voice: tuple[float, float] | None = None
+        self.voice_mem: tuple[float, float, float] | None = None   # world direction (x, z) + time heard (s)
         self._v3_ready = True
         self.last_obs_v2 = self._get_obs()
         return self.last_obs_v2
@@ -143,6 +146,16 @@ class HospitalEngageV3Env(HospitalPureVisionV2Env):
         fwd = dx * -math.sin(self.robot_yaw) + dz * -math.cos(self.robot_yaw)
         right = dx * math.cos(self.robot_yaw) + dz * -math.sin(self.robot_yaw)
         return math.atan2(right, fwd), math.hypot(dx, dz)
+
+    def _rel_to_world_dir(self, rel: float) -> tuple[float, float]:
+        fwd = (-math.sin(self.robot_yaw), -math.cos(self.robot_yaw))
+        right = (math.cos(self.robot_yaw), -math.sin(self.robot_yaw))
+        return fwd[0] * math.cos(rel) + right[0] * math.sin(rel), fwd[1] * math.cos(rel) + right[1] * math.sin(rel)
+
+    def _world_dir_to_rel(self, dx: float, dz: float) -> float:
+        fwd = dx * -math.sin(self.robot_yaw) + dz * -math.cos(self.robot_yaw)
+        right = dx * math.cos(self.robot_yaw) + dz * -math.sin(self.robot_yaw)
+        return math.atan2(right, fwd)
 
     def _face_of(self, i: int) -> dict[str, float] | None:
         """YuNet-like face detection of patient i, or None."""
@@ -264,6 +277,28 @@ class HospitalEngageV3Env(HospitalPureVisionV2Env):
                 if self.active_patient_idx is not None and self.patients[self.active_patient_idx] is p:
                     self.patient_x, self.patient_z, self.patient_seated = nx, nz, False
                 return
+
+    def setup_walkup_drill(self, d_range: tuple[float, float] = (0.8, 1.9)) -> bool:
+        """Short drill episode: right after reset, one person needing help (not a caller) stands next to the stopped
+        robot at any bearing (±180°), looking anywhere. Walk-up talkers are rare in full shifts (~0.5 per 700 s), so
+        drills give the policy many more chances to learn turning to the voice. Returns False if no spot was found."""
+        cands = [i for i, p in enumerate(self.patients) if floor_of(p["x"]) == floor_of(self.robot_x)]
+        if not cands:
+            return False
+        p = self.patients[int(self.rng.choice(cands))]
+        for _ in range(12):
+            b = float(self.rng.uniform(-math.pi, math.pi))
+            r = float(self.rng.uniform(*d_range))
+            nx, nz = self.robot_x - math.sin(b) * r, self.robot_z - math.cos(b) * r
+            fx, fz = self.robot_x - math.sin(b) * (r + 0.4), self.robot_z - math.cos(b) * (r + 0.4)
+            if floor_of(nx) == floor_of(self.robot_x) and not self._check_los_occluded(self.robot_x, self.robot_z, fx, fz):
+                p.update(x=nx, z=nz, seated=False, needs_help=True, caller=False,
+                         face_yaw=float(self.rng.uniform(-math.pi, math.pi)))
+                if self.active_patient_idx is not None and self.patients[self.active_patient_idx] is p:
+                    self.patient_x, self.patient_z, self.patient_seated = nx, nz, False
+                self.last_obs_v2 = self._get_obs()
+                return True
+        return False
 
     def _ask_candidates(self) -> list[tuple[int, float, float]]:
         """People the question reaches: body in the camera view (YOLO box, face not needed: someone facing away hears
@@ -436,9 +471,21 @@ class HospitalEngageV3Env(HospitalPureVisionV2Env):
                 if best is None or d < best[1]:
                     best = (ang, d)
         self.last_voice = best
+        now = self.step_count * self.dt
         if best is not None:
             o[21] = 1.0
             o[22], o[23] = math.sin(best[0]), math.cos(best[0])
+            self.voice_mem = (*self._rel_to_world_dir(best[0]), now)
+        # remembered voice direction: last heard bearing kept in the world frame (robot: DOA + odometry), so it stays
+        # valid while the robot turns after the person stopped talking
+        o[32], o[33], o[34] = 0.0, 0.0, 1.0
+        if self.voice_mem is not None and now - self.voice_mem[2] <= VOICE_MEMORY_S:
+            rel = self._world_dir_to_rel(self.voice_mem[0], self.voice_mem[1])
+            o[32], o[33], o[34] = math.sin(rel), math.cos(rel), (now - self.voice_mem[2]) / VOICE_MEMORY_S
+            if best is None and DOA_HOLDS_MEMORY:
+                # DOA slots hold the remembered direction once the person stops talking (o[21] still says "silent"):
+                # the turn-to-voice response learned on o[22:24] keeps working instead of seeing (0, 0) = "nobody"
+                o[22], o[23] = o[32], o[33]
         # face: dialogue partner, else the most central one
         face = None
         if self.dialogue is not None:
@@ -478,6 +525,8 @@ class HospitalEngageV3Env(HospitalPureVisionV2Env):
                 a_w = float(np.clip(-2.0 * fcx, -1.0, 1.0))
             elif o[21] > 0.5:
                 a_w = float(np.clip(-1.5 * math.atan2(o[22], o[23]), -1.0, 1.0))
+            elif o[34] < 1.0:                                   # person stopped talking: remembered direction
+                a_w = float(np.clip(-1.5 * math.atan2(o[32], o[33]), -1.0, 1.0))
         elif o[21] > 0.5 and phase in (TaskPhase.SEARCH_PATIENT, TaskPhase.APPROACH_PATIENT):
             ang = math.atan2(float(o[22]), float(o[23]))         # turn to the voice, walk to it once facing it
             s = o[0:5]

@@ -55,9 +55,9 @@ from src.training.hospital_env_pure_vision_v2 import (  # noqa: E402
     remap_v1_obs,
     tether_features,
 )
-from src.training.hospital_env_engage_v3 import OBS_DIM_V3  # noqa: E402
+from src.training.hospital_env_engage_v3 import DOA_HOLDS_MEMORY, OBS_DIM_V3, VOICE_MEMORY_S  # noqa: E402
 
-V3_DIMS = (31, OBS_DIM_V3)   # 31 = V3 trước khi có "mặt đã gặp"
+V3_DIMS = (31, 32, OBS_DIM_V3)   # 31 = trước "mặt đã gặp"; 32 = trước "nhớ hướng giọng nói"
 from src.training.hospital_env_vision import (  # noqa: E402
     PUBLIC_PATROL_WAYPOINTS,
     HospitalVisualShiftEnv,
@@ -350,7 +350,7 @@ class PolicyRunner:
         if self.obs_dim in (OBS_DIM_V2, *V3_DIMS):
             obs = self._to_v2(obs, msg)
         if self.obs_dim in V3_DIMS:
-            obs = np.concatenate([obs, v3_features(msg.get("v3", {}))[: self.obs_dim - OBS_DIM_V2]]).astype(np.float32)
+            obs = np.concatenate([obs, v3_features(msg.get("v3", {}), hold_doa=DOA_HOLDS_MEMORY and self.obs_dim >= 35)[: self.obs_dim - OBS_DIM_V2]]).astype(np.float32)
 
         # Forward through Actor network
         with torch.no_grad():
@@ -396,21 +396,34 @@ class PolicyRunner:
 OBS_DUMP_PATH = os.environ.get("RL_OBS_DUMP", "")
 
 
-def v3_features(v3: dict) -> np.ndarray:
+def v3_features(v3: dict, hold_doa: bool = DOA_HOLDS_MEMORY) -> np.ndarray:
     """10 quan sát tương tác của V3 (docs/RL_V3_DESIGN.md) từ Godot:
     voice [active, bearing_rad (+ phải)], face [seen, cx, cy, size] (cx, cy ∈ −0.5..0.5), tilt (−1..1),
-    since_ask_s, dialogue (0/1); face[4] = mặt đó là người đã gặp (đã giúp / đã từ chối)."""
+    since_ask_s, dialogue (0/1); face[4] = mặt đó là người đã gặp (đã giúp / đã từ chối);
+    voice_mem [valid, bearing_rad (+ phải, đã xoay theo odometry), age_s] = hướng giọng nói nghe lần cuối.
+    hold_doa: lúc im lặng, ô DOA giữ hướng đã nhớ (thử ở vòng 8, kém hơn ➔ tắt, theo DOA_HOLDS_MEMORY)."""
     voice = list(v3.get("voice", [0.0, 0.0])) + [0.0, 0.0]
     face = list(v3.get("face", [0.0, 0.0, 0.0, 0.0, 0.0])) + [0.0] * 5
     active = 1.0 if float(voice[0]) > 0.5 else 0.0
     ang = float(voice[1])
+    mem = list(v3.get("voice_mem", [0.0, 0.0, 99.0])) + [0.0, 0.0, 99.0]
+    mem_ok = float(mem[0]) > 0.5 and float(mem[2]) <= VOICE_MEMORY_S
+    mem_ang = float(mem[1])
+    if active:
+        doa = (math.sin(ang), math.cos(ang))
+    elif hold_doa and mem_ok:
+        doa = (math.sin(mem_ang), math.cos(mem_ang))
+    else:
+        doa = (0.0, 0.0)
     return np.array([
-        active, math.sin(ang) * active, math.cos(ang) * active,
+        active, doa[0], doa[1],
         1.0 if float(face[0]) > 0.5 else 0.0, float(face[1]), float(face[2]), float(face[3]),
         float(np.clip(v3.get("tilt", 0.0), -1.0, 1.0)),
         float(np.clip(float(v3.get("since_ask_s", 99.0)) / 5.0, 0.0, 1.0)),
         1.0 if v3.get("dialogue") else 0.0,
         1.0 if float(face[0]) > 0.5 and float(face[4]) > 0.5 else 0.0,
+        math.sin(mem_ang) if mem_ok else 0.0, math.cos(mem_ang) if mem_ok else 0.0,
+        float(mem[2]) / VOICE_MEMORY_S if mem_ok else 1.0,
     ], dtype=np.float32)
 
 

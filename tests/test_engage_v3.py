@@ -191,3 +191,59 @@ def test_widening_loader_keeps_old_policy(tmp_path) -> None:
     load_widening(new, p)
     o = torch.randn(4, OBS_DIM_V3)
     assert torch.allclose(policy_mean(new, o), policy_mean(old, o[:, :31]), atol=1e-5)
+
+
+def test_selection_score_prefers_walkup_enrolment_and_few_wasted_asks() -> None:
+    from src.training.train_engage_v3 import selection_score
+    a = {"return": 108.0, "walkup_enroll_rate": 0.87, "wasted_asks_per_ep": 0.4}
+    b = {"return": 106.0, "walkup_enroll_rate": 1.0, "wasted_asks_per_ep": 0.5}
+    assert selection_score(a) > selection_score(b), "mặc định: chỉ theo return như trước"
+    assert selection_score(b, 40.0, 2.0) > selection_score(a, 40.0, 2.0)
+
+
+def test_walkup_drill_puts_needy_person_next_to_robot() -> None:
+    from src.training.train_engage_v3 import make_env
+    for seed in range(5):
+        env = make_env(seed, 30.0, dr=True)
+        env.reset(seed=seed)
+        assert env.setup_walkup_drill()
+        near = [p for p in env.patients
+                if p["needs_help"] and not p["caller"] and not p["seated"]
+                and 0.75 <= math.hypot(p["x"] - env.robot_x, p["z"] - env.robot_z) <= 1.95]
+        assert near, "có một người cần giúp đứng sát robot"
+        assert env.last_obs_v2.shape == (OBS_DIM_V3,)
+
+
+def test_walkup_probe_runs_and_scores_selection() -> None:
+    from src.training.train_engage_v3 import selection_score, walkup_probe
+    agent = PPOHospitalAgent(obs_dim=OBS_DIM_V3, act_dim=ACT_DIM_V3)
+    pr = walkup_probe(agent, n=3)
+    assert 0.0 <= pr["probe_walkup"] <= 1.0 and "probe_walkup_side" in pr
+    ev = {"return": 100.0, "walkup_enroll_rate": 1.0, "wasted_asks_per_ep": 0.0, "probe_walkup": 0.5}
+    assert selection_score(ev, 40.0) == 120.0, "có probe thì dùng probe, không dùng walkup_enroll_rate"
+
+
+def test_voice_memory_follows_robot_rotation_after_voice_stops() -> None:
+    from src.training.hospital_env_engage_v3 import VOICE_MEMORY_S
+    env = make()
+    p = env.patients[0]
+    for q in env.patients[1:]:
+        q["x"] += 30.0
+    env.robot_x, env.robot_z, env.robot_yaw = p["x"] - 2.0, p["z"], 0.0   # person on the robot's right
+    p["speak_t"] = 1.0
+    o = env._get_obs()
+    assert o[21] == 1.0 and o[34] == 0.0
+    assert math.atan2(o[32], o[33]) == pytest.approx(math.atan2(o[22], o[23]), abs=1e-5)
+    p["speak_t"] = 0.0
+    before = math.atan2(o[32], o[33])
+    env.robot_yaw -= math.radians(30.0)                  # robot turns right by 30° → person 30° less to the right
+    env.step_count += 5
+    o = env._get_obs()
+    assert o[21] == 0.0, "đã ngừng nói"
+    assert math.atan2(o[32], o[33]) == pytest.approx(before - math.radians(30.0), abs=0.05), "nhớ hướng, xoay theo robot"
+    assert 0.0 < o[34] < 1.0
+    assert (o[22], o[23]) == (0.0, 0.0), "im lặng ➔ ô DOA = 0 (vòng 8 thử giữ hướng, kém hơn)"
+    env.step_count += int(VOICE_MEMORY_S / env.dt) + 1
+    o = env._get_obs()
+    assert (o[32], o[33], o[34]) == (0.0, 0.0, 1.0), "quên sau VOICE_MEMORY_S"
+    assert (o[22], o[23]) == (0.0, 0.0)

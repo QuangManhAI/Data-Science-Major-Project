@@ -22,7 +22,8 @@ Cấu trúc thư mục trên HF **giống hệt repo**: tải thẳng vào thư 
 |---|---|
 | YOLO26n detect 17 lớp (mAP50 92.6 %) | `models/yolo26n_hospital_robot_v6_best/yolo26n_hospital_robot_best_map92.6.pt` |
 | RL PPO Pure-Vision V2 (21-D, không LiDAR) | `experiments/checkpoints/PPOHospital-PureVisionV2_best.pt` |
-| RL PPO Engagement V3 (quay về người nói, ngẩng đầu, hỏi; cần code nhánh `feat/rl-v3-engagement`, `--policy v3`) | `experiments/checkpoints/PPOHospital-EngageV3_best.pt` |
+| RL PPO Engagement V3, 35-D (quay về người nói, ngẩng đầu, hỏi; cần code nhánh `feat/rl-v3-engagement` có quan sát 35-D, `--policy v3`) | `experiments/checkpoints/PPOHospital-EngageV3_best.pt` |
+| RL V3 bản cũ 31-D (cho code trước khi có 35-D; đổi tên thành `PPOHospital-EngageV3_best.pt`) | `experiments/checkpoints/PPOHospital-EngageV3_round3_31d.pt` |
 | Nhận diện bệnh nhân lúc dẫn: YuNet (mặt), OSNet x0.25 MSMT17 (ReID thân), SFace (chỉ để đánh giá) | `models/identity/` |
 | STT PhoASR-whisper-small fine-tune | `models_finetuned/phoasr_small_hospital_best/` |
 | NLU PhoBERT intent | `models_finetuned/phobert-intent/` |

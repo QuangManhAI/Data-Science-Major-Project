@@ -59,7 +59,7 @@ def test_v2_checkpoint_reply_unchanged() -> None:
 
 def test_v3_features_face_known_flag() -> None:
     f = rps.v3_features({"face": [1.0, 0.0, 0.0, 0.1, 1.0]})
-    assert f.shape == (11,) and f[10] == 1.0
+    assert f.shape == (14,) and f[10] == 1.0
     assert rps.v3_features({"face": [1.0, 0.0, 0.0, 0.1]})[10] == 0.0, "Godot cũ không gửi cờ ➔ 0"
 
 
@@ -69,3 +69,24 @@ def test_old_31d_v3_checkpoint_still_served(tmp_path: Path) -> None:
     torch.save({"model_state_dict": agent.state_dict(), "episode": 0}, p)
     runner = rps.PolicyRunner(rps.load_agent(p), "camera")
     assert "tilt" in runner.act(_msg({"face": [1.0, 0.0, 0.0, 0.1, 1.0], "dialogue": False}))
+
+
+def test_v3_features_voice_memory() -> None:
+    import math
+    f = rps.v3_features({"voice_mem": [1.0, 0.8, 2.0]})
+    assert f[0] == 0.0, "không có tiếng lúc này"
+    assert tuple(f[1:3]) == (0.0, 0.0), "im lặng ➔ ô DOA = 0, như lúc train"
+    held = rps.v3_features({"voice_mem": [1.0, 0.8, 2.0]}, hold_doa=True)
+    assert math.atan2(held[1], held[2]) == pytest.approx(0.8)
+    assert math.atan2(f[11], f[12]) == pytest.approx(0.8) and f[13] == pytest.approx(2.0 / rps.VOICE_MEMORY_S)
+    old = rps.v3_features({"voice_mem": [1.0, 0.8, rps.VOICE_MEMORY_S + 1.0]})
+    assert tuple(old[11:]) == (0.0, 0.0, 1.0), "quá lâu ➔ quên"
+    assert tuple(rps.v3_features({})[11:]) == (0.0, 0.0, 1.0), "Godot cũ không gửi ➔ như chưa nghe"
+
+
+def test_old_32d_v3_checkpoint_still_served(tmp_path: Path) -> None:
+    agent = PPOHospitalAgent(obs_dim=32, act_dim=ACT_DIM_V3)
+    p = tmp_path / "v3_32.pt"
+    torch.save({"model_state_dict": agent.state_dict(), "episode": 0}, p)
+    runner = rps.PolicyRunner(rps.load_agent(p), "camera")
+    assert "tilt" in runner.act(_msg({"voice_mem": [1.0, 0.3, 1.0], "dialogue": False}))

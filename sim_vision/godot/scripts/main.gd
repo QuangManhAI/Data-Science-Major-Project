@@ -1097,6 +1097,7 @@ func reset_positions(is_task_transition: bool = false) -> void:
 	_arrived_wait_s = 0.0
 	_reset_escort_hri()
 	identity.reset()
+	_voice_mem_t = -1e9
 	_id_det = {}
 	overlay.set_remembered_face(null)
 	var prev_pat: CharacterBody3D = active_escorted_patient
@@ -2260,6 +2261,10 @@ func _npc_of(p: Node) -> Npc:
 	return (p.get_npc() if p.has_method("get_npc") else p.get_node_or_null(^"Npc")) as Npc
 
 
+var _voice_mem_dir: Vector3 = Vector3.ZERO
+var _voice_mem_t: float = -1e9
+
+
 func _v3_features() -> Dictionary:
 	var out: Dictionary = {"tilt": robot.get_head_tilt_norm(), "since_ask_s": _now_s() - _last_ask_s,
 			"dialogue": Main.is_dialogue_state(state)}
@@ -2270,6 +2275,14 @@ func _v3_features() -> Dictionary:
 		var bearing: float = atan2(local.x, -local.z)            # + = bên phải (như DOA của micro mảng)
 		out["voice"] = [1.0, bearing]
 		expect_cx = Main.bearing_to_cx(bearing)
+		_voice_mem_dir = Vector3(spk.global_position.x - robot.global_position.x, 0.0,
+				spk.global_position.z - robot.global_position.z).normalized()
+		_voice_mem_t = _now_s()
+	# Hướng giọng nói nghe lần cuối, giữ theo hệ thế giới (robot thật: DOA + odometry) ➔ người ngừng nói, robot vẫn
+	# biết quay về đâu.
+	if _voice_mem_t > -1e8:
+		var ml: Vector3 = robot.global_transform.basis.inverse() * _voice_mem_dir
+		out["voice_mem"] = [1.0, atan2(ml.x, -ml.z), _now_s() - _voice_mem_t]
 	# Mặt: của người đang nói (gần hướng giọng nói), không thì mặt gần giữa khung nhất.
 	var best: Dictionary = {}
 	var best_score: float = INF

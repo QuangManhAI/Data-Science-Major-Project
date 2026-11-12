@@ -34,6 +34,7 @@ from torch.distributions import Normal
 
 from src.models.ppo_agent import PPOHospitalAgent
 from src.training.hospital_env_engage_v3 import ACT_DIM_V3, OBS_DIM_V3, HospitalEngageV3Env
+from src.training.hospital_env import TaskPhase
 from src.training.hospital_env_pure_vision_v2 import GAMMA_V2, OBS_DIM_V2
 
 CKPT_PREFIX = "PPOHospital-EngageV3"
@@ -97,6 +98,14 @@ def load_widening(agent: PPOHospitalAgent, ckpt: Path) -> None:
                 raise ValueError(f"cannot widen {k}: {tuple(v.shape)} -> {tuple(own[k].shape)}")
 
 
+def selection_score(ev: dict, w_walkup: float = 0.0, w_wasted: float = 0.0) -> float:
+    """Checkpoint choice: eval return, optionally rewarding walk-up enrolment and penalising wasted asks.
+
+    Return alone picked round-4 checkpoints that asked less but enrolled walk-up talkers less often. The walk-up term
+    uses the fixed probe (walkup_probe) when it was run."""
+    return ev["return"] + w_walkup * ev.get("probe_walkup", ev.get("walkup_enroll_rate", 0.0)) - w_wasted * ev.get("wasted_asks_per_ep", 0.0)
+
+
 @torch.no_grad()
 def evaluate(agent: PPOHospitalAgent | None, n: int, shift_s: float, teacher: bool = False) -> dict[str, float]:
     """Deterministic policy (or the rule-based teacher) on fixed held-out seeds (people / callers randomised)."""
@@ -121,6 +130,41 @@ def evaluate(agent: PPOHospitalAgent | None, n: int, shift_s: float, teacher: bo
             "callers_gave_up_per_ep": st["callers_gave_up"] / n, "aborted_per_ep": st["aborted"] / n}
 
 
+@torch.no_grad()
+def walkup_probe(agent: PPOHospitalAgent, n: int = 100) -> dict[str, float]:
+    """Fixed walk-up test: one needy person 0.8–1.9 m from the stopped robot at a random bearing (±180°), nobody else
+    near; did the policy enrol them within 30 s? Full-shift evals see too few walk-ups (≈ 0.5 per episode) to rank
+    checkpoints on this skill."""
+    rng = np.random.default_rng(0)
+    ok = side_ok = side_n = dlg_n = 0
+    for t in range(n):
+        env = HospitalEngageV3Env(curriculum_stage=1, shift_duration_s=120.0, dt=0.2, seed=t, env_mode="solo",
+                                  stagnation_timeout_s=90.0, stagnation_penalty=0.0, escort_only=True)
+        env.reset(seed=t)
+        p = env.patients[0]
+        p.update(needs_help=True, caller=False)
+        for q in env.patients[1:]:
+            q["x"] += 30.0
+        b, d = float(rng.uniform(-math.pi, math.pi)), float(rng.uniform(0.8, 1.9))
+        env.robot_yaw = float(rng.uniform(-math.pi, math.pi))
+        env.robot_x = p["x"] + math.sin(env.robot_yaw + b) * d
+        env.robot_z = p["z"] + math.cos(env.robot_yaw + b) * d
+        p["face_yaw"] = float(rng.uniform(-math.pi, math.pi))
+        info: dict = {}
+        for _ in range(150):
+            a = policy_mean(agent, torch.as_tensor(env._get_obs()).unsqueeze(0)).squeeze(0).numpy()
+            _, _, done, info = env.step(a)
+            if done or env.task_phase == TaskPhase.GUIDE_ESCORT:
+                break
+        e = int(info["v3"]["enrolled"] >= 1)
+        ok += e
+        dlg_n += int(info["v3"]["dialogues"] >= 1)
+        if math.radians(45) <= abs(b) < math.radians(120):
+            side_ok += e; side_n += 1
+    return {"probe_walkup": ok / n, "probe_walkup_side": side_ok / max(1, side_n),
+            "probe_walkup_given_dialogue": ok / max(1, dlg_n)}
+
+
 def train(args: argparse.Namespace) -> Path:
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
@@ -135,7 +179,8 @@ def train(args: argparse.Namespace) -> Path:
     elif not args.from_scratch:
         warm_start_from_v2(agent, Path(args.v2_ckpt))
     opt = torch.optim.AdamW(agent.parameters(), lr=args.lr, eps=1e-5, weight_decay=0.0)
-    est_updates = max(1, int(args.episodes * args.shift / 0.2 * 0.8 / args.steps_per_update))
+    mean_ep_s = (1.0 - args.drill_frac) * args.shift + args.drill_frac * args.drill_s
+    est_updates = max(1, int(args.episodes * mean_ep_s / 0.2 * 0.8 / args.steps_per_update))
     sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=est_updates, eta_min=args.lr * 0.1)
 
     run_dir = Path(args.out) / "runs" / f"{dt.datetime.now():%Y%m%d_%H%M%S}_{CKPT_PREFIX}"
@@ -159,6 +204,8 @@ def train(args: argparse.Namespace) -> Path:
     base = evaluate(None, args.eval_episodes, args.shift, teacher=True)
     log(f"[BASELINE rule-based teacher] {json.dumps({k: round(v, 3) for k, v in base.items()})}")
     init = evaluate(agent, args.eval_episodes, args.shift)
+    if args.probe:
+        init.update(walkup_probe(agent))
     log(f"[INIT policy] {json.dumps({k: round(v, 3) for k, v in init.items()})}")
 
     buf: dict[str, list] = collections.defaultdict(list)
@@ -168,8 +215,11 @@ def train(args: argparse.Namespace) -> Path:
 
     for ep in range(1, args.episodes + 1):
         w = args.teacher_start * max(0.0, 1.0 - (ep - 1) / max(1, args.teacher_episodes))
-        env = make_env(args.seed + ep * 17, args.shift, dr=True)
+        drill = rng.random() < args.drill_frac
+        env = make_env(args.seed + ep * 17, args.drill_s if drill else args.shift, dr=True)
         obs, done = env.reset(), False
+        if drill and env.setup_walkup_drill():
+            obs = env.last_obs_v2
         e_obs, e_act, e_tea, e_logp, e_rew, e_val = [], [], [], [], [], []
         while not done:
             teacher = env.teacher_action() if w > 0.0 else np.zeros(ACT_DIM_V3, dtype=np.float32)
@@ -207,13 +257,13 @@ def train(args: argparse.Namespace) -> Path:
         v3 = info["v3"]
         rec = {"episode": ep, "return": R, "roll20": float(np.mean(roll)), "helped": info["patients_helped"],
                "collisions": info["collisions"], "escort_speed": info["escort_speed"], "steps": env.step_count,
-               "exit": info.get("exit_reason", ""), "teacher_w": w, "lr": sched.get_last_lr()[0], "v3": v3}
+               "exit": info.get("exit_reason", ""), "drill": bool(drill), "teacher_w": w, "lr": sched.get_last_lr()[0], "v3": v3}
         metrics_f.write(json.dumps(rec) + "\n"); metrics_f.flush()
         el = time.time() - t0
         log(f"Ep {ep:5d}/{args.episodes} | R {R:+7.2f} (avg20 {rec['roll20']:+7.2f}) | helped {rec['helped']}/6 | "
             f"col {rec['collisions']:3d} | dlg {v3['dialogues']} enr {v3['enrolled']} ask {v3['asks']} "
             f"waste {v3['asks_empty'] + v3['asks_repeat']} gaveup {v3['callers_gave_up']} | {rec['exit']:<19s} | "
-            f"w {w:.2f} | ETA {el / ep * (args.episodes - ep) / 60:5.1f} min")
+            f"w {w:.2f}{' D' if drill else ''} | ETA {el / ep * (args.episodes - ep) / 60:5.1f} min")
 
         if len(buf["obs"]) >= args.steps_per_update or ep == args.episodes:
             b_obs = torch.as_tensor(np.asarray(buf["obs"]))
@@ -256,7 +306,9 @@ def train(args: argparse.Namespace) -> Path:
 
         if ep % args.eval_every == 0 or ep == args.episodes:
             ev = evaluate(agent, args.eval_episodes, args.shift)
-            score = ev["return"]
+            if args.probe:
+                ev.update(walkup_probe(agent))
+            score = selection_score(ev, args.select_walkup, args.select_wasted)
             tag = ""
             if score > best_score:
                 best_score, tag = score, "  <- new best"
@@ -264,7 +316,7 @@ def train(args: argparse.Namespace) -> Path:
             log(f"[EVAL @ ep {ep}] {json.dumps({k: round(v, 3) for k, v in ev.items()})}{tag}")
             metrics_f.write(json.dumps({"episode": ep, "eval": ev}) + "\n"); metrics_f.flush()
     save(f"{CKPT_PREFIX}_last.pt", args.episodes, {})
-    log(f"Done. Best eval return {best_score:.2f}. Checkpoints in {run_dir / 'checkpoints'}")
+    log(f"Done. Best eval score {best_score:.2f}. Checkpoints in {run_dir / 'checkpoints'}")
     return run_dir
 
 
@@ -289,6 +341,13 @@ def main() -> None:
     p.add_argument("--threads", type=int, default=4)
     p.add_argument("--resume", type=str, default=None)
     p.add_argument("--reset-omega-std", type=float, default=0.0, help="with --resume: set the ω action std to this")
+    p.add_argument("--select-walkup", type=float, default=0.0,
+                   help="best-checkpoint score += this × walk-up enrol rate (probe if --probe)")
+    p.add_argument("--select-wasted", type=float, default=0.0,
+                   help="best-checkpoint score −= this × wasted_asks_per_ep")
+    p.add_argument("--drill-frac", type=float, default=0.0, help="share of episodes that are short walk-up drills")
+    p.add_argument("--drill-s", type=float, default=30.0, help="walk-up drill length (s)")
+    p.add_argument("--probe", action="store_true", help="run the 100-trial walk-up probe at every eval")
     p.add_argument("--v2-ckpt", type=str, default=str(V2_CKPT))
     p.add_argument("--from-scratch", action="store_true")
     p.add_argument("--out", type=str, default="experiments")

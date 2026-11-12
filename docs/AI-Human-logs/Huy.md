@@ -11,7 +11,7 @@
  §5 Hiện trạng & Khoảng trống của Module Vision.
 - **References**: [agents/rules/MD_CONVENTION.md](../../agents/rules/MD_CONVENTION.md), [docs/AI-Human-logs/Vuong.md](Vuong.md), [docs/Đề cương đồ án Robot trợ lý dẫn đường bệnh viện.md](../%C4%90%E1%BB%81%20c%C6%B0%C6%A1ng%20%C4%91%E1%BB%93%20%C3%A1n%20Robot%20tr%E1%BB%A3%20l%C3%BD%20d%E1%BA%ABn%20%C4%91%C6%B0%E1%BB%9Dng%20b%E1%BB%87nh%20vi%E1%BB%87n.md), [docs/progress/huy/khao_sat_vision/0001.md](../progress/huy/khao_sat_vision/0001.md), [sim_vision/README.md](../../sim_vision/README.md).
 - **Created**: 2026-11-09T23:57:00+07:00
-- **Last Updated**: 2026-11-10T15:58:00+07:00
+- **Last Updated**: 2026-11-12T08:50:00+07:00
 
 ---
 
@@ -20,6 +20,9 @@
 | ID | Tiêu đề | Phụ trách | Trạng thái |
 | :--- | :--- | :--- | :---: |
 | [D-045](#d-045--tiếp-nhận-module-vision-và-hoàn-thành-khảo-sát-toàn-bộ-kiến-trúc-dự-án-giai-đoạn-1) | Tiếp nhận Module Vision và hoàn thành khảo sát toàn bộ kiến trúc dự án (Giai đoạn 1) | Huy (Human) + Antigravity AI | Accepted |
+| [D-074](#d-074--khắc-phục-lỗi-keyerror-val_wer_n-tái-cấu-trúc-lưu-checkpoint-và-hỗ-trợ-smoke-test-pipeline-asr) | Khắc phục lỗi KeyError 'val_wer_n', tái cấu trúc lưu Checkpoint và hỗ trợ Smoke Test pipeline ASR | Huy (Human) + Antigravity AI | Accepted |
+| [D-075](#d-075--thiết-lập-khung-phương-pháp-luận--hồ-sơ-dữ-liệu-kiểm-thử-asr-fine-tuned-epoch-1-best-checkpoint) | Thiết lập Khung phương pháp luận & Hồ sơ Dữ liệu Kiểm thử ASR Fine-tuned (Epoch 1 Best Checkpoint) | Huy (Human) + Antigravity AI | Accepted |
+| [D-076](#d-076--hoàn-thành-benchmark-toàn-diện-mô-hình-epoch-1-trên-1726-câu-test-real-voice) | Hoàn thành Benchmark toàn diện mô hình Epoch 1 trên 1.726 câu Test Real Voice | Huy (Human) + Antigravity AI | Accepted |
 
 ---
 
@@ -38,6 +41,63 @@
 - **Lý do:** Đảm bảo tính minh bạch, khả năng truy vết kiến trúc, tránh hiểu lầm phạm vi và ngăn ngừa sự trôi dạt kỹ thuật (technical drift).
 - **File liên quan:** `docs/AI-Human-logs/Huy.md`, `docs/progress/huy/khao_sat_vision/0001.md`, `sim_vision/python/yolo_server.py`, `sim_vision/godot/scripts/vision_client.gd`.
 - **Minh chứng:** Báo cáo chi tiết Giai đoạn 1 tại [docs/progress/huy/khao_sat_vision/0001.md](../progress/huy/khao_sat_vision/0001.md) và các phần bên dưới (§2, §3, §4, §5).
+
+---
+
+### D-074 — Khắc phục lỗi KeyError 'val_wer_n', tái cấu trúc lưu Checkpoint và hỗ trợ Smoke Test pipeline ASR
+- **Trạng thái:** Accepted
+- **Thời gian:** 2026-11-12T01:30:00+07:00
+- **Phụ trách:** Huy (Human) + Antigravity AI
+- **Bối cảnh:** Quá trình huấn luyện PhoASR Whisper Small (`scripts/train_asr_finetune.py`) trên tập dữ liệu `voice_dataset_v2` gặp sự cố crash ngay sau Epoch 1 với `KeyError: 'val_wer_n'`. Rà soát notebook Colab (`notebooks/finetune_asr_colab.ipynb`) cho thấy cell 23 cũng gặp lỗi tương tự, dẫn đến việc checkpoint model không bao giờ được lưu sau Epoch 1. Đồng thời, nhu cầu kiểm thử nhanh toàn bộ pipeline (smoke test) trước khi chạy huấn luyện dài qua đêm là rất cấp thiết.
+- **Quyết định:**
+  1. **Khắc phục KeyError trong `plot_curves()`:** Kiểm tra an toàn sự tồn tại của các key (`if any(key in r for r in epochs)`), bỏ qua việc vẽ `val_wer_n` khi tập validation không có mẫu dữ liệu mode `n` (trong `voice_dataset_v2`, val chỉ có `r` và `u`).
+  2. **Đảo thứ tự lưu Checkpoint & Phòng thủ ngoại lệ:** Đưa `model.save_pretrained(run / "checkpoints" / "best")` lên TRƯỚC hàm vẽ đồ thị; bọc toàn bộ `plot_curves()` và `plot_final()` trong khối `try...except` để bảo vệ quá trình huấn luyện không bị dừng bởi các lỗi phụ trợ đồ thị.
+  3. **Bổ sung tham số `--train-limit`:** Cho phép giới hạn số lượng mẫu train (kết hợp với `--eval-limit` và `--max-steps`) để chạy smoke test toàn diện toàn bộ pipeline (huấn luyện, validation, checkpoint, đánh giá đa điều kiện SNR, xuất kết quả CSV/JSON và biểu đồ) chỉ trong ~30 giây.
+  4. **Kiểm chứng thực nghiệm:** Chạy thành công smoke test (`experiments/runs/20261112_012836_ASR-smoke-test/`) hoàn tất trong 30 giây, xác nhận toàn bộ pipeline hoạt động trơn tru 100%.
+- **Lý do:** Đảm bảo tính toàn vẹn dữ liệu, độ ổn định cho các ca train dài qua đêm, và cung cấp cơ chế kiểm thử nhanh đáng tin cậy tuân thủ [agents/rules/AGENT_AI.md](../../agents/rules/AGENT_AI.md) (§4 Stage 4: VERIFY).
+- **File liên quan:** `scripts/train_asr_finetune.py`, `notebooks/finetune_asr_colab.ipynb`, `docs/AI-Human-logs/Huy.md`.
+- **Minh chứng:** Log huấn luyện smoke test tại `experiments/runs/20261112_012836_ASR-smoke-test/train.log` và toàn bộ artifacts sinh ra tại `experiments/runs/20261112_012836_ASR-smoke-test/`.
+
+---
+
+### D-075 — Thiết lập Khung phương pháp luận & Hồ sơ Dữ liệu Kiểm thử ASR Fine-tuned (Epoch 1 Best Checkpoint)
+- **Trạng thái:** Accepted
+- **Thời gian:** 2026-11-12T08:25:00+07:00
+- **Phụ trách:** Huy (Human) + Antigravity AI
+- **Bối cảnh:** Sau ca huấn luyện đêm ngày 12/11/2026, mô hình PhoASR Whisper Small đã hoàn thành Epoch 1 với kết quả validation đột phá (`val_loss = 0.0223`, `val_wer_all = 0.62%`, `val_sent_acc = 94.75%`) được lưu tại `experiments/runs/20261112_033805_ASR-v2-fresh/checkpoints/best/`. Theo chỉ đạo của cấp quản lý, trọng số Epoch 1 được lựa chọn để tiến hành đánh giá độc lập toàn diện. Cần xác định vị trí chính xác của tập dữ liệu test, xây dựng khung phương pháp luận kiểm thử Sequence-to-Sequence chuẩn mực và lập kế hoạch đánh giá đa chiều.
+- **Quyết định:**
+  1. **Định vị & Hồ sơ hóa Dữ liệu Kiểm thử:** Xác định tập test chính tại `notebooks/data/voice_dataset_v2/test.jsonl` gồm **1.726 câu thoại 100% giọng người thật (Real Voice)** và tập test kiểm tra độ khái quát hóa `notebooks/data/voice_dataset_v2/test_newtext.jsonl` gồm **267 câu thoại held-out prompt**.
+  2. **Chuẩn hóa Khung Đánh giá 5 Trụ cột:**
+     - Metrics định lượng: WER (Raw & Normalized), CER, Sentence Accuracy (Exact Match), RTF (Real-Time Factor).
+     - Chuẩn hóa âm học tiếng Việt (Vietnamese Acoustic Normalization): Unicode NFC, lowercase, loại dấu câu, chuyển số thành chữ (`410` $\to$ `bốn trăm mười`), đồng nghĩa khẩu ngữ (`lẻ` $\leftrightarrow$ `linh`).
+     - Phân rã lỗi Levenshtein: Substitutions ($S$), Deletions ($D$), Insertions ($I$ - đo lường hallucination).
+     - Phân tầng đa chiều: Chế độ `_r` vs `_n`, người nói/độ tuổi/trẻ em (`PU_M10`), dải tạp âm SNR ($<30$ dB, $30-45$ dB, $>45$ dB), câu có số vs không số, câu quen thuộc vs câu mới (`test_newtext`).
+     - Phân tích lỗi sâu: Top 20 câu lỗi nặng nhất, kiểm tra hallucination lặp từ khi gặp khoảng lặng, và độ nhạy từ vựng y tế (*"X-quang"*, *"BHYT"*, *"siêu âm"*, *"phòng cấp cứu"*).
+  3. **Lưu trữ Tài liệu Bối cảnh & Phương pháp:** Tạo tài liệu chi tiết tại `docs/progress/huy/test-fine-tune-voice/README.md` tuân thủ nghiêm ngặt [agents/rules/MD_CONVENTION.md](../../agents/rules/MD_CONVENTION.md) và [agents/rules/AGENT_AI.md](../../agents/rules/AGENT_AI.md).
+- **Lý do:** Chuẩn hóa quy trình kiểm thử ASR theo tiêu chuẩn khoa học, cung cấp bằng chứng thực nghiệm rõ ràng đối chiếu với Baseline chưa fine-tune (WER 19.1%), bảo vệ hệ thống đối thoại của Robot bệnh viện khỏi các lỗi nhận dạng nguy hiểm.
+- **File liên quan:** `docs/progress/huy/test-fine-tune-voice/README.md`, `experiments/runs/20261112_033805_ASR-v2-fresh/checkpoints/best/`, `notebooks/data/voice_dataset_v2/test.jsonl`, `docs/AI-Human-logs/Huy.md`.
+- **Minh chứng:** Checkpoint Epoch 1 tại `experiments/runs/20261112_033805_ASR-v2-fresh/checkpoints/best/model.safetensors` và tài liệu phương pháp luận tại [docs/progress/huy/test-fine-tune-voice/README.md](../progress/huy/test-fine-tune-voice/README.md).
+
+---
+
+### D-076 — Hoàn thành Benchmark toàn diện mô hình Epoch 1 trên 1.726 câu Test Real Voice
+- **Trạng thái:** Accepted
+- **Thời gian:** 2026-11-12T08:50:00+07:00
+- **Phụ trách:** Huy (Human) + Antigravity AI
+- **Bối cảnh:** Sau khi hoàn thành thiết lập script chuẩn hóa `scripts/eval_asr_comprehensive.py` và kiểm chứng an toàn qua Smoke Test, hệ thống tiến hành chạy Full Benchmark trên toàn bộ 1.726 câu thoại thực tế (`notebooks/data/voice_dataset_v2/test.jsonl`, tương đương 117.51 phút âm thanh) để đánh giá năng lực của Checkpoint Epoch 1 so với Baseline chưa fine-tune.
+- **Quyết định & Kết quả Thực nghiệm:**
+  1. **Hiệu năng & Độ trễ vượt bậc:** Toàn bộ 1.726 câu thoại được xử lý thành công 100% trên GPU RTX 4060 Laptop với tốc độ $\text{RTF} = 0.0273$ (chỉ mất $\approx 0.1$s/câu), đáp ứng hoàn hảo yêu cầu tương tác thời gian thực cho Robot đối thoại ($\text{RTF} < 0.08$).
+  2. **Tiến bộ Vượt bậc so với Baseline:**
+     - **WER Chế độ Đọc chuẩn (`_r`):** Giảm ngoạn mục từ **13.30% xuống 6.87%** (giảm gần một nửa lỗi âm học).
+     - **WER Chuẩn hóa Tổng thể:** Giảm từ **19.10% xuống 11.69%**.
+     - **Tỷ lệ Câu Đúng 100% (Sent Acc):** Tăng vọt từ **41.20% lên 62.11%** (hơn 6/10 câu nghe đúng tuyệt đối không sai một ký tự).
+     - **CER Chuẩn hóa:** Giảm từ **12.90% xuống 8.59%**.
+  3. **Độ nhạy Từ vựng Y tế (Recall):** Đạt từ 80% đến 100% trên các từ khóa bệnh viện trọng yếu: *Phòng khám (100%), Bảo hiểm (96.5%), Khoa sản (91.1%), Nhà thuốc (90.0%), Robot (85.7%), Siêu âm (84.5%), Khoa nhi (84.1%), X-quang (82.4%), Thang máy (80.0%)*.
+  4. **Phân tích Bản chất Lỗi:** Tỷ lệ lỗi ở chế độ `_n` (17.01%) chủ yếu do người nói thêm từ ngữ điệu/khẩu ngữ ("cho tôi hỏi...", "á...", "nhé...") khác với nhãn prompt, trong khi mô hình nghe đúng âm thanh thực tế.
+  5. **Lưu trữ Hồ sơ Nghiệm thu:** Toàn bộ kết quả chi tiết được bảo lưu tại `experiments/results/eval_epoch1_test_real/` (`predictions.csv`, `summary.json`, `REPORT.md`).
+- **Lý do:** Khẳng định giá trị thực nghiệm của quá trình fine-tune PhoASR-Whisper-Small, cung cấp số liệu nghiệm thu minh bạch và làm căn cứ kỹ thuật báo cáo cấp quản lý.
+- **File liên quan:** `scripts/eval_asr_comprehensive.py`, `experiments/results/eval_epoch1_test_real/REPORT.md`, `experiments/results/eval_epoch1_test_real/predictions.csv`, `experiments/results/eval_epoch1_test_real/summary.json`.
+- **Minh chứng:** Báo cáo chi tiết và toàn bộ dự đoán tại [experiments/results/eval_epoch1_test_real/REPORT.md](../../../experiments/results/eval_epoch1_test_real/REPORT.md).
 
 ---
 

@@ -1,0 +1,1343 @@
+{
+  "timestamp": "2026-11-12T08:46:28+0700",
+  "model_path": "/home/notworle/nonvintage/gitvanhub/Data-Science-Major-Project/experiments/runs/20261112_033805_ASR-v2-fresh/checkpoints/best",
+  "dataset_split": "test",
+  "device": "cuda",
+  "device_name": "NVIDIA GeForce RTX 4060 Laptop GPU",
+  "num_beams": 1,
+  "batch_size": 16,
+  "total_utterances": 1726,
+  "total_audio_minutes": 117.51,
+  "total_infer_seconds": 192.18,
+  "rtf": 0.0273,
+  "overall": {
+    "n": 1726,
+    "minutes": 117.51,
+    "wer": 0.1169,
+    "cer": 0.0859,
+    "sub": 1045,
+    "dele": 192,
+    "ins": 456,
+    "ref_words": 14488,
+    "sent_acc": 0.6211
+  },
+  "macro_wer_by_speaker": 0.1265,
+  "macro_cer_by_speaker": 0.0906,
+  "by_mode": {
+    "n": {
+      "n": 823,
+      "minutes": 55.95,
+      "wer": 0.1701,
+      "cer": 0.1299,
+      "sub": 647,
+      "dele": 116,
+      "ins": 418,
+      "ref_words": 6943,
+      "sent_acc": 0.5103
+    },
+    "r": {
+      "n": 883,
+      "minutes": 60.46,
+      "wer": 0.0687,
+      "cer": 0.0457,
+      "sub": 396,
+      "dele": 76,
+      "ins": 38,
+      "ref_words": 7425,
+      "sent_acc": 0.718
+    },
+    "u": {
+      "n": 20,
+      "minutes": 1.1,
+      "wer": 0.0167,
+      "cer": 0.0144,
+      "sub": 2,
+      "dele": 0,
+      "ins": 0,
+      "ref_words": 120,
+      "sent_acc": 0.9
+    }
+  },
+  "by_speaker": {
+    "APP_112ba0": {
+      "n": 15,
+      "minutes": 0.79,
+      "wer": 0.4581,
+      "cer": 0.2886,
+      "sub": 55,
+      "dele": 9,
+      "ins": 7,
+      "ref_words": 155,
+      "sent_acc": 0.0667
+    },
+    "APP_1603b1": {
+      "n": 80,
+      "minutes": 4.96,
+      "wer": 0.1544,
+      "cer": 0.125,
+      "sub": 55,
+      "dele": 8,
+      "ins": 46,
+      "ref_words": 706,
+      "sent_acc": 0.4875
+    },
+    "APP_2ff99b": {
+      "n": 11,
+      "minutes": 0.62,
+      "wer": 0.3208,
+      "cer": 0.1918,
+      "sub": 30,
+      "dele": 4,
+      "ins": 0,
+      "ref_words": 106,
+      "sent_acc": 0.2727
+    },
+    "APP_5ac354": {
+      "n": 80,
+      "minutes": 3.85,
+      "wer": 0.2688,
+      "cer": 0.1973,
+      "sub": 117,
+      "dele": 26,
+      "ins": 36,
+      "ref_words": 666,
+      "sent_acc": 0.3375
+    },
+    "APP_ba76d1": {
+      "n": 8,
+      "minutes": 0.74,
+      "wer": 0.1064,
+      "cer": 0.0893,
+      "sub": 9,
+      "dele": 0,
+      "ins": 1,
+      "ref_words": 94,
+      "sent_acc": 0.5
+    },
+    "APP_c5de7e": {
+      "n": 22,
+      "minutes": 1.09,
+      "wer": 0.0833,
+      "cer": 0.0578,
+      "sub": 13,
+      "dele": 2,
+      "ins": 4,
+      "ref_words": 228,
+      "sent_acc": 0.4545
+    },
+    "APP_f91703": {
+      "n": 80,
+      "minutes": 3.83,
+      "wer": 0.0976,
+      "cer": 0.0734,
+      "sub": 44,
+      "dele": 15,
+      "ins": 6,
+      "ref_words": 666,
+      "sent_acc": 0.7
+    },
+    "HT_F20": {
+      "n": 10,
+      "minutes": 0.69,
+      "wer": 0.0333,
+      "cer": 0.0288,
+      "sub": 2,
+      "dele": 0,
+      "ins": 0,
+      "ref_words": 60,
+      "sent_acc": 0.8
+    },
+    "HT_M20": {
+      "n": 70,
+      "minutes": 5.27,
+      "wer": 0.1815,
+      "cer": 0.1582,
+      "sub": 13,
+      "dele": 4,
+      "ins": 93,
+      "ref_words": 606,
+      "sent_acc": 0.5
+    },
+    "LH_A": {
+      "n": 80,
+      "minutes": 4.32,
+      "wer": 0.027,
+      "cer": 0.0182,
+      "sub": 8,
+      "dele": 2,
+      "ins": 8,
+      "ref_words": 666,
+      "sent_acc": 0.8375
+    },
+    "LH_A2": {
+      "n": 80,
+      "minutes": 5.92,
+      "wer": 0.006,
+      "cer": 0.004,
+      "sub": 4,
+      "dele": 0,
+      "ins": 0,
+      "ref_words": 666,
+      "sent_acc": 0.95
+    },
+    "LH_A3": {
+      "n": 80,
+      "minutes": 3.57,
+      "wer": 0.4084,
+      "cer": 0.2805,
+      "sub": 231,
+      "dele": 37,
+      "ins": 4,
+      "ref_words": 666,
+      "sent_acc": 0.1375
+    },
+    "LH_A4": {
+      "n": 1,
+      "minutes": 0.06,
+      "wer": 0.1667,
+      "cer": 0.1458,
+      "sub": 1,
+      "dele": 1,
+      "ins": 0,
+      "ref_words": 12,
+      "sent_acc": 0.0
+    },
+    "LH_B": {
+      "n": 80,
+      "minutes": 6.09,
+      "wer": 0.0113,
+      "cer": 0.0072,
+      "sub": 6,
+      "dele": 2,
+      "ins": 0,
+      "ref_words": 706,
+      "sent_acc": 0.925
+    },
+    "LH_B1": {
+      "n": 80,
+      "minutes": 5.92,
+      "wer": 0.1955,
+      "cer": 0.1181,
+      "sub": 118,
+      "dele": 17,
+      "ins": 3,
+      "ref_words": 706,
+      "sent_acc": 0.2625
+    },
+    "LH_B2": {
+      "n": 80,
+      "minutes": 5.64,
+      "wer": 0.0297,
+      "cer": 0.0228,
+      "sub": 6,
+      "dele": 10,
+      "ins": 5,
+      "ref_words": 706,
+      "sent_acc": 0.7875
+    },
+    "LH_B3": {
+      "n": 80,
+      "minutes": 4.47,
+      "wer": 0.0411,
+      "cer": 0.0246,
+      "sub": 25,
+      "dele": 3,
+      "ins": 1,
+      "ref_words": 706,
+      "sent_acc": 0.775
+    },
+    "LH_B7": {
+      "n": 80,
+      "minutes": 5.78,
+      "wer": 0.0694,
+      "cer": 0.0484,
+      "sub": 37,
+      "dele": 6,
+      "ins": 6,
+      "ref_words": 706,
+      "sent_acc": 0.625
+    },
+    "LH_B8": {
+      "n": 79,
+      "minutes": 5.15,
+      "wer": 0.0531,
+      "cer": 0.0399,
+      "sub": 23,
+      "dele": 9,
+      "ins": 5,
+      "ref_words": 697,
+      "sent_acc": 0.7342
+    },
+    "LH_F30_01": {
+      "n": 70,
+      "minutes": 5.66,
+      "wer": 0.0728,
+      "cer": 0.0505,
+      "sub": 33,
+      "dele": 6,
+      "ins": 0,
+      "ref_words": 536,
+      "sent_acc": 0.6286
+    },
+    "LH_F30_02": {
+      "n": 70,
+      "minutes": 7.18,
+      "wer": 0.0056,
+      "cer": 0.0014,
+      "sub": 3,
+      "dele": 0,
+      "ins": 0,
+      "ref_words": 536,
+      "sent_acc": 0.9714
+    },
+    "LH_F30_03": {
+      "n": 70,
+      "minutes": 5.16,
+      "wer": 0.0597,
+      "cer": 0.044,
+      "sub": 27,
+      "dele": 4,
+      "ins": 1,
+      "ref_words": 536,
+      "sent_acc": 0.7571
+    },
+    "LH_F30_04": {
+      "n": 70,
+      "minutes": 4.92,
+      "wer": 0.0672,
+      "cer": 0.0458,
+      "sub": 29,
+      "dele": 2,
+      "ins": 5,
+      "ref_words": 536,
+      "sent_acc": 0.7286
+    },
+    "LH_M30": {
+      "n": 70,
+      "minutes": 4.56,
+      "wer": 0.0914,
+      "cer": 0.0569,
+      "sub": 41,
+      "dele": 7,
+      "ins": 1,
+      "ref_words": 536,
+      "sent_acc": 0.6429
+    },
+    "PU_F10": {
+      "n": 25,
+      "minutes": 1.75,
+      "wer": 0.1011,
+      "cer": 0.0635,
+      "sub": 15,
+      "dele": 0,
+      "ins": 4,
+      "ref_words": 188,
+      "sent_acc": 0.52
+    },
+    "PU_F20_A": {
+      "n": 80,
+      "minutes": 6.66,
+      "wer": 0.1997,
+      "cer": 0.1744,
+      "sub": 29,
+      "dele": 3,
+      "ins": 101,
+      "ref_words": 666,
+      "sent_acc": 0.4
+    },
+    "PU_F20_B": {
+      "n": 80,
+      "minutes": 6.84,
+      "wer": 0.238,
+      "cer": 0.1994,
+      "sub": 46,
+      "dele": 11,
+      "ins": 111,
+      "ref_words": 706,
+      "sent_acc": 0.35
+    },
+    "PU_M10": {
+      "n": 25,
+      "minutes": 1.78,
+      "wer": 0.0798,
+      "cer": 0.0473,
+      "sub": 13,
+      "dele": 1,
+      "ins": 1,
+      "ref_words": 188,
+      "sent_acc": 0.64
+    },
+    "X_F30": {
+      "n": 70,
+      "minutes": 4.27,
+      "wer": 0.041,
+      "cer": 0.0255,
+      "sub": 12,
+      "dele": 3,
+      "ins": 7,
+      "ref_words": 536,
+      "sent_acc": 0.8143
+    }
+  },
+  "r_only_by_speaker": {
+    "APP_112ba0": {
+      "n": 12,
+      "minutes": 0.66,
+      "wer": 0.4634,
+      "cer": 0.2842,
+      "sub": 44,
+      "dele": 8,
+      "ins": 5,
+      "ref_words": 123,
+      "sent_acc": 0.0833
+    },
+    "APP_1603b1": {
+      "n": 40,
+      "minutes": 2.4,
+      "wer": 0.0283,
+      "cer": 0.0173,
+      "sub": 8,
+      "dele": 1,
+      "ins": 1,
+      "ref_words": 353,
+      "sent_acc": 0.825
+    },
+    "APP_2ff99b": {
+      "n": 5,
+      "minutes": 0.27,
+      "wer": 0.48,
+      "cer": 0.2718,
+      "sub": 22,
+      "dele": 2,
+      "ins": 0,
+      "ref_words": 50,
+      "sent_acc": 0.0
+    },
+    "APP_5ac354": {
+      "n": 40,
+      "minutes": 1.82,
+      "wer": 0.0811,
+      "cer": 0.0501,
+      "sub": 23,
+      "dele": 4,
+      "ins": 0,
+      "ref_words": 333,
+      "sent_acc": 0.625
+    },
+    "APP_ba76d1": {
+      "n": 4,
+      "minutes": 0.37,
+      "wer": 0.0638,
+      "cer": 0.0561,
+      "sub": 3,
+      "dele": 0,
+      "ins": 0,
+      "ref_words": 47,
+      "sent_acc": 0.75
+    },
+    "APP_c5de7e": {
+      "n": 11,
+      "minutes": 0.59,
+      "wer": 0.0439,
+      "cer": 0.0357,
+      "sub": 2,
+      "dele": 1,
+      "ins": 2,
+      "ref_words": 114,
+      "sent_acc": 0.6364
+    },
+    "APP_f91703": {
+      "n": 40,
+      "minutes": 1.88,
+      "wer": 0.0541,
+      "cer": 0.0407,
+      "sub": 13,
+      "dele": 5,
+      "ins": 0,
+      "ref_words": 333,
+      "sent_acc": 0.75
+    },
+    "HT_M20": {
+      "n": 30,
+      "minutes": 1.71,
+      "wer": 0.022,
+      "cer": 0.0168,
+      "sub": 3,
+      "dele": 2,
+      "ins": 1,
+      "ref_words": 273,
+      "sent_acc": 0.8
+    },
+    "LH_A": {
+      "n": 40,
+      "minutes": 2.08,
+      "wer": 0.033,
+      "cer": 0.0254,
+      "sub": 4,
+      "dele": 2,
+      "ins": 5,
+      "ref_words": 333,
+      "sent_acc": 0.8
+    },
+    "LH_A2": {
+      "n": 40,
+      "minutes": 2.97,
+      "wer": 0.009,
+      "cer": 0.0051,
+      "sub": 3,
+      "dele": 0,
+      "ins": 0,
+      "ref_words": 333,
+      "sent_acc": 0.925
+    },
+    "LH_A3": {
+      "n": 40,
+      "minutes": 1.9,
+      "wer": 0.3123,
+      "cer": 0.2151,
+      "sub": 86,
+      "dele": 15,
+      "ins": 3,
+      "ref_words": 333,
+      "sent_acc": 0.175
+    },
+    "LH_A4": {
+      "n": 1,
+      "minutes": 0.06,
+      "wer": 0.1667,
+      "cer": 0.1458,
+      "sub": 1,
+      "dele": 1,
+      "ins": 0,
+      "ref_words": 12,
+      "sent_acc": 0.0
+    },
+    "LH_B": {
+      "n": 40,
+      "minutes": 3.3,
+      "wer": 0.0028,
+      "cer": 0.0014,
+      "sub": 1,
+      "dele": 0,
+      "ins": 0,
+      "ref_words": 353,
+      "sent_acc": 0.975
+    },
+    "LH_B1": {
+      "n": 40,
+      "minutes": 3.04,
+      "wer": 0.1813,
+      "cer": 0.1098,
+      "sub": 57,
+      "dele": 7,
+      "ins": 0,
+      "ref_words": 353,
+      "sent_acc": 0.325
+    },
+    "LH_B2": {
+      "n": 40,
+      "minutes": 2.78,
+      "wer": 0.0368,
+      "cer": 0.0296,
+      "sub": 3,
+      "dele": 6,
+      "ins": 4,
+      "ref_words": 353,
+      "sent_acc": 0.75
+    },
+    "LH_B3": {
+      "n": 40,
+      "minutes": 2.36,
+      "wer": 0.017,
+      "cer": 0.0087,
+      "sub": 6,
+      "dele": 0,
+      "ins": 0,
+      "ref_words": 353,
+      "sent_acc": 0.875
+    },
+    "LH_B7": {
+      "n": 40,
+      "minutes": 2.87,
+      "wer": 0.0567,
+      "cer": 0.0397,
+      "sub": 14,
+      "dele": 2,
+      "ins": 4,
+      "ref_words": 353,
+      "sent_acc": 0.675
+    },
+    "LH_B8": {
+      "n": 40,
+      "minutes": 2.69,
+      "wer": 0.0397,
+      "cer": 0.0368,
+      "sub": 6,
+      "dele": 5,
+      "ins": 3,
+      "ref_words": 353,
+      "sent_acc": 0.85
+    },
+    "LH_F30_01": {
+      "n": 35,
+      "minutes": 2.8,
+      "wer": 0.0709,
+      "cer": 0.0463,
+      "sub": 15,
+      "dele": 4,
+      "ins": 0,
+      "ref_words": 268,
+      "sent_acc": 0.6286
+    },
+    "LH_F30_02": {
+      "n": 35,
+      "minutes": 3.43,
+      "wer": 0.0075,
+      "cer": 0.0019,
+      "sub": 2,
+      "dele": 0,
+      "ins": 0,
+      "ref_words": 268,
+      "sent_acc": 0.9714
+    },
+    "LH_F30_03": {
+      "n": 35,
+      "minutes": 2.67,
+      "wer": 0.0485,
+      "cer": 0.0333,
+      "sub": 10,
+      "dele": 3,
+      "ins": 0,
+      "ref_words": 268,
+      "sent_acc": 0.7714
+    },
+    "LH_F30_04": {
+      "n": 35,
+      "minutes": 2.64,
+      "wer": 0.0299,
+      "cer": 0.0231,
+      "sub": 5,
+      "dele": 1,
+      "ins": 2,
+      "ref_words": 268,
+      "sent_acc": 0.8571
+    },
+    "LH_M30": {
+      "n": 35,
+      "minutes": 2.37,
+      "wer": 0.0448,
+      "cer": 0.0259,
+      "sub": 11,
+      "dele": 1,
+      "ins": 0,
+      "ref_words": 268,
+      "sent_acc": 0.7714
+    },
+    "PU_F10": {
+      "n": 25,
+      "minutes": 1.75,
+      "wer": 0.1011,
+      "cer": 0.0635,
+      "sub": 15,
+      "dele": 0,
+      "ins": 4,
+      "ref_words": 188,
+      "sent_acc": 0.52
+    },
+    "PU_F20_A": {
+      "n": 40,
+      "minutes": 3.63,
+      "wer": 0.033,
+      "cer": 0.0211,
+      "sub": 10,
+      "dele": 1,
+      "ins": 0,
+      "ref_words": 333,
+      "sent_acc": 0.775
+    },
+    "PU_F20_B": {
+      "n": 40,
+      "minutes": 3.48,
+      "wer": 0.0453,
+      "cer": 0.0347,
+      "sub": 13,
+      "dele": 3,
+      "ins": 0,
+      "ref_words": 353,
+      "sent_acc": 0.7
+    },
+    "PU_M10": {
+      "n": 25,
+      "minutes": 1.78,
+      "wer": 0.0798,
+      "cer": 0.0473,
+      "sub": 13,
+      "dele": 1,
+      "ins": 1,
+      "ref_words": 188,
+      "sent_acc": 0.64
+    },
+    "X_F30": {
+      "n": 35,
+      "minutes": 2.17,
+      "wer": 0.0261,
+      "cer": 0.0176,
+      "sub": 3,
+      "dele": 1,
+      "ins": 3,
+      "ref_words": 268,
+      "sent_acc": 0.8286
+    }
+  },
+  "by_intent": {
+    "bao_hiem": {
+      "n": 69,
+      "minutes": 5.63,
+      "wer": 0.1086,
+      "cer": 0.0722,
+      "sub": 63,
+      "dele": 8,
+      "ins": 20,
+      "ref_words": 838,
+      "sent_acc": 0.5507
+    },
+    "cam_on": {
+      "n": 90,
+      "minutes": 4.8,
+      "wer": 0.1222,
+      "cer": 0.091,
+      "sub": 28,
+      "dele": 6,
+      "ins": 10,
+      "ref_words": 360,
+      "sent_acc": 0.7222
+    },
+    "cap_cuu": {
+      "n": 58,
+      "minutes": 4.14,
+      "wer": 0.1278,
+      "cer": 0.092,
+      "sub": 46,
+      "dele": 4,
+      "ins": 19,
+      "ref_words": 540,
+      "sent_acc": 0.5862
+    },
+    "dan_duong": {
+      "n": 88,
+      "minutes": 6.31,
+      "wer": 0.1045,
+      "cer": 0.0732,
+      "sub": 49,
+      "dele": 14,
+      "ins": 20,
+      "ref_words": 794,
+      "sent_acc": 0.6932
+    },
+    "dang_ky_kham": {
+      "n": 117,
+      "minutes": 9.74,
+      "wer": 0.103,
+      "cer": 0.0733,
+      "sub": 107,
+      "dele": 6,
+      "ins": 31,
+      "ref_words": 1398,
+      "sent_acc": 0.4872
+    },
+    "dieu_chinh_am_luong": {
+      "n": 28,
+      "minutes": 2.22,
+      "wer": 0.1029,
+      "cer": 0.0634,
+      "sub": 19,
+      "dele": 2,
+      "ins": 7,
+      "ref_words": 272,
+      "sent_acc": 0.5714
+    },
+    "dieu_chinh_toc_do": {
+      "n": 88,
+      "minutes": 5.66,
+      "wer": 0.1259,
+      "cer": 0.0963,
+      "sub": 32,
+      "dele": 18,
+      "ins": 23,
+      "ref_words": 580,
+      "sent_acc": 0.6818
+    },
+    "dung_lai": {
+      "n": 42,
+      "minutes": 2.64,
+      "wer": 0.1348,
+      "cer": 0.0942,
+      "sub": 26,
+      "dele": 1,
+      "ins": 11,
+      "ref_words": 282,
+      "sent_acc": 0.5714
+    },
+    "gap_nhan_vien": {
+      "n": 92,
+      "minutes": 5.9,
+      "wer": 0.1208,
+      "cer": 0.0865,
+      "sub": 63,
+      "dele": 5,
+      "ins": 18,
+      "ref_words": 712,
+      "sent_acc": 0.6522
+    },
+    "ho_tro_di_chuyen": {
+      "n": 26,
+      "minutes": 2.05,
+      "wer": 0.1,
+      "cer": 0.082,
+      "sub": 14,
+      "dele": 1,
+      "ins": 13,
+      "ref_words": 280,
+      "sent_acc": 0.7692
+    },
+    "hoi_khoa": {
+      "n": 225,
+      "minutes": 15.58,
+      "wer": 0.1226,
+      "cer": 0.0869,
+      "sub": 148,
+      "dele": 27,
+      "ins": 62,
+      "ref_words": 1933,
+      "sent_acc": 0.6
+    },
+    "hoi_phong": {
+      "n": 296,
+      "minutes": 20.23,
+      "wer": 0.1177,
+      "cer": 0.0902,
+      "sub": 183,
+      "dele": 56,
+      "ins": 73,
+      "ref_words": 2651,
+      "sent_acc": 0.598
+    },
+    "khong_ho_tro": {
+      "n": 47,
+      "minutes": 3.11,
+      "wer": 0.0888,
+      "cer": 0.0544,
+      "sub": 27,
+      "dele": 4,
+      "ins": 7,
+      "ref_words": 428,
+      "sent_acc": 0.617
+    },
+    "nha_thuoc": {
+      "n": 86,
+      "minutes": 5.06,
+      "wer": 0.1037,
+      "cer": 0.0839,
+      "sub": 23,
+      "dele": 6,
+      "ins": 22,
+      "ref_words": 492,
+      "sent_acc": 0.7558
+    },
+    "nhac_lai": {
+      "n": 34,
+      "minutes": 2.62,
+      "wer": 0.0815,
+      "cer": 0.06,
+      "sub": 14,
+      "dele": 7,
+      "ins": 9,
+      "ref_words": 368,
+      "sent_acc": 0.6471
+    },
+    "thanh_toan": {
+      "n": 101,
+      "minutes": 6.31,
+      "wer": 0.1748,
+      "cer": 0.1284,
+      "sub": 85,
+      "dele": 6,
+      "ins": 34,
+      "ref_words": 715,
+      "sent_acc": 0.5149
+    },
+    "thoi_gian_cho": {
+      "n": 58,
+      "minutes": 3.78,
+      "wer": 0.1398,
+      "cer": 0.1022,
+      "sub": 46,
+      "dele": 6,
+      "ins": 19,
+      "ref_words": 508,
+      "sent_acc": 0.6379
+    },
+    "tien_ich": {
+      "n": 139,
+      "minutes": 9.3,
+      "wer": 0.1162,
+      "cer": 0.0952,
+      "sub": 67,
+      "dele": 13,
+      "ins": 51,
+      "ref_words": 1127,
+      "sent_acc": 0.6187
+    },
+    "tiep_tuc": {
+      "n": 42,
+      "minutes": 2.42,
+      "wer": 0.0667,
+      "cer": 0.0578,
+      "sub": 5,
+      "dele": 2,
+      "ins": 7,
+      "ref_words": 210,
+      "sent_acc": 0.8095
+    }
+  },
+  "by_duration_bucket": {
+    "<2s (ngắn)": {
+      "n": 43,
+      "minutes": 1.24,
+      "wer": 0.3785,
+      "cer": 0.285,
+      "sub": 74,
+      "dele": 20,
+      "ins": 1,
+      "ref_words": 251,
+      "sent_acc": 0.4186
+    },
+    "2-4s (vừa)": {
+      "n": 822,
+      "minutes": 43.39,
+      "wer": 0.1213,
+      "cer": 0.0864,
+      "sub": 520,
+      "dele": 102,
+      "ins": 118,
+      "ref_words": 6103,
+      "sent_acc": 0.629
+    },
+    ">4s (dài)": {
+      "n": 861,
+      "minutes": 72.89,
+      "wer": 0.1055,
+      "cer": 0.0793,
+      "sub": 451,
+      "dele": 70,
+      "ins": 337,
+      "ref_words": 8134,
+      "sent_acc": 0.6237
+    }
+  },
+  "by_has_digit": {
+    "False": {
+      "n": 1637,
+      "minutes": 111.29,
+      "wer": 0.1171,
+      "cer": 0.0854,
+      "sub": 1002,
+      "dele": 153,
+      "ins": 436,
+      "ref_words": 13588,
+      "sent_acc": 0.6261
+    },
+    "True": {
+      "n": 89,
+      "minutes": 6.22,
+      "wer": 0.1133,
+      "cer": 0.0928,
+      "sub": 43,
+      "dele": 39,
+      "ins": 20,
+      "ref_words": 900,
+      "sent_acc": 0.5281
+    }
+  },
+  "by_heldout_text": {
+    "False": {
+      "n": 1459,
+      "minutes": 99.36,
+      "wer": 0.1155,
+      "cer": 0.084,
+      "sub": 883,
+      "dele": 144,
+      "ins": 382,
+      "ref_words": 12199,
+      "sent_acc": 0.6223
+    },
+    "True": {
+      "n": 267,
+      "minutes": 18.15,
+      "wer": 0.1241,
+      "cer": 0.0962,
+      "sub": 162,
+      "dele": 48,
+      "ins": 74,
+      "ref_words": 2289,
+      "sent_acc": 0.6142
+    }
+  },
+  "hospital_keywords_recall": {
+    "x quang": {
+      "total_occurrences": 17,
+      "hits": 14,
+      "recall": 0.8235
+    },
+    "bảo hiểm": {
+      "total_occurrences": 85,
+      "hits": 82,
+      "recall": 0.9647
+    },
+    "siêu âm": {
+      "total_occurrences": 58,
+      "hits": 49,
+      "recall": 0.8448
+    },
+    "khoa sản": {
+      "total_occurrences": 56,
+      "hits": 51,
+      "recall": 0.9107
+    },
+    "khoa nhi": {
+      "total_occurrences": 44,
+      "hits": 37,
+      "recall": 0.8409
+    },
+    "cấp cứu": {
+      "total_occurrences": 14,
+      "hits": 11,
+      "recall": 0.7857
+    },
+    "phòng khám": {
+      "total_occurrences": 16,
+      "hits": 16,
+      "recall": 1.0
+    },
+    "robot": {
+      "total_occurrences": 14,
+      "hits": 12,
+      "recall": 0.8571
+    },
+    "thang máy": {
+      "total_occurrences": 30,
+      "hits": 24,
+      "recall": 0.8
+    },
+    "nhà thuốc": {
+      "total_occurrences": 70,
+      "hits": 63,
+      "recall": 0.9
+    }
+  },
+  "hallucination_candidates_count": 5,
+  "hallucination_candidates": [
+    {
+      "audio_filepath": "wav/real/HT_M20/HT_M20__A_15_n.wav",
+      "speaker_id": "HT_M20",
+      "mode": "n",
+      "len_ratio": 1.8333302777828704,
+      "ref_norm": "nhà thuốc bệnh viện ở đâu",
+      "hyp_norm": "bạn cho mình hỏi nhà thuốc bệnh viện ở đâu ớ"
+    },
+    {
+      "audio_filepath": "wav/real/HT_M20/HT_M20__A_16_n.wav",
+      "speaker_id": "HT_M20",
+      "mode": "n",
+      "len_ratio": 1.9999966666722224,
+      "ref_norm": "thang máy gần nhất ở đâu",
+      "hyp_norm": "ờ thang máy gần nhất của bệnh viện này ở đâu nhờ"
+    },
+    {
+      "audio_filepath": "wav/real/PU_F20_A/PU_F20_A__A_26_n.wav",
+      "speaker_id": "PU_F20_A",
+      "mode": "n",
+      "len_ratio": 1.9999960000080002,
+      "ref_norm": "khoa cấp cứu ở đâu",
+      "hyp_norm": "cho mày hỏi khoa thuốc cú nằm ở đâu vậy"
+    },
+    {
+      "audio_filepath": "wav/real/PU_F20_A/PU_F20_A__C05_n.wav",
+      "speaker_id": "PU_F20_A",
+      "mode": "n",
+      "len_ratio": 2.3999952000096,
+      "ref_norm": "quầy thu ngân ở đâu",
+      "hyp_norm": "cho tôi hỏi có đòi thu ngân ở tại nền bá thầu"
+    },
+    {
+      "audio_filepath": "wav/real/PU_F20_A/PU_F20_A__C06_n.wav",
+      "speaker_id": "PU_F20_A",
+      "mode": "n",
+      "len_ratio": 2.2499943750140625,
+      "ref_norm": "nhà thuốc ở đâu",
+      "hyp_norm": "cho tôi hỏi nhà thuốc nằm ở đâu vậy"
+    }
+  ],
+  "top_worst_predictions": [
+    {
+      "audio_filepath": "wav/real/PU_F20_A/PU_F20_A__C05_n.wav",
+      "speaker_id": "PU_F20_A",
+      "mode": "n",
+      "intent": "thanh_toan",
+      "duration_s": 4.416,
+      "wer_norm": 1.8,
+      "cer_norm": 1.6842,
+      "text": "Quầy thu ngân ở đâu?",
+      "hyp": "Cho tôi hỏi có đòi thu ngân ở tại nền bá thầu?",
+      "ref_norm": "quầy thu ngân ở đâu",
+      "hyp_norm": "cho tôi hỏi có đòi thu ngân ở tại nền bá thầu"
+    },
+    {
+      "audio_filepath": "wav/real/PU_F20_A/PU_F20_A__A_26_n.wav",
+      "speaker_id": "PU_F20_A",
+      "mode": "n",
+      "intent": "cap_cuu",
+      "duration_s": 4.736,
+      "wer_norm": 1.4,
+      "cer_norm": 1.4444,
+      "text": "Khoa cấp cứu ở đâu?",
+      "hyp": "Cho mày hỏi khoa thuốc cú nằm ở đâu vậy?",
+      "ref_norm": "khoa cấp cứu ở đâu",
+      "hyp_norm": "cho mày hỏi khoa thuốc cú nằm ở đâu vậy"
+    },
+    {
+      "audio_filepath": "wav/real/PU_F20_B/PU_F20_B__C10_n.wav",
+      "speaker_id": "PU_F20_B",
+      "mode": "n",
+      "intent": "cam_on",
+      "duration_s": 4.16,
+      "wer_norm": 1.3333,
+      "cer_norm": 1.4,
+      "text": "Cảm ơn nhé.",
+      "hyp": "Ok, ok, mình cảm ơn.",
+      "ref_norm": "cảm ơn nhé",
+      "hyp_norm": "ok ok mình cảm ơn"
+    },
+    {
+      "audio_filepath": "wav/real/PU_F20_A/PU_F20_A__C06_n.wav",
+      "speaker_id": "PU_F20_A",
+      "mode": "n",
+      "intent": "nha_thuoc",
+      "duration_s": 3.584,
+      "wer_norm": 1.25,
+      "cer_norm": 1.3333,
+      "text": "Nhà thuốc ở đâu?",
+      "hyp": "Cho tôi hỏi nhà thuốc nằm ở đâu vậy?",
+      "ref_norm": "nhà thuốc ở đâu",
+      "hyp_norm": "cho tôi hỏi nhà thuốc nằm ở đâu vậy"
+    },
+    {
+      "audio_filepath": "wav/real/LH_A3/LH_A3__C06_n.wav",
+      "speaker_id": "LH_A3",
+      "mode": "n",
+      "intent": "nha_thuoc",
+      "duration_s": 1.08,
+      "wer_norm": 1.0,
+      "cer_norm": 0.9333,
+      "text": "Nhà thuốc ở đâu?",
+      "hyp": "Dạ vâng",
+      "ref_norm": "nhà thuốc ở đâu",
+      "hyp_norm": "dạ vâng"
+    },
+    {
+      "audio_filepath": "wav/real/LH_A3/LH_A3__C09_n.wav",
+      "speaker_id": "LH_A3",
+      "mode": "n",
+      "intent": "gap_nhan_vien",
+      "duration_s": 1.26,
+      "wer_norm": 1.0,
+      "cer_norm": 0.6923,
+      "text": "Gọi nhân viên giúp tôi với.",
+      "hyp": "những ký kết tối đấy",
+      "ref_norm": "gọi nhân viên giúp tôi với",
+      "hyp_norm": "những ký kết tối đấy"
+    },
+    {
+      "audio_filepath": "wav/real/LH_A3/LH_A3__C08_n.wav",
+      "speaker_id": "LH_A3",
+      "mode": "n",
+      "intent": "dieu_chinh_toc_do",
+      "duration_s": 1.74,
+      "wer_norm": 1.0,
+      "cer_norm": 0.75,
+      "text": "Đi chậm lại giúp tôi.",
+      "hyp": "là em chết rồi",
+      "ref_norm": "đi chậm lại giúp tôi",
+      "hyp_norm": "là em chết rồi"
+    },
+    {
+      "audio_filepath": "wav/real/APP_5ac354/APP_5ac354__A_16_n.wav",
+      "speaker_id": "APP_5ac354",
+      "mode": "n",
+      "intent": "tien_ich",
+      "duration_s": 2.28,
+      "wer_norm": 1.0,
+      "cer_norm": 0.625,
+      "text": "Thang máy gần nhất ở đâu?",
+      "hyp": "Thế mấy người Mỹ có đau?",
+      "ref_norm": "thang máy gần nhất ở đâu",
+      "hyp_norm": "thế mấy người mỹ có đau"
+    },
+    {
+      "audio_filepath": "wav/real/APP_5ac354/APP_5ac354__A_17_n.wav",
+      "speaker_id": "APP_5ac354",
+      "mode": "n",
+      "intent": "tien_ich",
+      "duration_s": 2.76,
+      "wer_norm": 1.0,
+      "cer_norm": 0.7647,
+      "text": "Cho mình hỏi nhà vệ sinh nam ở đâu?",
+      "hyp": "Minh bé ơi, cho mình hỏi chân sứ nó đau nhỉ?",
+      "ref_norm": "cho mình hỏi nhà vệ sinh nam ở đâu",
+      "hyp_norm": "minh bé ơi cho mình hỏi chân sứ nó đau nhỉ"
+    },
+    {
+      "audio_filepath": "wav/real/APP_5ac354/APP_5ac354__C05_n.wav",
+      "speaker_id": "APP_5ac354",
+      "mode": "n",
+      "intent": "thanh_toan",
+      "duration_s": 2.76,
+      "wer_norm": 1.0,
+      "cer_norm": 0.7368,
+      "text": "Quầy thu ngân ở đâu?",
+      "hyp": "Này chú, ớ đâu nhỉ?",
+      "ref_norm": "quầy thu ngân ở đâu",
+      "hyp_norm": "này chú ớ đâu nhỉ"
+    },
+    {
+      "audio_filepath": "wav/real/APP_5ac354/APP_5ac354__A_27_n.wav",
+      "speaker_id": "APP_5ac354",
+      "mode": "n",
+      "intent": "gap_nhan_vien",
+      "duration_s": 3.18,
+      "wer_norm": 1.0,
+      "cer_norm": 0.7576,
+      "text": "Mình muốn gặp nhân viên hướng dẫn.",
+      "hyp": "Nhưng đi hướng dẫn ở đâu nhỉ?",
+      "ref_norm": "mình muốn gặp nhân viên hướng dẫn",
+      "hyp_norm": "nhưng đi hướng dẫn ở đâu nhỉ"
+    },
+    {
+      "audio_filepath": "wav/real/PU_F20_B/PU_F20_B__C02_n.wav",
+      "speaker_id": "PU_F20_B",
+      "mode": "n",
+      "intent": "hoi_khoa",
+      "duration_s": 3.328,
+      "wer_norm": 1.0,
+      "cer_norm": 1.0,
+      "text": "Khoa nhi ở tầng mấy?",
+      "hyp": "Cho mình hỏi khoa nhi nằm đó tầng mấy?",
+      "ref_norm": "khoa nhi ở tầng mấy",
+      "hyp_norm": "cho mình hỏi khoa nhi nằm đó tầng mấy"
+    },
+    {
+      "audio_filepath": "wav/real/PU_F20_B/PU_F20_B__C05_n.wav",
+      "speaker_id": "PU_F20_B",
+      "mode": "n",
+      "intent": "thanh_toan",
+      "duration_s": 3.648,
+      "wer_norm": 1.0,
+      "cer_norm": 0.6842,
+      "text": "Quầy thu ngân ở đâu?",
+      "hyp": "Ờ, quầy thu mua nằm mát đâu ạ?",
+      "ref_norm": "quầy thu ngân ở đâu",
+      "hyp_norm": "ờ quầy thu mua nằm mát đâu ạ"
+    },
+    {
+      "audio_filepath": "wav/real/HT_M20/HT_M20__A_16_n.wav",
+      "speaker_id": "HT_M20",
+      "mode": "n",
+      "intent": "tien_ich",
+      "duration_s": 4.949,
+      "wer_norm": 1.0,
+      "cer_norm": 1.0,
+      "text": "Thang máy gần nhất ở đâu?",
+      "hyp": "Ờ, thang máy gần nhất của bệnh viện này ở đâu nhờ?",
+      "ref_norm": "thang máy gần nhất ở đâu",
+      "hyp_norm": "ờ thang máy gần nhất của bệnh viện này ở đâu nhờ"
+    },
+    {
+      "audio_filepath": "wav/real/PU_F20_B/PU_F20_B__B_11_n.wav",
+      "speaker_id": "PU_F20_B",
+      "mode": "n",
+      "intent": "gap_nhan_vien",
+      "duration_s": 5.376,
+      "wer_norm": 0.9167,
+      "cer_norm": 0.8409,
+      "text": "Em đợi lâu quá rồi mà chưa tới lượt, hỏi ai ạ?",
+      "hyp": "Em thấy em đợi lâu quá rồi, mà chưa thích được em thì bây giờ em nên hỏi ai?",
+      "ref_norm": "em đợi lâu quá rồi mà chưa tới lượt hỏi ai ạ",
+      "hyp_norm": "em thấy em đợi lâu quá rồi mà chưa thích được em thì bây giờ em nên hỏi ai"
+    },
+    {
+      "audio_filepath": "wav/real/APP_f91703/APP_f91703__A_21_n.wav",
+      "speaker_id": "APP_f91703",
+      "mode": "n",
+      "intent": "dan_duong",
+      "duration_s": 5.52,
+      "wer_norm": 0.9167,
+      "cer_norm": 0.6731,
+      "text": "Bạn dẫn bố con mình đến phòng siêu âm tim được không?",
+      "hyp": "Anh ơi, anh dẫn bố con em đi tìm phòng lông ở đây.",
+      "ref_norm": "bạn dẫn bố con mình đến phòng siêu âm tim được không",
+      "hyp_norm": "anh ơi anh dẫn bố con em đi tìm phòng lông ở đây"
+    },
+    {
+      "audio_filepath": "wav/real/LH_A3/LH_A3__C04_n.wav",
+      "speaker_id": "LH_A3",
+      "mode": "n",
+      "intent": "hoi_phong",
+      "duration_s": 1.5,
+      "wer_norm": 0.9,
+      "cer_norm": 0.7436,
+      "text": "Phòng siêu âm số 304 ở đâu?",
+      "hyp": "sẽ bán giấy tờ đâu",
+      "ref_norm": "phòng siêu âm số ba trăm linh bốn ở đâu",
+      "hyp_norm": "sẽ bán giấy tờ đâu"
+    },
+    {
+      "audio_filepath": "wav/real/HT_M20/HT_M20__A_14_n.wav",
+      "speaker_id": "HT_M20",
+      "mode": "n",
+      "intent": "thanh_toan",
+      "duration_s": 6.229,
+      "wer_norm": 0.8889,
+      "cer_norm": 0.6744,
+      "text": "Ở đây có thanh toán bằng chuyển khoản không?",
+      "hyp": "Ờm thì ở bên viện này có thanh toán bằng chỉ khoản được không ạ?",
+      "ref_norm": "ở đây có thanh toán bằng chuyển khoản không",
+      "hyp_norm": "ờm thì ở bên viện này có thanh toán bằng chỉ khoản được không ạ"
+    },
+    {
+      "audio_filepath": "wav/real/LH_A3/LH_A3__A_13_n.wav",
+      "speaker_id": "LH_A3",
+      "mode": "n",
+      "intent": "thanh_toan",
+      "duration_s": 1.62,
+      "wer_norm": 0.8571,
+      "cer_norm": 0.7241,
+      "text": "Đóng tiền viện phí ở quầy nào?",
+      "hyp": "Có tên người khác có khoảnh nào?",
+      "ref_norm": "đóng tiền viện phí ở quầy nào",
+      "hyp_norm": "có tên người khác có khoảnh nào"
+    },
+    {
+      "audio_filepath": "wav/real/LH_A3/LH_A3__C07_n.wav",
+      "speaker_id": "LH_A3",
+      "mode": "n",
+      "intent": "dan_duong",
+      "duration_s": 2.28,
+      "wer_norm": 0.8571,
+      "cer_norm": 0.5484,
+      "text": "Dẫn tôi đến khoa sản được không?",
+      "hyp": "Nhà tơ đấy có sẵn không?",
+      "ref_norm": "dẫn tôi đến khoa sản được không",
+      "hyp_norm": "nhà tơ đấy có sẵn không"
+    }
+  ]
+}

@@ -343,7 +343,8 @@ def plot_curves(run: Path, steps: list[dict], epochs: list[dict]) -> None:
         fig, ax = plt.subplots(figsize=(8, 4))
         for key, c, lab in [("val_wer_all", C1, "val WER"), ("val_wer_r", C2, "val WER _r"),
                             ("val_wer_n", C3, "val WER _n")]:
-            ax.plot(e, [100 * r[key] for r in epochs], color=c, linewidth=2, marker="o", markersize=6, label=lab)
+            if any(key in r for r in epochs):
+                ax.plot(e, [100 * r[key] for r in epochs if key in r], color=c, linewidth=2, marker="o", markersize=6, label=lab)
         ax.set(title="WER trên val theo epoch (epoch 0 = model gốc)", xlabel="epoch", ylabel="WER %")
         ax.legend()
         fig.tight_layout()
@@ -447,6 +448,7 @@ def main() -> None:
     ap.add_argument("--noise-dir", default="", help="extra folder of real ambience wavs (any sr)")
     ap.add_argument("--test-snrs", default="10,5", help="SNRs for the noisy-test evaluation")
     ap.add_argument("--eval-batch-size", type=int, default=16)
+    ap.add_argument("--train-limit", type=int, default=0, help="cap train utterances (smoke tests)")
     ap.add_argument("--eval-limit", type=int, default=0, help="cap eval utterances (smoke tests)")
     ap.add_argument("--max-steps", type=int, default=0, help="stop after N optimizer steps (smoke tests)")
     ap.add_argument("--log-every", type=int, default=5)
@@ -468,6 +470,8 @@ def main() -> None:
     modes = set(args.modes.split(","))
     train = [r for r in read_split("train") if r["mode"] in modes or r["mode"] == "u"]
     val, test, test_new = read_split("val"), read_split("test"), read_split("test_newtext")
+    if args.train_limit:
+        train = train[: args.train_limit]
     if args.eval_limit:
         val, test, test_new = val[: args.eval_limit], test[: args.eval_limit], test_new[: args.eval_limit]
     audio = {r["audio_filepath"]: load_wav(DATA / r["audio_filepath"]) for r in train + val + test + test_new}
@@ -584,7 +588,6 @@ def main() -> None:
         epoch_rows.append(row)
         write_csv(run / "metrics_steps.csv", step_rows)
         write_csv(run / "metrics_epochs.csv", epoch_rows)
-        plot_curves(run, step_rows, epoch_rows)
         if row["val_wer_r"] < best_wer - 1e-4:
             best_wer, best_epoch, bad_epochs = row["val_wer_r"], epoch, 0
             model.save_pretrained(run / "checkpoints" / "best")
@@ -593,6 +596,10 @@ def main() -> None:
         else:
             bad_epochs += 1
             log.info(f"  no improvement ({bad_epochs}/{args.patience}), best {best_wer:.2%} @ epoch {best_epoch}")
+        try:
+            plot_curves(run, step_rows, epoch_rows)
+        except Exception as pe:
+            log.warning(f"plot_curves error (ignored): {pe}")
         if stop or bad_epochs >= args.patience:
             log.info("early stop" if not stop else "max steps reached")
             break
@@ -623,7 +630,7 @@ def main() -> None:
             s = score(test, hyps)
             final["test_by_condition"].setdefault(cname, {})[tag] = s["wer_all"]
             final["summary"][f"{tag} | test {cname}"] = s
-            log.info(f"  {tag:4s} test {cname:9s} WER {s['wer_all']:.2%} (_r {s['wer_r']:.2%}) CER {s['cer_all']:.2%}")
+            log.info(f"  {tag:4s} test {cname:9s} WER {s['wer_all']:.2%} (_r {s.get('wer_r', float('nan')):.2%}) CER {s['cer_all']:.2%}")
         hyps = transcribe(m, processor, [audio[r["audio_filepath"]] for r in test_new], device, args.eval_batch_size)
         s = score(test_new, hyps)
         final["test_newtext"][tag] = s
@@ -650,7 +657,10 @@ def main() -> None:
                             round(jiwer.wer(ref, normalize(b)), 4), round(jiwer.wer(ref, normalize(ft)), 4)])
     final["finished"] = datetime.now().isoformat(timespec="seconds")
     (run / "eval" / "summary.json").write_text(json.dumps(final, ensure_ascii=False, indent=1), encoding="utf8")
-    plot_final(run, final)
+    try:
+        plot_final(run, final)
+    except Exception as pe:
+        log.warning(f"plot_final error (ignored): {pe}")
     log.info(f"done -> {run}")
 
 

@@ -70,6 +70,7 @@ func _setup_arms() -> void:
 	for c: Node in [_viewport.get_node_or_null(^"RobotCamera"), _rear_viewport.get_node_or_null(^"RearCamera")]:
 		if c is Camera3D:
 			(c as Camera3D).cull_mask &= ~RobotArms.VISUAL_LAYER
+			RenderLayers.setup_robot_camera(c as Camera3D)
 
 
 func _setup_lidar_fan() -> void:

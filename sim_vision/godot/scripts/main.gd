@@ -206,6 +206,8 @@ func _ready() -> void:
 	if face_paste:
 		_apply_face_paste()
 	reset_positions()
+	if viewer_camera != null:
+		RenderLayers.setup_viewer_camera(viewer_camera)
 	_update_viewer_camera()
 	_setup_hospital_ambience()
 
@@ -896,8 +898,8 @@ func _tween_turn(tw: Tween, node: Node3D, yaw: float, duration: float) -> void:
 func _update_viewer_camera() -> void:
 	if viewer_camera == null or robot == null:
 		return
-	if ceiling_mesh != null:
-		ceiling_mesh.visible = (camera_mode != CameraMode.TOP_DOWN)
+	if ceiling_mesh is VisualInstance3D:
+		RenderLayers.set_viewer_visible(ceiling_mesh as VisualInstance3D, camera_mode != CameraMode.TOP_DOWN)
 	if room != null:
 		room.set_ceiling_visible(camera_mode != CameraMode.TOP_DOWN)
 	var x_center: float = 100.0 if robot.global_position.x >= 75.0 else (50.0 if robot.global_position.x >= 25.0 else 0.0)
@@ -1007,12 +1009,11 @@ func _update_wall_transparency() -> void:
 
 	for wall: MeshInstance3D in _occluding_walls:
 		if not new_occluding.has(wall) and is_instance_valid(wall):
-			wall.material_override = null
+			_hide_wall_ghost(wall)
 
-	var trans_mat: StandardMaterial3D = _get_transparent_wall_mat()
 	for wall: MeshInstance3D in new_occluding:
 		if not _occluding_walls.has(wall):
-			wall.material_override = trans_mat
+			_show_wall_ghost(wall)
 
 	_occluding_walls = new_occluding
 
@@ -1057,8 +1058,31 @@ func _update_inspection_panel() -> void:
 func _clear_wall_transparency() -> void:
 	for wall: MeshInstance3D in _occluding_walls:
 		if is_instance_valid(wall):
-			wall.material_override = null
+			_hide_wall_ghost(wall)
 	_occluding_walls.clear()
+
+
+## Tường chắn người xem: tường thật chuyển sang layer chỉ camera robot render (robot vẫn thấy tường đặc, không nhìn
+## xuyên được), thêm một bản "ma" trong suốt chỉ ViewerCamera render. Va chạm / tia depth dùng physics, không đổi.
+func _show_wall_ghost(wall: MeshInstance3D) -> void:
+	RenderLayers.set_viewer_visible(wall, false)
+	if wall.get_node_or_null(^"ViewerGhost") != null:
+		return
+	var ghost := MeshInstance3D.new()
+	ghost.name = "ViewerGhost"
+	ghost.mesh = wall.mesh
+	ghost.material_override = _get_transparent_wall_mat()
+	ghost.layers = RenderLayers.VIEWER_ONLY
+	ghost.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	wall.add_child(ghost)
+
+
+func _hide_wall_ghost(wall: MeshInstance3D) -> void:
+	RenderLayers.set_viewer_visible(wall, true)
+	var ghost: Node = wall.get_node_or_null(^"ViewerGhost")
+	if ghost != null:
+		wall.remove_child(ghost)
+		ghost.queue_free()
 
 
 ## Đặt robot và người ở vị trí ngẫu nhiên mới, robot hướng ngẫu nhiên, về SEARCH.
@@ -2279,7 +2303,7 @@ func _face_owner(face: Dictionary) -> CharacterBody3D:
 		if uv.x < 0.0:
 			continue
 		var d: float = uv.distance_to(c)
-		if d < tol and d < best_d:
+		if d < tol and d < best_d and has_line_of_sight(robot, p):   # người sau tường không phải chủ mặt
 			best_d = d
 			best = p
 	return best

@@ -17,6 +17,7 @@ const RLEnvBridgeScript = preload("res://scripts/rl_env_bridge.gd")
 const RLControllerScript = preload("res://scripts/rl_controller.gd")
 const RLPolicyClientScript = preload("res://scripts/rl_policy_client.gd")
 const InspectionPanelScript = preload("res://scripts/inspection_panel.gd")
+const AuditWatchdogScript = preload("res://scripts/audit_watchdog.gd")
 const PATIENT_ENGAGE_DIST_M: float = 1.85  # Khoảng cách tiếp cận thực tế đến vị trí bệnh nhân để bắt đầu hội thoại
 const TASK_TIMEOUT_S: float = 45.0         # = stagnation_timeout_s lúc train: không tiến triển quá lâu ➔ hủy
 const TASK_PROGRESS_M: float = 1.0         # = STAGNATION_PROGRESS_M: lại gần đích thêm 1 m ➔ đặt lại đồng hồ
@@ -28,6 +29,8 @@ const ARRIVED_WAIT_S: float = 10.0         # đứng ARRIVED mà NPC không bắ
 @export var use_rl_controller: bool = false
 var solo_patient_mode: bool = false
 var escort_only_mode: bool = false
+var audit_mode: bool = false
+var watchdog: AuditWatchdog = null
 
 var state: int = Config.RobotState.SEARCH
 var camera_mode: int = CameraMode.FOLLOW
@@ -150,6 +153,8 @@ func _ready() -> void:
 			all_intents_flag = true
 		elif arg in ["--no-face-paste", "--no_face_paste"]:
 			face_paste = false
+		elif arg in ["--audit-mode", "--audit"]:
+			audit_mode = true
 		elif arg.begins_with("--lag-prob="):
 			patient_lag_prob = clampf(arg.get_slice("=", 1).to_float(), 0.0, 1.0)
 	if use_rl_controller and not all_intents_flag:
@@ -183,6 +188,12 @@ func _ready() -> void:
 		_rng.randomize()
 	vision.setup(robot.get_camera_viewport())
 	overlay.set_viewport(robot.get_camera_viewport())
+	if audit_mode:
+		watchdog = AuditWatchdogScript.new()
+		watchdog.name = "AuditWatchdog"
+		add_child(watchdog)
+		watchdog.setup(self, robot)
+		print("[Main] AuditWatchdog initialized (Dashcam & failure recording active)")
 	_setup_rear_vision()
 	vision.detections_received.connect(_on_detections)
 	vision.connection_changed.connect(_on_connection_changed)

@@ -14,6 +14,7 @@ signal turn_completed(row: Dictionary)
 ## Phụ đề giữ thêm sau khi âm thanh hết (ẩn ngay khi robot nói xong); quá thời lượng + SPEAK_GRACE_S mà player
 ## chưa báo xong ➔ coi như xong (tránh treo).
 const SPEAK_GRACE_S: float = 2.0
+const LISTEN_TIMEOUT_S: float = 8.0
 
 @export var snr_db: float = Config.DEFAULT_SNR_DB
 @export var noise: String = "babble"
@@ -25,6 +26,7 @@ const SPEAK_GRACE_S: float = 2.0
 
 var utt_id: int = 0                 # utt_id đang chờ (tăng mỗi lượt, không reset)
 var deadline_ms: int = -1           # −1 = không chờ STT
+var listen_deadline_ms: int = -1    # −1 = không chờ NPC nói xong (Watchdog timeout tránh freeze)
 var pending_clip: String = ""
 var sent_distance_m: float = 0.0
 var waiting_tts: bool = false
@@ -76,7 +78,11 @@ func _ready() -> void:
 
 func _process(_delta: float) -> void:
 	var now: int = Time.get_ticks_msec()
-	if main.state == Config.RobotState.THINK and DialogueManager.is_timed_out(deadline_ms, now):
+	if main.state == Config.RobotState.LISTEN and DialogueManager.is_timed_out(listen_deadline_ms, now):
+		listen_deadline_ms = -1
+		push_warning("[DialogueManager] LISTEN timed out (> %s s), auto-aborting talk to prevent robot freeze" % LISTEN_TIMEOUT_S)
+		_on_talk_aborted("listen timeout")
+	elif main.state == Config.RobotState.THINK and DialogueManager.is_timed_out(deadline_ms, now):
 		_fail("timeout")
 	elif main.state == Config.RobotState.RESPOND and waiting_tts \
 			and DialogueManager.is_timed_out(tts_deadline_ms, now):
@@ -88,6 +94,7 @@ func _process(_delta: float) -> void:
 ## Đặt lại khi Main đặt lại vị trí (phím R). utt_id giữ nguyên để transcript / audio muộn của lượt cũ bị bỏ.
 func reset() -> void:
 	deadline_ms = -1
+	listen_deadline_ms = -1
 	pending_clip = ""
 	waiting_tts = false
 	tts_deadline_ms = -1
@@ -163,15 +170,18 @@ func _on_talk_started(clip_id: String) -> void:
 		used_clips = [clip_id]
 		main.overlay.set_alert("")
 		main.overlay.set_status("")
+		listen_deadline_ms = Time.get_ticks_msec() + int(LISTEN_TIMEOUT_S * 1000.0)
 		main.set_dialogue_state(Config.RobotState.LISTEN)
 
 
 func _on_talk_aborted(_clip_id: String) -> void:
+	listen_deadline_ms = -1
 	if main.state == Config.RobotState.LISTEN:
 		main.set_dialogue_state(Config.RobotState.ARRIVED)
 
 
 func _on_utterance_finished(clip_id: String) -> void:
+	listen_deadline_ms = -1
 	if main.state != Config.RobotState.LISTEN:
 		return
 	utt_id += 1

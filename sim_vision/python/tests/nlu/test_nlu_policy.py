@@ -143,7 +143,7 @@ def test_policy_refuse_repeat_adjust_answer() -> None:
         assert decide(_r(it), 0, None) == PolicyResult("adjust", responses.FIXED[it])
     assert decide(_r("nha_thuoc"), 0, None) == PolicyResult("answer", responses.build("nha_thuoc", {}))
     assert decide(_r("cam_on"), 0, None).action == "answer"
-    assert decide(_r("unknown", 0.9), 0, None) == PolicyResult("answer", responses.UNKNOWN)
+    assert decide(_r("unknown", 0.9), 0, None) == PolicyResult("clarify", policy.CLARIFY), "không hiểu ➔ nhờ nói lại"
 
 
 def test_examples_g20() -> None:

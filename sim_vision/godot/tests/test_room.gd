@@ -287,3 +287,71 @@ func test_human_in_doorway_steps_out_for_robot() -> void:
 	robot.set_command(0.7, -0.1)
 	await wait_physics_frames(200)
 	assert_gt(robot.global_position.z, -2.0, "robot qua được cửa 205 ra hành lang")
+
+
+## Robot xin đường ("Xin lỗi, cho tôi đi nhờ ạ"): người đứng chắn bước tránh dù KHÔNG bật tự né và robot đang đứng yên.
+## Trước đó họ đứng im (robot không trông vào việc người ta tự né).
+func test_make_way_on_request_even_when_pardon_off_and_robot_still() -> void:
+	var robot := (load("res://scenes/robot.tscn") as PackedScene).instantiate() as Robot
+	room.add_child(robot)
+	var pat := room.get_node(^"Furniture/Patient_03") as HospitalNpc
+	robot.global_position = Vector3(99.70, 0.0, -3.50)        # trong phòng 302 (log run_1500)
+	var p0 := Vector3(99.87, 0.0, -2.89)
+	var to := p0 - robot.global_position
+	robot.rotation.y = atan2(-to.x, -to.z)
+	pat.global_position = p0
+	pat.set_state(HospitalNpc.State.STANDING)
+	pat._state_timer = 100.0
+	pat._anchor_pos = p0
+	pat.pardon_enabled = false
+	pat.setup_robot(robot)
+	robot.set_command(0.0, 0.0)
+	await wait_physics_frames(60)
+	assert_almost_eq(Human.flat_distance(pat.global_position, p0), 0.0, 0.05, "không ai xin thì đứng yên")
+	assert_true(pat.make_way(robot), "được xin đường ➔ nhận lời")
+	await wait_physics_frames(150)
+	var local: Vector3 = robot.to_local(pat.global_position)
+	assert_gt(absf(local.x), 0.6, "đã bước khỏi lối đi trước mặt robot")
+	robot.set_command(0.6, 0.0)
+	await wait_physics_frames(200)
+	assert_gt(robot.global_position.z, -2.0, "robot ra được hành lang")
+
+
+func test_seated_or_escorted_person_does_not_make_way() -> void:
+	var robot := (load("res://scenes/robot.tscn") as PackedScene).instantiate() as Robot
+	room.add_child(robot)
+	var pat := room.get_node(^"Furniture/Patient_03") as HospitalNpc
+	pat.set_state(HospitalNpc.State.SITTING)
+	assert_false(pat.make_way(robot))
+	pat.set_state(HospitalNpc.State.ESCORTED)
+	assert_false(pat.make_way(robot))
+
+
+## Log run_1932 (t=582–775 s): bệnh nhân tụt lại ở góc cạnh (2.0, 2.3), robot đã đi xa 3.4 m. Điểm vết duy nhất đi
+## thẳng tới được cách 0.23 m (< ngưỡng bước lại) ➔ bệnh nhân "đã tới", đứng im mãi, bộ đo kẹt không chạy.
+func test_lagging_patient_at_corner_keeps_following_trail() -> void:
+	var robot := (load("res://scenes/robot.tscn") as PackedScene).instantiate() as Robot
+	room.add_child(robot)
+	robot.global_position = Vector3(4.27, 0.0, -0.19)
+	robot.rotation.y = -PI * 0.5
+	var pat := room.get_node(^"Furniture/Patient_03") as HospitalNpc
+	pat.setup_robot(robot)
+	pat.set_state(HospitalNpc.State.STANDING)
+	pat.global_position = Vector3(2.02, 0.0, 2.32)
+	pat.set_state(HospitalNpc.State.ESCORTED)
+	RLEnvBridge.reset_escort_follow()
+	var trail: Array[Vector3] = []
+	var pts: Array[Vector3] = [Vector3(1.96, 0, 2.17), Vector3(1.95, 0, 2.10), Vector3(1.89, 0, 1.66),
+			Vector3(1.86, 0, 0.72), Vector3(2.4, 0, 0.2), Vector3(2.88, 0, -0.09), Vector3(3.75, 0, -0.16), robot.global_position]
+	for i: int in pts.size() - 1:
+		var n: int = maxi(1, int(ceil(Human.flat_distance(pts[i], pts[i + 1]) / RLEnvBridge.TRAIL_SPACING_M)))
+		for k: int in n:
+			trail.append(pts[i].lerp(pts[i + 1], float(k) / n))
+	await wait_physics_frames(2)
+	var gap0: float = Human.flat_distance(pat.global_position, robot.global_position)
+	for i: int in 100:
+		RLEnvBridge.step_escorted_patient(pat, robot.global_position, 0.1, trail, robot.rotation.y)
+		await wait_physics_frames(1)
+	assert_lt(Human.flat_distance(pat.global_position, robot.global_position), gap0 - 1.5,
+			"bệnh nhân đi tiếp theo vết robot, không đứng im ở góc")
+	RLEnvBridge.reset_escort_follow()

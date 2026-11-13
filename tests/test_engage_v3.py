@@ -247,3 +247,125 @@ def test_voice_memory_follows_robot_rotation_after_voice_stops() -> None:
     o = env._get_obs()
     assert (o[32], o[33], o[34]) == (0.0, 0.0, 1.0), "quên sau VOICE_MEMORY_S"
     assert (o[22], o[23]) == (0.0, 0.0)
+
+
+# ---------- vòng 9: người chắn lối, xin đường, trí nhớ vật cản, tín hiệu gỡ kẹt ----------
+
+def _full(seed: int = 5, dr: bool = False) -> HospitalEngageV3Env:
+    env = HospitalEngageV3Env(curriculum_stage=1, shift_duration_s=40.0, dt=0.2, seed=seed, env_mode="full",
+                              stagnation_timeout_s=90.0, stagnation_penalty=0.0, escort_only=True,
+                              domain_randomization=dr)
+    env.reset(seed=seed)
+    return env
+
+
+def test_exit_drill_places_person_between_robot_and_door() -> None:
+    env = _full()
+    assert env.setup_exit_drill()
+    p = env.patients[0]
+    assert p["served"] and not p["seated"] and env.active_patient_idx is None
+    assert abs(env.robot_z) > 2.0, "robot ở trong phòng"
+    assert abs(p["z"]) < abs(env.robot_z) + 0.6, "người đứng về phía cửa"
+    assert env.last_obs_v2.shape == (OBS_DIM_V3,)
+
+
+def test_delivered_person_blocks_and_is_seen_in_depth() -> None:
+    env = _full()
+    p = env.patients[0]
+    env.robot_x, env.robot_z, env.robot_yaw = 100.0, -4.0, math.pi     # nhìn +Z (ra cửa phòng 302)
+    p.update(x=100.0, z=-3.4, served=True, seated=False)
+    env.returning_to_lobby = True
+    o = env._get_obs()
+    assert o[2] > 0.8, "người đứng ngay trước mặt hiện trong depth (không bị che)"
+    assert o[42] == 1.0 and o[44] > 0.5, "và có box người to ở giữa khung"
+    z0 = env.robot_z
+    for _ in range(10):
+        _, _, _, info = env.step(np.array([1.0, 0.0, 0.0, -1.0], dtype=np.float32))
+    assert env.robot_z < z0 + 0.25, "không đi xuyên qua người"
+    assert info["v3"]["push_steps"] > 0, "đẩy vào người bị tính (phạt)"
+    assert env.last_obs_v2[41] != 0.0, "kẹt ➔ có tín hiệu gỡ kẹt"
+
+
+def test_excuse_me_makes_blocking_person_step_aside() -> None:
+    env = _full()
+    p = env.patients[0]
+    env.robot_x, env.robot_z, env.robot_yaw = 100.0, -4.0, math.pi
+    p.update(x=100.0, z=-3.2, served=True, seated=False)
+    env.returning_to_lobby = True                                       # đang bận quay về: "hỏi" = xin đường
+    env.since_ask_s = 99.0
+    _, r, _, info = env.step(np.array([-1.0, 0.0, 0.0, 1.0], dtype=np.float32))
+    assert info["v3"]["excuse"] == 1 and info["v3"]["asks_empty"] == 0
+    for _ in range(25):
+        env.step(np.array([-1.0, 0.0, 0.0, -1.0], dtype=np.float32))
+    assert abs(p["x"] - 100.0) > 0.7, "người được xin đã bước sang bên"
+    for _ in range(40):
+        env.step(np.array([0.6, 0.0, 0.0, -1.0], dtype=np.float32))
+    assert env.robot_z > -2.6, "robot đi tiếp ra cửa được"
+
+
+def test_ask_when_busy_and_nobody_ahead_is_wasted() -> None:
+    env = _full()
+    for q in env.patients:
+        q["x"] += 30.0
+    env.returning_to_lobby = True
+    env.since_ask_s = 99.0
+    _, _, _, info = env.step(np.array([-1.0, 0.0, 0.0, 1.0], dtype=np.float32))
+    assert info["v3"]["asks_empty"] == 1 and info["v3"]["excuse"] == 0
+
+
+def test_obstacle_memory_keeps_person_after_turning_away() -> None:
+    def right_memory(with_person: bool) -> float:
+        env = _full()
+        p = env.patients[0]
+        env.robot_x, env.robot_z, env.robot_yaw = 100.0, -5.0, math.pi
+        p.update(x=100.0 if with_person else 130.0, z=-4.1, served=True, seated=False)
+        env.returning_to_lobby = True
+        env.mem.reset()
+        for _ in range(8):                                              # quay trái ~110°: người ra khỏi khung, ở bên phải
+            env.step(np.array([-1.0, 1.0, 0.0, -1.0], dtype=np.float32))
+        ang, _ = env._rel_angle(100.0, -4.1)
+        assert abs(ang) > math.radians(50.0), "người đã ra ngoài khung nhìn"
+        return float(env.last_obs_v2[38:41].max())
+
+    assert right_memory(True) > right_memory(False) + 0.3, "người vừa ra khỏi khung vẫn còn trong trí nhớ phía bên phải"
+
+
+def test_dialogue_goal_points_at_speaker() -> None:
+    env = make()
+    p = env.patients[0]
+    p.update(needs_help=True)
+    env.robot_x, env.robot_z, env.robot_yaw = p["x"] - 1.2, p["z"], 0.0   # người ở bên phải robot
+    env._start_dialogue(0)
+    o = env._get_obs()
+    assert o[30] == 1.0 and o[13] == 0.0
+    assert math.atan2(float(o[14]), float(o[15])) == pytest.approx(-math.pi / 2, abs=0.3), "đích = hướng giọng nói (âm = phải)"
+
+
+def test_follower_behind_is_tracked_by_rear_camera() -> None:
+    env = _full()
+    p = env.patients[0]
+    env.robot_x, env.robot_z, env.robot_yaw = 0.0, 0.0, -math.pi / 2     # đi về +X
+    p.update(x=-1.2, z=0.0, seated=False, follows_behind=True)
+    env.active_patient_idx, env.task_phase, env.goal_key = 0, TaskPhase.GUIDE_ESCORT, "112"
+    env.patient_x, env.patient_z = p["x"], p["z"]
+    o = env._get_obs()
+    assert o[5] == 0.0, "camera trước không thấy người đi sau"
+    assert o[19] == 1.0 and o[18] == pytest.approx(1.2 / 5.0, abs=0.08), "camera sau thấy ➔ tether vẫn biết họ ở gần"
+    for _ in range(30):
+        env.step(np.array([1.0, 0.0, 0.0, -1.0], dtype=np.float32))
+    d = math.hypot(p["x"] - env.robot_x, p["z"] - env.robot_z)
+    assert 0.6 < d < 2.0 and p["x"] < env.robot_x, "người vẫn theo sau lưng robot"
+
+
+def test_recovery_cue_keeps_side_and_counts_down() -> None:
+    from src.training.local_memory import RECOVERY_S, RecoveryCue
+    c = RecoveryCue()
+    assert c.update(0.5, 0.0, 0.2, True, 0.9, 0.1, 0.0) == 0.0
+    v = c.update(0.5, 0.0, 0.2, True, 0.9, 0.1, 0.0)
+    assert v == pytest.approx(-1.0), "kẹt 0.4 s, bên trái bị chắn ➔ quay phải"
+    v2 = c.update(0.0, 0.0, 0.2, True, 0.1, 0.9, 1.0)
+    assert -1.0 < v2 < 0.0, "giữ nguyên phía quay dù quan sát đổi, đếm lùi"
+    for _ in range(int(RECOVERY_S / 0.2) + 1):
+        v2 = c.update(0.0, 0.0, 0.2, True, 0.0, 0.0, 0.0)
+    assert v2 == 0.0
+    assert c.update(0.5, 0.0, 0.2, False, 0.9, 0.1, 0.0) == 0.0 and c.stall_s == 0.0, "đang nói chuyện ➔ không tính kẹt"

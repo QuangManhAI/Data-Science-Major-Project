@@ -28,6 +28,7 @@ var robot_ref: Node3D = null
 
 var _wp_index: int = 0
 var _is_pardoning: bool = false
+var _make_way_left_s: float = 0.0
 var _pardon_target: Vector3 = Vector3.ZERO
 var _anchor_pos: Vector3 = Vector3.ZERO
 var _escorted: bool = false  # đang được robot dẫn đường: main điều khiển bước đi, bỏ qua waypoint / pardon
@@ -55,6 +56,20 @@ func setup_robot(robot_node: Node3D) -> void:
 
 func is_pardoning() -> bool:
 	return _is_pardoning
+
+
+## Robot xin đường (xem HospitalNpc.make_way).
+func make_way(robot: Node3D) -> bool:
+	if robot == null or _escorted:
+		return false
+	var target: Variant = HospitalNpc.pick_clear_pardon_target(self, global_position, robot)
+	if target == null:
+		return false
+	_anchor_pos = global_position
+	_is_pardoning = true
+	_pardon_target = target
+	_make_way_left_s = HospitalNpc.MAKE_WAY_S
+	return true
 
 
 ## Thay bộ texture (body/head/opacity) của `$Human` sang biến thể bệnh nhân cao tuổi bất kỳ.
@@ -138,9 +153,13 @@ func _physics_process(delta: float) -> void:
 			if target != null:
 				_is_pardoning = true
 				_pardon_target = target
-		elif _is_pardoning and dist_robot >= PARDON_CLEAR_DIST:
+		elif _is_pardoning and _make_way_left_s <= 0.0 and dist_robot >= PARDON_CLEAR_DIST:
 			_is_pardoning = false
 
+	if _make_way_left_s > 0.0:
+		_make_way_left_s -= delta
+		if _make_way_left_s <= 0.0:
+			_is_pardoning = false
 	if _is_pardoning:
 		if Human.flat_distance(global_position, _pardon_target) > ARRIVE_TOL:
 			var p_step: Vector3 = Human.step_towards(global_position, _pardon_target, WALK_SPEED * delta)

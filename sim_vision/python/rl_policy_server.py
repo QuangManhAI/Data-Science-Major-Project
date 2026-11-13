@@ -55,9 +55,14 @@ from src.training.hospital_env_pure_vision_v2 import (  # noqa: E402
     remap_v1_obs,
     tether_features,
 )
+from src.training.hospital_env import ROBOT_RADIUS_M  # noqa: E402
 from src.training.hospital_env_engage_v3 import DOA_HOLDS_MEMORY, OBS_DIM_V3, VOICE_MEMORY_S  # noqa: E402
+from src.training.local_memory import ObstacleMemory, RecoveryCue, flank_proximity  # noqa: E402
 
-V3_DIMS = (31, 32, OBS_DIM_V3)   # 31 = trước "mặt đã gặp"; 32 = trước "nhớ hướng giọng nói"
+OBS_DIM_V3_R8 = 35               # tới vòng 8: chưa có trí nhớ vật cản / kẹt / box người
+# 31 = trước "mặt đã gặp"; 32 = trước "nhớ hướng giọng nói"; 35 = vòng 8; OBS_DIM_V3 (45) = vòng 9
+V3_DIMS = (31, 32, OBS_DIM_V3_R8, OBS_DIM_V3)
+STEP_DT_S = 0.2
 from src.training.hospital_env_vision import (  # noqa: E402
     PUBLIC_PATROL_WAYPOINTS,
     HospitalVisualShiftEnv,
@@ -91,12 +96,21 @@ class PolicyRunner:
         self.last_sectors: list[float] = [0.0, 0.0, 0.0, 0.0, 0.0]
         self.tether_last_d: float = 1.0
         self.tether_unseen_s: float = 0.0
+        # Vòng 9 (45-D): cùng lớp với môi trường train ➔ quan sát không lệch nhau
+        self.round9: bool = self.obs_dim >= OBS_DIM_V3
+        self.mem = ObstacleMemory(DEPTH_HFOV_RAD, DEPTH_MAX_RANGE_M, ROBOT_RADIUS_M)
+        self.stall = RecoveryCue()
+        self.last_cmd_v: float = 0.0
 
     def _to_v2(self, obs29: np.ndarray, msg: dict) -> np.ndarray:
         """29-D pipeline (patient / phase / goal / kinematics) -> 21-D V2 obs with camera depth + tether."""
         sectors = depth_rays_to_sectors(depth_from_msg(msg))
         self.last_sectors = sectors.tolist()
-        if self.env.task_phase == TaskPhase.GUIDE_ESCORT:
+        id_tether = (msg.get("v3") or {}).get("tether") if self.round9 else None
+        if self.env.task_phase == TaskPhase.GUIDE_ESCORT and id_tether is not None and len(id_tether) >= 3:
+            # Người đang dẫn theo ReID ở camera trước HOẶC sau (bệnh nhân thường đi sau lưng robot): [m, thấy, số giây mất dấu]
+            tether = tether_features(float(np.clip(float(id_tether[0]), 0.5, 5.0)), float(id_tether[1]) > 0.5, float(id_tether[2]))
+        elif self.env.task_phase == TaskPhase.GUIDE_ESCORT:
             seen = bool(obs29[5] > 0.5)
             if seen:
                 self.tether_last_d = float(np.clip(1.20 / max(float(obs29[7]), 0.05), 0.5, 5.0))
@@ -191,6 +205,10 @@ class PolicyRunner:
                 has_pat = True
                 obs[5] = 1.0
                 obs[6] = float(patient_box.get("cx", (float(patient_box.get("x1", 0.0)) + float(patient_box.get("x2", 0.0))) / 2.0 - 0.5))
+                if self.round9:
+                    # Lúc train tâm box theo camera_vision_model là -1..1 (mép ảnh = ±1); box YOLO ở đây là -0.5..0.5
+                    # ➔ trước vòng 9 policy thấy bệnh nhân lệch chỉ bằng nửa thực tế.
+                    obs[6] = float(np.clip(2.0 * obs[6], -1.0, 1.0))
                 obs[7] = float(patient_box.get("h", float(patient_box.get("y2", 0.0)) - float(patient_box.get("y1", 0.0))))
                 obs[8] = float(patient_box.get("conf", 0.9))
 
@@ -347,11 +365,32 @@ class PolicyRunner:
                     obs[26] = math.sin(angle_goal)
                     obs[27] = math.cos(angle_goal)
 
+        returning = self.round9 and phase == TaskPhase.CALL_STAFF
+        if returning:
+            # Đi một mình tới đích (quay về thang máy / đi gọi nhân viên): lúc train là pha SEARCH + "đang quay về", không
+            # nhận bệnh nhân mới. Pha CALL_STAFF chưa từng có lúc train escort-only.
+            obs[5:9] = 0.0
+            obs[13:17] = 0.0
+            obs[13] = 1.0
         if self.obs_dim in (OBS_DIM_V2, *V3_DIMS):
             obs = self._to_v2(obs, msg)
         if self.obs_dim in V3_DIMS:
-            obs = np.concatenate([obs, v3_features(msg.get("v3", {}), hold_doa=DOA_HOLDS_MEMORY and self.obs_dim >= 35)[: self.obs_dim - OBS_DIM_V2]]).astype(np.float32)
+            v3 = msg.get("v3") or {}
+            feats = v3_features(v3, hold_doa=DOA_HOLDS_MEMORY and self.obs_dim >= 35)
+            obs = np.concatenate([obs, feats[: min(self.obs_dim, OBS_DIM_V3_R8) - OBS_DIM_V2]]).astype(np.float32)
+        if self.round9:
+            v3 = msg.get("v3") or {}
+            self.mem.update(x, z, yaw, depth_from_msg(msg), self.n_steps * STEP_DT_S)
+            if in_dialogue and obs[34] < 1.0:
+                obs[13], obs[14], obs[15] = 0.0, -obs[32], obs[33]   # đang nói chuyện: "đích" là hướng người nói
+            mem = self.mem.sectors(x, z, yaw)
+            # Tín hiệu gỡ kẹt: lệnh đi của bước trước mà robot không nhúc nhích (bị giữ đứng yên lúc nói chuyện thì không tính)
+            left, right = flank_proximity(obs[0:5], mem)
+            cue = self.stall.update(self.last_cmd_v, v, STEP_DT_S, not (in_dialogue or bool(v3.get("held"))), left, right,
+                                    math.atan2(float(obs[14]), float(obs[15])))
+            obs = np.concatenate([obs, mem, [cue], largest_person_box(dets)]).astype(np.float32)
 
+        self.last_obs = obs                    # test so khớp với môi trường train (tests/test_policy_v3.py)
         # Forward through Actor network
         with torch.no_grad():
             action, _, _, _ = self.agent.get_action_and_value(
@@ -366,6 +405,7 @@ class PolicyRunner:
         max_v = ESCORT_WALK_SPEED if env.task_phase == TaskPhase.GUIDE_ESCORT else V_MAX
         v_out = float(np.clip((a_v + 1.0) * 0.5 * max_v, 0.0, max_v))
         omega_out = float(np.clip(a_omega * OMEGA_MAX, -OMEGA_MAX, OMEGA_MAX))
+        self.last_cmd_v = v_out
         self.n_steps += 1
 
         if self.trace and (env.task_phase in (TaskPhase.GUIDE_ESCORT, TaskPhase.CALL_STAFF) or self.n_steps % 5 == 0):
@@ -425,6 +465,18 @@ def v3_features(v3: dict, hold_doa: bool = DOA_HOLDS_MEMORY) -> np.ndarray:
         math.sin(mem_ang) if mem_ok else 0.0, math.cos(mem_ang) if mem_ok else 0.0,
         float(mem[2]) / VOICE_MEMORY_S if mem_ok else 1.0,
     ], dtype=np.float32)
+
+
+def largest_person_box(dets: list) -> np.ndarray:
+    """[thấy, cx (-0.5..0.5), h] của box người to nhất ở camera trước (YOLO lớp patient / doctor), bất kể là ai."""
+    best = (0.0, 0.0, 0.0)
+    for d in dets:
+        if int(d.get("class_id", -1)) not in (0, 1) and str(d.get("class_name", "")) not in ("patient", "doctor"):
+            continue
+        h = float(d.get("y2", 0.0)) - float(d.get("y1", 0.0))
+        if h > best[2]:
+            best = (1.0, (float(d.get("x1", 0.0)) + float(d.get("x2", 0.0))) * 0.5 - 0.5, h)
+    return np.asarray(best, dtype=np.float32)
 
 
 def depth_from_msg(msg: dict) -> np.ndarray:

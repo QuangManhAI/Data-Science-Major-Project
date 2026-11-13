@@ -31,6 +31,10 @@ const ESCORT_INTENTS: Array[String] = ["hoi_phong", "hoi_khoa", "dan_duong"]
 var state: String = IDLE
 var cooldown_left: float = 0.0
 var turns_done: int = 0
+## Lượt nói do kịch bản gọi (say_intent: trả lời "có dẫn tiếp không", cảm ơn): người nói đứng yên chỗ họ đang đứng,
+## robot đứng chờ ➔ không hủy vì "robot ở xa". Trước đây bệnh nhân tụt lại 3.4 m trả lời "đi tiếp" thì lượt bị hủy
+## ngay (xa > TALK_TRIGGER_DIST + LEAVE_MARGIN_M), robot không nghe được, chờ câu trả lời mãi (log run_1932).
+var scripted_turn: bool = false
 var current_clip: String = ""
 var robot: Node3D = null
 ## Hàm không tham số trả trạng thái robot (Config.RobotState); main/dialogue_manager gán.
@@ -106,7 +110,7 @@ func _process(delta: float) -> void:
 	if state == IDLE and next == NOTICE:
 		if has_line_of_sight_to_robot():
 			_notice()
-	elif state == TALK and next == IDLE:
+	elif state == TALK and next == IDLE and not scripted_turn:
 		_abort_talk()
 
 
@@ -222,6 +226,7 @@ func reset() -> void:
 	if state != IDLE:
 		_resume_walking()
 	state = IDLE
+	scripted_turn = false
 	cooldown_left = 0.0
 	turns_done = 0
 	current_clip = ""
@@ -282,6 +287,7 @@ func say_intent(intent: String) -> String:
 		human.set("walks", false)
 	current_clip = id
 	state = TALK
+	scripted_turn = true
 	talk_started.emit(id)   # robot nghe ngay; người bệnh quay lại từ từ rồi mới nói
 	_turn_then_play(stream)
 	return id
@@ -409,6 +415,7 @@ func _start_talk() -> void:
 	if _used_intents.size() >= _distinct_intents():
 		_used_intents.clear()
 	state = TALK
+	scripted_turn = false
 	var anim: AnimationPlayer = human.get_node_or_null(^"AnimationPlayer") as AnimationPlayer if human != null else null
 	if anim == null and human != null:
 		var model_node: Node3D = human.get_node_or_null(^"Model") as Node3D
@@ -423,6 +430,7 @@ func _start_talk() -> void:
 
 
 func _abort_talk() -> void:
+	scripted_turn = false
 	player.stop()
 	_turning = false
 	state = IDLE

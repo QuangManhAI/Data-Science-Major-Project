@@ -19,6 +19,7 @@ const REMIND_EVERY_S: float = 8.0
 const ASK_AFTER_S: float = 20.0           # đứng chờ lâu vậy mà vẫn chưa theo kịp ➔ hỏi
 const REST_WAIT_S: float = 20.0           # bệnh nhân xin dừng nghỉ ➔ chờ rồi hỏi lại
 const REST_MIN_S: float = 4.0             # xin nghỉ ➔ đứng chờ ít nhất chừng này rồi mới mời đi tiếp (kể cả đang ở gần)
+const ANSWER_WAIT_S: float = 15.0         # hỏi rồi mà quá lâu không có câu trả lời ➔ "no_answer" (coi như không nghe rõ)
 const MAX_ASKS: int = 3                   # tổng số lần hỏi trong một ca; hết ➔ kết thúc
 const CONTINUE_INTENTS: Array[String] = ["tiep_tuc", "dan_duong", "dieu_chinh_toc_do"]
 const REST_INTENTS: Array[String] = ["dung_lai"]
@@ -52,7 +53,7 @@ func hold_robot() -> bool:
 	return state in [State.FAR, State.ASK, State.REST]
 
 
-## Cập nhật; trả danh sách sự kiện: "remind", "remind_again", "resumed", "ask_continue", "ask_again".
+## Cập nhật; trả danh sách sự kiện: "remind", "remind_again", "resumed", "ask_continue", "no_answer", "give_up".
 func step(dist_m: float, seen: bool, dt: float) -> Array[String]:
 	var ev: Array[String] = []
 	# Mất dấu chỉ tính khi đang xa: ở gần mà tia nhìn bị che (góc tường, người khác) vẫn là đang theo kịp.
@@ -88,7 +89,12 @@ func step(dist_m: float, seen: bool, dt: float) -> Array[String]:
 			elif wait_s >= REST_WAIT_S:
 				ev.append(_ask())
 		State.ASK:
-			pass                        # chờ answer()
+			# Chờ answer(). Không có câu trả lời (lượt nói hỏng, người không đáp) thì không được chờ mãi: báo
+			# "no_answer" ➔ Main xử như câu không rõ (hỏi lại, lần hai thì kết thúc ca). Log run_1932: chờ 190 s.
+			wait_s += dt
+			if wait_s >= ANSWER_WAIT_S:
+				wait_s = 0.0
+				ev.append("no_answer")
 	return ev
 
 
@@ -112,6 +118,7 @@ func answer(intent: String) -> String:
 		state = State.ENDED
 		return "end"
 	asks += 1
+	wait_s = 0.0
 	return "ask_again"
 
 
@@ -121,6 +128,7 @@ func _ask() -> String:
 		return "give_up"
 	asks += 1
 	state = State.ASK
+	wait_s = 0.0
 	return "ask_continue"
 
 

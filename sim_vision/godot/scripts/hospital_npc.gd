@@ -22,6 +22,7 @@ const PARDON_CLEARANCE_M: float = 0.35    # khoảng trống cần có sau đi�
 const PARDON_MAX_S: float = 4.0           # né quá 4 s (vd. lỡ đứng chắn cửa robot cần qua) ➔ đi tiếp lộ trình...
 const PARDON_COOLDOWN_S: float = 3.0      # ...và 3 s sau mới được né lại
 const PARDON_DOORWAY_KEEP_CLEAR_M: float = 1.2  # điểm né không chắn cửa (đường robot có thể rẽ vào cửa)
+const MAKE_WAY_S: float = 6.0             # được robot xin đường: đứng tránh chừng này rồi mới đi tiếp việc của mình
 const PERSONAL_SPACE_M: float = 0.9       # không bước lại gần tâm robot hơn 0.9 m; đứng chờ...
 const BLOCKED_TURN_S: float = 2.0         # ...chờ quá 2 s khi đi tuần ➔ quay đầu về điểm tuần còn lại
 
@@ -60,6 +61,7 @@ var _is_pardoning: bool = false
 var _pardon_target: Vector3 = Vector3.ZERO
 var _pardon_elapsed_s: float = 0.0
 var _pardon_cooldown_s: float = 0.0
+var _make_way_left_s: float = 0.0
 var _blocked_s: float = 0.0
 var _state_timer: float = 0.0
 var _last_pos: Vector3 = Vector3.ZERO
@@ -161,6 +163,22 @@ func setup_robot(robot_node: Node3D, state_fn: Callable = Callable()) -> void:
 
 func is_pardoning() -> bool:
 	return _is_pardoning
+
+
+## Robot nói "Xin lỗi, cho tôi đi nhờ ạ" với người này ➔ bước sang bên (đang đứng trong ô cửa thì bước hẳn ra khỏi cửa),
+## kể cả khi `pardon_enabled` tắt và robot đang đứng yên: robot chủ động xin đường chứ không trông vào việc người ta tự né.
+## Trả false nếu không nhường được (đang ngồi / đang được dẫn / không còn chỗ).
+func make_way(robot: Node3D) -> bool:
+	if robot == null or current_state in [State.SITTING, State.ESCORTED]:
+		return false
+	var target: Variant = HospitalNpc.pick_clear_pardon_target(self, global_position, robot)
+	if target == null:
+		return false
+	_is_pardoning = true
+	_pardon_target = target
+	_pardon_elapsed_s = 0.0
+	_make_way_left_s = MAKE_WAY_S
+	return true
 
 
 func set_state(new_state: State) -> void:
@@ -309,12 +327,18 @@ func _physics_process(delta: float) -> void:
 				_is_pardoning = true
 				_pardon_target = target
 				_pardon_elapsed_s = 0.0
+		elif _is_pardoning and _make_way_left_s > 0.0:
+			pass                                # đang nhường theo lời robot xin: giữ tới hết MAKE_WAY_S
 		elif _is_pardoning and dist_robot >= PARDON_CLEAR_DIST:
 			_is_pardoning = false
 		elif _is_pardoning and _pardon_elapsed_s >= PARDON_MAX_S:
 			_is_pardoning = false
 			_pardon_cooldown_s = PARDON_COOLDOWN_S
 
+	if _make_way_left_s > 0.0:
+		_make_way_left_s -= delta
+		if _make_way_left_s <= 0.0:
+			_is_pardoning = false
 	if _is_pardoning:
 		var d_target: float = Human.flat_distance(global_position, _pardon_target)
 		if d_target > ARRIVE_TOL:

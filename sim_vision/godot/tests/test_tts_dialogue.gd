@@ -332,3 +332,55 @@ func test_guide_text() -> void:
 	assert_eq(ViewOverlay.guide_text({"room": "205"}), "Đang dẫn đến: phòng 205")
 	assert_eq(ViewOverlay.guide_text({}), "")
 	assert_eq(ViewOverlay.tts_connection_text(false), "TTS: mất kết nối")
+
+
+func _with_bridge(main: Main) -> void:
+	var b = load("res://scripts/rl_env_bridge.gd").new()
+	b.name = "RLEnvBridge"
+	main.add_child(b)
+	b.setup(main.robot, main.room)
+	main._rl_bridge = b
+	main.escort_only_mode = true
+	main.set_physics_process(false)   # không có policy server trong test
+
+
+func test_escort_only_clarify_asks_again_instead_of_guiding() -> void:
+	var p: Array = _main()
+	var main: Main = p[0]
+	var dm: DialogueManager = p[1]
+	_with_bridge(main)
+	dm.turn_completed.connect(main._on_dialogue_turn_completed)
+	_heard(main, dm, "A_07_r")
+	dm._on_transcript(_transcript(dm.utt_id, "A_07_r", "clarify", "Dạ, anh chị nói lại giúp tôi được không ạ?"))
+	dm._on_tts_audio(TtsClient.parse_audio(_audio_json(dm.utt_id, 0.1)))
+	assert_eq(main._rl_bridge.task_phase, RLEnvBridge.TaskPhase.SEARCH_PATIENT, "chưa nghe rõ thì chưa dẫn đi đâu")
+	assert_null(main.active_escorted_patient)
+	await wait_for_signal(dm.voice.finished_speaking, 2.0)
+	assert_eq(main.state, S.LISTEN, "escort-only cũng nhờ người bệnh nói lại")
+	assert_eq(dm.npc.current_clip, "A_07_n")
+
+
+func test_escort_only_clarify_without_other_take_calls_staff() -> void:
+	var p: Array = _main()
+	var main: Main = p[0]
+	var dm: DialogueManager = p[1]
+	_with_bridge(main)
+	dm.turn_completed.connect(main._on_dialogue_turn_completed)
+	dm.clarify_gave_up.connect(main._on_clarify_gave_up)
+	watch_signals(dm)
+	_heard(main, dm, "A_25_r")
+	dm._on_transcript(_transcript(dm.utt_id, "A_25_r", "clarify", "Dạ, anh chị nói lại giúp tôi được không ạ?"))
+	dm._on_tts_audio(TtsClient.parse_audio(_audio_json(dm.utt_id, 0.1)))
+	await wait_for_signal(dm.voice.finished_speaking, 2.0)
+	await wait_process_frames(2)
+	assert_signal_emitted(dm, "clarify_gave_up")
+	assert_eq(main._rl_bridge.task_phase, RLEnvBridge.TaskPhase.CALL_STAFF, "không phải phòng ngẫu nhiên")
+
+
+func test_escort_only_answer_goes_to_reception_not_random_room() -> void:
+	var p: Array = _main()
+	var main: Main = p[0]
+	_with_bridge(main)
+	main._on_dialogue_turn_completed({"action": "answer", "target": "", "floor": 1})
+	assert_eq(main._rl_bridge.task_phase, RLEnvBridge.TaskPhase.GUIDE_ESCORT)
+	assert_eq(main._rl_bridge.final_target_key, Main.ESCORT_FALLBACK_TARGET)

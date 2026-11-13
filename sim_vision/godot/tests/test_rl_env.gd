@@ -148,3 +148,44 @@ func test_escorted_patient_does_not_wobble_with_robot_yaw() -> void:
 	assert_lt(hi - lo, 0.25, "lateral sway peak-to-peak %.2f m" % (hi - lo))
 	var gap: float = Human.flat_distance(human.global_position, robot_pos)
 	assert_between(gap, 0.6, 2.0, "patient keeps up near the companion spot")
+
+
+## Robot dừng lại quay tại chỗ 180° (quay lại nhắc bệnh nhân): bệnh nhân không đi vòng quanh robot theo hướng thân.
+func test_escorted_patient_does_not_circle_when_robot_turns_in_place() -> void:
+	var human := HumanScene.instantiate() as Human
+	add_child_autofree(human)
+	RLEnvBridge.reset_escort_follow()
+	var trail: Array[Vector3] = []
+	var dt: float = 1.0 / float(Engine.physics_ticks_per_second)
+	var robot_pos := Vector3.ZERO
+	human.global_position = Vector3(0.45, 0.0, -1.2)
+	for i: int in int(4.0 / dt):                      # đi thẳng −Z 4 s
+		robot_pos.z -= 0.52 * dt
+		RLEnvBridge.step_escorted_patient(human, robot_pos, dt, trail, 0.0)
+	for i: int in int(2.0 / dt):                      # dừng 2 s: bệnh nhân bước nốt tới chỗ đứng rồi đứng yên
+		RLEnvBridge.step_escorted_patient(human, robot_pos, dt, trail, 0.0)
+	var before: Vector3 = human.global_position
+	var path_len: float = 0.0
+	var last: Vector3 = before
+	for i: int in int(3.0 / dt):                      # đứng yên, quay 180° trong 3 s
+		var yaw: float = PI * minf(1.0, i * dt / 2.0)
+		RLEnvBridge.step_escorted_patient(human, robot_pos, dt, trail, yaw)
+		path_len += Human.flat_distance(last, human.global_position)
+		last = human.global_position
+	assert_lt(path_len, 0.4, "bệnh nhân đi %.2f m khi robot chỉ quay tại chỗ" % path_len)
+
+
+## Robot quay tại chỗ, bệnh nhân đứng ngay trước mũi robot: bệnh nhân bước sang bên nhường lối (không kẹt cứng).
+func test_escorted_patient_steps_aside_when_blocking_robot() -> void:
+	var human := HumanScene.instantiate() as Human
+	add_child_autofree(human)
+	RLEnvBridge.reset_escort_follow()
+	var trail: Array[Vector3] = [Vector3(0, 0, 1.0), Vector3(0, 0, 0.5), Vector3.ZERO]   # đã đi về −Z
+	var dt: float = 1.0 / float(Engine.physics_ticks_per_second)
+	var robot_pos := Vector3.ZERO
+	human.global_position = Vector3(0.05, 0.0, -0.55)   # ngay trước mũi robot (robot nhìn −Z)
+	for i: int in int(3.0 / dt):
+		RLEnvBridge.step_escorted_patient(human, robot_pos, dt, trail, 0.0)
+	var rel: Vector3 = human.global_position - robot_pos
+	var blocking: bool = -rel.z > 0.0 and -rel.z < RLEnvBridge.YIELD_AHEAD_M and absf(rel.x) < RLEnvBridge.YIELD_HALF_W_M
+	assert_false(blocking, "bệnh nhân đã ra khỏi lối trước robot (trước %.2f m, ngang %.2f m)" % [-rel.z, rel.x])

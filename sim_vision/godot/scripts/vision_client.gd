@@ -34,6 +34,10 @@ var _capture_accum: float = 0.0
 var _next_id: int = 0
 var _last_id: int = -1
 var _sent_at: Dictionary = {}  # frame_id ➔ thời điểm gửi (ms)
+var _sent_img: Dictionary = {}  # frame_id ➔ ảnh đã gửi (cắt mặt / box phải dùng đúng ảnh server đã thấy)
+## Ảnh của frame có kết quả mới nhất (cùng frame với last_faces / dets). Robot đang quay ➔ ảnh viewport lúc kết quả về
+## đã lệch hàng chục px so với frame này, cắt theo box sẽ ra tường.
+var last_image: Image = null
 
 
 func setup(viewport: SubViewport) -> void:
@@ -101,6 +105,7 @@ func _send_frame(now: int) -> void:
 		_set_connected(false)
 		return
 	record_sent(_next_id, now)
+	_sent_img[_next_id] = img
 	_next_id += 1
 
 
@@ -123,6 +128,7 @@ func handle_message(text: String, now_ms: int) -> void:
 	if not VisionClient.is_fresh(frame_id, _last_id, sent, now_ms):
 		return
 	_last_id = frame_id
+	last_image = _sent_img.get(frame_id, null)
 	_drop_expired(now_ms)
 	last_faces = r["faces"]
 	detections_received.emit(frame_id, r["dets"], r["infer_ms"])
@@ -133,6 +139,9 @@ func _drop_expired(now_ms: int) -> void:
 	for id: int in _sent_at.keys():
 		if id <= _last_id or now_ms - int(_sent_at[id]) > Config.STALE_MS:
 			_sent_at.erase(id)
+	for id: int in _sent_img.keys():
+		if not _sent_at.has(id):          # đã có kết quả (ảnh nằm ở last_image) / bị bỏ / quá hạn
+			_sent_img.erase(id)
 
 
 ## Kết quả được nhận khi: frame_id mới hơn frame gần nhất, đã ghi thời điểm gửi, và trễ ≤ STALE_MS.

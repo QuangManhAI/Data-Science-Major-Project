@@ -509,7 +509,50 @@ static func pick_clear_pardon_target(npc: Node3D, anchor: Vector3, robot: Node3D
 		query.exclude = exclude
 		if space == null or space.intersect_ray(query).is_empty():
 			return target
+	# Đang đứng ngay trong ô cửa (vd. bệnh nhân vừa được dẫn tới, robot ở trong phòng): mọi điểm né ngang đều
+	# "chắn cửa" nên bị loại ở trên ➔ trước đây NPC đứng im mãi, robot (không lùi được) kẹt. Bước hẳn ra khỏi cửa,
+	# về phía không có robot, chéo sang một bên (không đứng ngay lối robot đi ra).
+	var door: Node3D = HospitalNpc.nearest_door(npc, npc.global_position)
+	if door == null:
+		return null
+	for t: Vector3 in HospitalNpc.doorway_exit_targets(door, npc.global_position, robot.global_position):
+		if HospitalNpc.near_doorway(npc, t):
+			continue
+		var from := Vector3(npc.global_position.x, 0.5, npc.global_position.z)
+		var to := Vector3(t.x, 0.5, t.z)
+		var query := PhysicsRayQueryParameters3D.create(from, to + (to - from).normalized() * PARDON_CLEARANCE_M)
+		query.exclude = exclude
+		if space == null or space.intersect_ray(query).is_empty():
+			return t
 	return null
+
+
+## Cửa trượt gần `p` nhất trong tầm PARDON_DOORWAY_KEEP_CLEAR_M; không có ➔ null.
+static func nearest_door(npc: Node, p: Vector3) -> Node3D:
+	var best: Node3D = null
+	var best_d: float = PARDON_DOORWAY_KEEP_CLEAR_M
+	for d: Node in npc.get_tree().get_nodes_in_group(&"sliding_doors"):
+		var dist: float = Human.flat_distance(p, (d as Node3D).global_position)
+		if dist < best_d:
+			best_d = dist
+			best = d as Node3D
+	return best
+
+
+## Điểm ra khỏi ô cửa, phía bên kia so với robot: chéo trái / phải (ưu tiên phía NPC đang lệch), cuối cùng thẳng ra.
+static func doorway_exit_targets(door: Node3D, npc_pos: Vector3, robot_pos: Vector3) -> Array[Vector3]:
+	var n3: Vector3 = door.global_transform.basis.z
+	var n := Vector2(n3.x, n3.z)
+	n = Vector2(0.0, 1.0) if n.length() < 1e-4 else n.normalized()
+	var c := Vector2(door.global_position.x, door.global_position.z)
+	if (Vector2(robot_pos.x, robot_pos.z) - c).dot(n) > 0.0:
+		n = -n                                   # n: hướng từ cửa ra phía KHÔNG có robot
+	var lat := Vector2(-n.y, n.x)
+	var side: float = 1.0 if (Vector2(npc_pos.x, npc_pos.z) - c).dot(lat) >= 0.0 else -1.0
+	var out: Array[Vector3] = []
+	for v: Vector2 in [n * 1.0 + lat * side * 1.0, n * 1.0 - lat * side * 1.0, n * 1.4]:
+		out.append(Vector3(c.x + v.x, npc_pos.y, c.y + v.y))
+	return out
 
 
 static func near_doorway(npc: Node, p: Vector3) -> bool:

@@ -10,6 +10,8 @@ extends Node
 
 ## Phát sau mỗi lượt (kể cả lỗi), cùng nội dung dòng log; G17 dùng. Có TTS ➔ phát khi biết kết quả TTS.
 signal turn_completed(row: Dictionary)
+## Robot vẫn chưa nghe rõ mà người bệnh không còn câu nào để nói lại ➔ Main quyết định (escort-only: gọi nhân viên).
+signal clarify_gave_up(row: Dictionary)
 
 ## Phụ đề giữ thêm sau khi âm thanh hết (ẩn ngay khi robot nói xong); quá thời lượng + SPEAK_GRACE_S mà player
 ## chưa báo xong ➔ coi như xong (tránh treo).
@@ -275,15 +277,18 @@ func _on_subtitle_finished() -> void:
 ## Robot nói xong. clarify ➔ người bệnh nói lại bằng clip khác take (tối đa MAX_CLARIFY lần), không thì kết thúc.
 func _after_response() -> void:
 	var target_npc: Npc = active_npc if active_npc != null else npc
-	var is_escort_only: bool = bool(main.get("escort_only_mode")) if main != null and "escort_only_mode" in main else false
-	if action == "clarify" and clarify_count < Config.MAX_CLARIFY and not is_escort_only:
-		var alt: String = Npc.alternate_clip(target_npc.get_clips(), pending_clip, used_clips)
-		if alt != "":
-			main.set_dialogue_state(Config.RobotState.LISTEN)
-			if target_npc.say_again(alt):
-				clarify_count += 1
-				used_clips.append(alt)
-				return
+	# Đang dẫn (câu trả lời "đi tiếp?" / cảm ơn) thì không hỏi lại: Main đã xử lý lượt đó rồi.
+	var mid_task: bool = main != null and main.has_method("is_task_busy") and main.is_task_busy()
+	if action == "clarify" and not mid_task:
+		if clarify_count < Config.MAX_CLARIFY:
+			var alt: String = Npc.alternate_clip(target_npc.get_clips(), pending_clip, used_clips)
+			if alt != "":
+				main.set_dialogue_state(Config.RobotState.LISTEN)
+				if target_npc.say_again(alt):
+					clarify_count += 1
+					used_clips.append(alt)
+					return
+		clarify_gave_up.emit(_row)
 	_finish()
 
 

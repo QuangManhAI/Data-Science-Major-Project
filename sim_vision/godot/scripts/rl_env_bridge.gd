@@ -312,6 +312,9 @@ const PATIENT_ESCORT_SPEED: float = 0.70  # > tốc độ dẫn đường 0.52 m
 const COMPANION_OFFSETS: Array[Vector2] = [Vector2(1.2, 0.45), Vector2(1.1, 0.25), Vector2(1.0, 0.0)]  # (trước, phải) m
 const TRAIL_SPACING_M: float = 0.25
 const PATIENT_STUCK_RESET_S: float = 2.0
+const YIELD_AHEAD_M: float = 0.75         # bệnh nhân trước mũi robot gần hơn chừng này ...
+const YIELD_HALF_W_M: float = 0.38        # ... và trong lối rộng ~0.75 m trước robot (thân robot + người) ➔ bước sang bên
+const YIELD_SIDE_M: float = 0.9
 const FOLLOW_HEADING_RATE: float = 2.0    # 1/s, làm mượt hướng đi của robot
 const FOLLOW_TARGET_RATE: float = 3.0     # 1/s, làm mượt điểm đứng
 const FOLLOW_ACCEL: float = 1.2           # m/s²
@@ -372,7 +375,14 @@ static func step_escorted_patient(patient: CharacterBody3D, robot_pos: Vector3, 
 		_progress_best = INF
 		patient.escort_stop()
 		return
+	# Hướng đi = hướng robot đã thực sự đi (đoạn cuối của vết), không phải hướng thân: robot quay tại chỗ (nhắc /
+	# tìm bệnh nhân / quay về người nói) thì điểm đứng cạnh robot không quét vòng ➔ bệnh nhân không đi vòng quanh robot.
 	var fwd_now := Vector3(-sin(robot_yaw), 0.0, -cos(robot_yaw))
+	if trail.size() >= 2:
+		var mv: Vector3 = trail[trail.size() - 1] - trail[trail.size() - 2]
+		mv.y = 0.0
+		if mv.length() > 0.05:
+			fwd_now = mv.normalized()
 	if _follow_heading == Vector3.ZERO:
 		_follow_heading = fwd_now
 	else:
@@ -402,6 +412,21 @@ static func step_escorted_patient(patient: CharacterBody3D, robot_pos: Vector3, 
 		for c: Vector3 in trail:
 			if Human.flat_distance(c, p_pos) < Human.flat_distance(target, p_pos):
 				target = c
+	# Bệnh nhân đứng chắn ngay trước mũi robot (robot quay tại chỗ / đổi hướng trong phòng hẹp) ➔ bước sang một bên,
+	# như người thật nhường lối. Không có bước này: chỗ đứng theo hướng đã đi ở ngay trước robot ➔ robot không đi được,
+	# chỗ đứng không đổi ➔ kẹt cứng.
+	var r_fwd := Vector3(-sin(robot_yaw), 0.0, -cos(robot_yaw))
+	var r_right := Vector3(-r_fwd.z, 0.0, r_fwd.x)
+	var rel := Vector3(p_pos.x - robot_pos.x, 0.0, p_pos.z - robot_pos.z)
+	var ahead: float = rel.dot(r_fwd)
+	var lat: float = rel.dot(r_right)
+	if ahead > 0.0 and ahead < YIELD_AHEAD_M and absf(lat) < YIELD_HALF_W_M:
+		var first: float = 1.0 if lat >= 0.0 else -1.0
+		for side: float in [first, -first]:
+			var spot: Vector3 = robot_pos + r_right * side * YIELD_SIDE_M + r_fwd * 0.2
+			if _path_clear(patient, p_pos, spot):
+				target = spot
+				break
 	if _follow_target == Vector3.ZERO or Human.flat_distance(_follow_target, target) > FOLLOW_JUMP_M:
 		_follow_target = target
 	else:

@@ -247,3 +247,43 @@ func test_floor3_rooms_and_elevator() -> void:
 	assert_eq(room.get_room_waypoint("303"), Vector3(108.0, 0.0, -5.2))
 	assert_eq(room.get_room_waypoint("315"), Vector3(91.0, 0.0, 5.2))
 	assert_eq(room.get_room_at(Vector3(92.0, 0.0, -5.2)), "301")
+
+
+## Log run_1335: robot trong cửa phòng 315, bệnh nhân vừa giao đứng ngay ô cửa ➔ mọi điểm né ngang "chắn cửa"
+## nên NPC đứng im mãi, robot (không lùi) kẹt hơn 30 phút. NPC phải bước hẳn ra khỏi cửa, phía không có robot.
+func test_npc_standing_in_doorway_steps_out_for_robot() -> void:
+	var robot := (load("res://scenes/robot.tscn") as PackedScene).instantiate() as Robot
+	room.add_child(robot)
+	var pat := room.get_node(^"Furniture/Patient_03") as HospitalNpc
+	robot.global_position = Vector3(91.04, 0.0, 3.41)
+	robot.rotation.y = 0.0                      # nhìn −Z: ra hành lang, bệnh nhân ngay trước mặt
+	pat.global_position = Vector3(91.19, 0.0, 2.80)
+	pat.set_state(HospitalNpc.State.STANDING)
+	pat._state_timer = 100.0
+	pat._anchor_pos = pat.global_position
+	pat.setup_robot(robot)
+	robot.set_command(0.8, 0.0)
+	await wait_physics_frames(2)
+	assert_true(HospitalNpc.near_doorway(pat, pat.global_position), "bệnh nhân đứng trong ô cửa")
+	await wait_physics_frames(150)
+	assert_lt(robot.global_position.z, 2.0, "robot qua được cửa, ra tới hành lang")
+	assert_lt(pat.global_position.z, 2.0, "bệnh nhân lùi ra phía hành lang (không chen vào phòng chỗ robot)")
+	assert_gt(Human.flat_distance(pat.global_position, robot.global_position), 0.5, "không đè lên robot")
+
+
+## Như trên với Human (NPC chính, code pardon riêng) ở cửa phòng 205 (log run_1427).
+func test_human_in_doorway_steps_out_for_robot() -> void:
+	var robot := (load("res://scenes/robot.tscn") as PackedScene).instantiate() as Robot
+	room.add_child(robot)
+	var h := (load("res://scenes/human.tscn") as PackedScene).instantiate() as Human
+	room.add_child(h)
+	h.pardon_enabled = true
+	h.setup_robot(robot)
+	robot.global_position = Vector3(49.57, 0.0, -3.55)
+	var to := Vector3(49.82, 0.0, -2.98) - robot.global_position
+	robot.rotation.y = atan2(-to.x, -to.z)      # quay về phía người vừa cảm ơn
+	h.global_position = Vector3(49.82, 0.0, -2.98)
+	h.end_escort()
+	robot.set_command(0.7, -0.1)
+	await wait_physics_frames(200)
+	assert_gt(robot.global_position.z, -2.0, "robot qua được cửa 205 ra hành lang")

@@ -94,7 +94,8 @@ func test_answer_rest_then_asks_again_or_resumes() -> void:
 	assert_has(_run(m, 6.0, true, EscortMonitor.REST_WAIT_S + 0.2), "ask_continue")
 	var m2 := _asking()
 	m2.answer("dung_lai")
-	assert_eq(_run(m2, 1.5, true, 0.2), ["resumed"] as Array[String], "nghỉ xong tự đi lại gần")
+	assert_eq(_run(m2, 1.5, true, EscortMonitor.REST_MIN_S + 0.2), ["resumed"] as Array[String],
+			"nghỉ đủ REST_MIN_S, đang ở gần ➔ đi tiếp")
 
 
 func test_unclear_answers_end_after_two() -> void:
@@ -182,3 +183,13 @@ func test_patient_hold_keeps_patient_still_and_counts_down() -> void:
 		RLEnvBridge.step_escorted_patient(human, Vector3(0, 0, -3), 0.1, trail, 0.0)
 	assert_almost_eq(human.global_position.distance_to(start), 0.0, 1e-4, "đang nghỉ ➔ đứng yên")
 	assert_almost_eq(float(human.get_meta("escort_hold_s")), 0.5, 1e-4)
+
+
+## Xin nghỉ khi đang đứng gần robot: robot không "đi tiếp" ngay mà chờ ít nhất REST_MIN_S.
+func test_rest_waits_minimum_even_when_patient_close() -> void:
+	var m := EscortMonitor.new()
+	_run(m, 6.0, true, EscortMonitor.ASK_AFTER_S + 0.2)
+	assert_eq(m.answer("dung_lai"), "rest")
+	assert_does_not_have(_run(m, 1.0, true, EscortMonitor.REST_MIN_S - 0.5), "resumed", "chưa đủ thời gian nghỉ")
+	assert_true(m.hold_robot(), "robot vẫn đứng chờ")
+	assert_has(_run(m, 1.0, true, 1.0), "resumed", "nghỉ đủ ➔ đi tiếp")

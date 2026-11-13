@@ -140,3 +140,18 @@ func test_sent_at_cleaned_up() -> void:
 	client.record_sent(11, 3100)
 	client._drop_expired(3000 + Config.STALE_MS + 1)
 	assert_eq(client.pending_count(), 1, "frame 10 quá hạn bị dọn, frame 11 còn")
+
+
+## Cắt mặt / box phải dùng đúng ảnh đã gửi cho server (robot quay ➔ ảnh viewport lúc kết quả về đã lệch).
+func test_last_image_is_the_frame_the_result_belongs_to() -> void:
+	var img6 := Image.create(4, 4, false, Image.FORMAT_RGB8)
+	var img7 := Image.create(8, 8, false, Image.FORMAT_RGB8)
+	client.record_sent(6, 1000)
+	client._sent_img[6] = img6
+	client.record_sent(7, 1100)
+	client._sent_img[7] = img7
+	client.handle_message(_msg(6), 1150)
+	assert_true(is_same(client.last_image, img6), "kết quả frame 6 ➔ ảnh frame 6, không phải frame mới hơn")
+	client.handle_message(_msg(7), 1200)
+	assert_true(is_same(client.last_image, img7))
+	assert_true(client._sent_img.is_empty(), "ảnh đã dùng / cũ được dọn")

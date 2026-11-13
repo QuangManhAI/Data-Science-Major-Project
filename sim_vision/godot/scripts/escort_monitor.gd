@@ -18,6 +18,7 @@ const LOST_UNSEEN_S: float = 8.0
 const REMIND_EVERY_S: float = 8.0
 const ASK_AFTER_S: float = 20.0           # đứng chờ lâu vậy mà vẫn chưa theo kịp ➔ hỏi
 const REST_WAIT_S: float = 20.0           # bệnh nhân xin dừng nghỉ ➔ chờ rồi hỏi lại
+const REST_MIN_S: float = 4.0             # xin nghỉ ➔ đứng chờ ít nhất chừng này rồi mới mời đi tiếp (kể cả đang ở gần)
 const MAX_ASKS: int = 3                   # tổng số lần hỏi trong một ca; hết ➔ kết thúc
 const CONTINUE_INTENTS: Array[String] = ["tiep_tuc", "dan_duong", "dieu_chinh_toc_do"]
 const REST_INTENTS: Array[String] = ["dung_lai"]
@@ -81,7 +82,7 @@ func step(dist_m: float, seen: bool, dt: float) -> Array[String]:
 				ev.append("remind_again")
 		State.REST:
 			wait_s += dt
-			if dist_m <= OK_M:
+			if dist_m <= OK_M and wait_s >= REST_MIN_S:
 				_to_ok()
 				ev.append("resumed")
 			elif wait_s >= REST_WAIT_S:

@@ -97,3 +97,14 @@ voices_quangbinh_nhatrang.zip
 # Ảnh mặt người nổi tiếng VN (fptudsc/face-celeb-vietnamese) + mặt NPC cắt ra: chỉ dùng thử nghiệm nội bộ, không commit
 /data/faces_vn/
 /sim_vision/godot/assets/textures/npc_faces/
+
+# Audit & Simulation artifacts
+/release_models/
+/data/vision/
+/runs/
+/sim_vision/reports/audit_evidence/
+*.mp4
+*.avi
+*.webm
+*.mkv
+.superpowers/

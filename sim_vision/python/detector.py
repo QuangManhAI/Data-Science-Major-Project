@@ -22,11 +22,19 @@ _REPO_ROOT = _THIS_DIR.parent.parent
 def resolve_model_path(path: str | Path | None = None) -> str:
     if path:
         p = Path(path)
-        for cand in [p, _REPO_ROOT / p, _THIS_DIR / p]:
+        for cand in [
+            p,
+            _REPO_ROOT / p,
+            _THIS_DIR / p,
+            _REPO_ROOT / "release_models" / p.name,
+            _REPO_ROOT / "release_models" / "yolo26n_hospital_robot_v6_best" / p.name,
+        ]:
             if cand.is_file():
                 return str(cand)
-        return str(p)
+        if p.is_file():
+            return str(p)
     candidates: list[Path] = [
+        _REPO_ROOT / "release_models" / "yolo26n_hospital_robot_v6_best" / "yolo26n_hospital_robot_best_map92.6.pt",
         _THIS_DIR / "yolo26n_hospital_robot_best_map92.6.pt",
         _REPO_ROOT / "models" / "yolo26n_hospital_robot_v6_best" / "yolo26n_hospital_robot_best_map92.6.pt",
         _REPO_ROOT / "sim_vision" / "python" / "yolo26n_hospital_robot_best_map92.6.pt",

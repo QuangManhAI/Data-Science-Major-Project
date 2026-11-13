@@ -100,6 +100,7 @@ def wait_for_port(port: int, timeout_s: float = 10.0) -> bool:
 def start_backend_servers(py_exe: Path) -> bool:
     env = dict(os.environ)
     env["PYTHONPATH"] = str(PYTHON_DIR)
+    EVIDENCE_DIR.mkdir(parents=True, exist_ok=True)
 
     # 1. YOLO Server
     yolo_model = REPO_ROOT / "release_models" / "yolo26n_hospital_robot_v6_best" / "yolo26n_hospital_robot_best_map92.6.pt"
@@ -107,23 +108,25 @@ def start_backend_servers(py_exe: Path) -> bool:
         yolo_model = REPO_ROOT / "models" / "yolov8n" / "yolov8n.pt"
 
     log.info("Starting YOLO Server on port 8765 (%s)...", yolo_model.name)
+    yolo_log = open(EVIDENCE_DIR / "yolo_server.log", "w", encoding="utf-8")
     yolo_proc = subprocess.Popen(
         [str(py_exe), "yolo_server.py", "--model", str(yolo_model)],
         cwd=PYTHON_DIR,
         env=env,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
+        stdout=yolo_log,
+        stderr=subprocess.STDOUT,
     )
     CHILD_PROCESSES.append(yolo_proc)
 
     # 2. STT Server with rule-based NLU
     log.info("Starting STT / Rule NLU Server on port 8766...")
+    stt_log = open(EVIDENCE_DIR / "stt_server.log", "w", encoding="utf-8")
     stt_proc = subprocess.Popen(
         [str(py_exe), "-m", "voice.stt_server", "--nlu", "rule"],
         cwd=PYTHON_DIR,
         env=env,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
+        stdout=stt_log,
+        stderr=subprocess.STDOUT,
     )
     CHILD_PROCESSES.append(stt_proc)
 
@@ -132,12 +135,13 @@ def start_backend_servers(py_exe: Path) -> bool:
     ok_rl = True
     if rl_checkpoint.is_file():
         log.info("Starting RL Policy Server on port 8768 (%s)...", rl_checkpoint.name)
+        rl_log = open(EVIDENCE_DIR / "rl_server.log", "w", encoding="utf-8")
         rl_proc = subprocess.Popen(
             [str(py_exe), "rl_policy_server.py", "--checkpoint", str(rl_checkpoint)],
             cwd=PYTHON_DIR,
             env=env,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            stdout=rl_log,
+            stderr=subprocess.STDOUT,
         )
         CHILD_PROCESSES.append(rl_proc)
         ok_rl = wait_for_port(8768, timeout_s=10.0)
@@ -261,7 +265,8 @@ def generate_audit_summary_report(output_dir: Path) -> Path:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run audit episodes and collect video evidence.")
     parser.add_argument("--episodes", type=int, default=3, help="Number of audit episodes to run (default: 3)")
-    parser.add_argument("--duration", type=float, default=25.0, help="Duration in seconds per episode (default: 25.0)")
+    parser.add_argument("--scenario", type=int, default=0, help="Run only specific scenario index (1, 2, or 3). Default 0 (run all).")
+    parser.add_argument("--duration", type=float, default=30.0, help="Duration in seconds per episode (default: 30.0)")
     parser.add_argument("--output-dir", default=str(EVIDENCE_DIR), help="Output directory for videos")
     return parser.parse_args()
 
@@ -280,13 +285,23 @@ def main() -> int:
 
     # Scenarios for audit testing
     scenarios = [
-        {"desc": "Kịch bản 1: RL Policy V3 dắt người bệnh đi chậm (--rl, --escort-only, --lag-prob=0.8)", "flags": ["--rl", "--escort-only", "--lag-prob=0.8"]},
-        {"desc": "Kịch bản 2: RL Policy V3 dắt người bệnh đi nhanh (--rl, --escort-only, --lag-prob=0.2)", "flags": ["--rl", "--escort-only", "--lag-prob=0.2"]},
-        {"desc": "Kịch bản 3: Heuristic Controller tuần tra hành lang (--solo-patient)", "flags": ["--solo-patient"]},
+        {
+            "desc": "Kịch bản 1: Stress Test TETHER_BREAK - RL Policy V3 bỏ rơi người bệnh khi người bệnh tụt lại (--rl, --escort-only, --no-reid, --lag-prob=0.8, --escort-target=201)",
+            "flags": ["--rl", "--escort-only", "--no-reid", "--lag-prob=0.8", "--escort-target=201"],
+        },
+        {
+            "desc": "Kịch bản 2: Stress Test STAGNATION - Robot kẹt/đóng băng không tiến triển khi dẫn đường (--rl, --escort-only, --no-reid, --stagnation-test, --escort-target=301)",
+            "flags": ["--rl", "--escort-only", "--no-reid", "--stagnation-test", "--escort-target=301"],
+        },
+        {
+            "desc": "Kịch bản 3: Stress Test REID MISMATCH - Mất dấu danh tính / bế tắc góc nhìn sau trong hành lang đông người (--rl, --escort-only, --lag-prob=0.5, --escort-target=112)",
+            "flags": ["--rl", "--escort-only", "--lag-prob=0.5", "--escort-target=112"],
+        },
     ]
 
     try:
-        for idx in range(1, min(args.episodes + 1, len(scenarios) + 1)):
+        run_indices = [args.scenario] if args.scenario > 0 else list(range(1, min(args.episodes + 1, len(scenarios) + 1)))
+        for idx in run_indices:
             sc = scenarios[idx - 1]
             log.info("=== %s ===", sc["desc"])
             run_episode(

@@ -15,6 +15,7 @@ const CAPTURE_INTERVAL_S: float = 0.066
 const TETHER_MAX_DIST_M: float = 2.5
 const TETHER_MAX_TIME_S: float = 2.0
 const REID_MIN_SIM: float = 0.75
+const REID_MISMATCH_MAX_S: float = 2.5
 const STAGNATION_VEL: float = 0.05
 const STAGNATION_MAX_S: float = 5.0
 
@@ -37,6 +38,7 @@ var _post_event_countdown: int = -1
 
 var _tether_broken_timer: float = 0.0
 var _stagnation_timer: float = 0.0
+var _reid_mismatch_timer: float = 0.0
 var _last_robot_pos: Vector3 = Vector3.ZERO
 var _event_counter: int = 0
 
@@ -81,7 +83,7 @@ func _process(delta: float) -> void:
 		if elapsed_wall_s >= max_audit_duration_s:
 			max_audit_duration_s = -1.0
 			print("[AuditWatchdog] Max audit duration reached (%.1fs wall-clock). Concluding episode..." % elapsed_wall_s)
-			if not _is_recording_event and _frame_buffer.size() >= 10:
+			if _event_counter == 0 and not _is_recording_event and _frame_buffer.size() >= 10:
 				var robot_pos: Vector3 = robot.global_position if robot != null else Vector3.ZERO
 				trigger_failure("EPISODE_SAMPLE", {
 					"note": "Routine audit sample captured at episode conclusion",
@@ -174,8 +176,8 @@ func _check_failure_triggers(delta: float) -> void:
 	else:
 		_tether_broken_timer = 0.0
 
-	# 2. Trigger STAGNATION khi robot di chuyển không tiến triển trong lúc tiếp cận/dắt
-	if main.state == Config.RobotState.APPROACH or is_escorting:
+	# 2. Trigger STAGNATION khi robot di chuyển không tiến triển trong lúc tiếp cận/dắt/tuần tra
+	if main.state in [Config.RobotState.APPROACH, Config.RobotState.SEARCH] or is_escorting:
 		var moved_dist: float = robot_pos.distance_to(_last_robot_pos)
 		if moved_dist < STAGNATION_VEL * delta * 5.0:
 			_stagnation_timer += delta
@@ -191,6 +193,39 @@ func _check_failure_triggers(delta: float) -> void:
 			_stagnation_timer = maxf(0.0, _stagnation_timer - delta * 0.5)
 	else:
 		_stagnation_timer = 0.0
+
+	# 3. Trigger REID_MISMATCH khi đang dắt người và nhận diện sai/mất dấu bệnh nhân
+	if is_escorting and main.identity != null and main.identity.is_enrolled():
+		var is_reid_issue: bool = false
+		var reason: String = ""
+		if main._id_stats.has("front") and int(main._id_stats["front"].get("wrong_other", 0)) > 0:
+			is_reid_issue = true
+			reason = "front_wrong_other"
+		elif main._id_stats.has("rear") and int(main._id_stats["rear"].get("wrong_other", 0)) > 0:
+			is_reid_issue = true
+			reason = "rear_wrong_other"
+		elif main._vision_tether() and (main._now_s() - main._id_seen_s) >= REID_MISMATCH_MAX_S:
+			is_reid_issue = true
+			reason = "unseen_timeout_during_escort"
+
+		if is_reid_issue:
+			_reid_mismatch_timer += delta
+			if _reid_mismatch_timer >= REID_MISMATCH_MAX_S:
+				trigger_failure("REID_MISMATCH", {
+					"reid_loss_duration_s": _reid_mismatch_timer,
+					"reason": reason,
+					"min_threshold_sim": REID_MIN_SIM,
+					"robot_state": Config.state_name(main.state),
+					"robot_pos": [robot_pos.x, robot_pos.y, robot_pos.z],
+					"patient_pos": [current_patient.global_position.x, current_patient.global_position.y, current_patient.global_position.z] if current_patient != null else [],
+					"templates_count": main.identity.templates.size(),
+				})
+				_reid_mismatch_timer = 0.0
+				return
+		else:
+			_reid_mismatch_timer = maxf(0.0, _reid_mismatch_timer - delta * 0.5)
+	else:
+		_reid_mismatch_timer = 0.0
 
 	_last_robot_pos = robot_pos
 
@@ -257,6 +292,11 @@ func _flush_event_to_video() -> void:
 	print("[AuditWatchdog] Stitch process finished with code %d: %s" % [exit_code, " ".join(exec_out)])
 
 	export_completed.emit(_active_error_type, output_mp4, output_mp4.replace(".mp4", ".json"))
+	if _active_error_type in ["TETHER_BREAK", "STAGNATION", "REID_MISMATCH"]:
+		print("[AuditWatchdog] >>> FAILURE VIDEO READY: %s" % output_mp4)
+		print("[AuditWatchdog] >>> FAILURE METADATA READY: %s" % output_mp4.replace(".mp4", ".json"))
+		get_tree().quit(0)
+		return
 	# Giữ lại 30 frames cuối làm buffer nối tiếp
 	if _frame_buffer.size() > 30:
 		_frame_buffer = _frame_buffer.slice(_frame_buffer.size() - 30)

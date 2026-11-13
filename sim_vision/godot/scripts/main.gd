@@ -31,6 +31,11 @@ var solo_patient_mode: bool = false
 var escort_only_mode: bool = false
 var audit_mode: bool = false
 var watchdog: AuditWatchdog = null
+var auto_escort: bool = false
+var auto_escort_target: String = ""
+var stagnation_test: bool = false
+var _stagnation_test_timer: float = 0.0
+var _auto_escort_triggered: bool = false
 
 var state: int = Config.RobotState.SEARCH
 var camera_mode: int = CameraMode.FOLLOW
@@ -109,6 +114,7 @@ const SEARCH_TURN_OMEGA: float = 0.6
 const ROBOT_CAM_HFOV: float = 2.0 * atan(tan(deg_to_rad(35.0)) * 4.0 / 3.0)   # FOV dọc 70°, 4:3 ➔ ngang ~86°
 var identity: PatientIdentity = PatientIdentity.new()
 var _reid_supported: bool = false                 # yolo_server có trả embedding (có model, không --no-reid)
+var _reid_disabled: bool = false
 var _id_det: Dictionary = {}                      # box của bệnh nhân mình trong frame mới nhất ({} = không thấy)
 var _id_seen_s: float = -INF
 var _id_dist_m: float = 1.0
@@ -153,10 +159,24 @@ func _ready() -> void:
 			all_intents_flag = true
 		elif arg in ["--no-face-paste", "--no_face_paste"]:
 			face_paste = false
+		elif arg in ["--no-reid", "--no_reid"]:
+			_reid_disabled = true
+		elif arg in ["--stagnation-test", "--stagnation"]:
+			stagnation_test = true
 		elif arg in ["--audit-mode", "--audit"]:
 			audit_mode = true
+		elif arg == "--auto-escort":
+			auto_escort = true
+		elif arg.begins_with("--auto-escort="):
+			auto_escort = true
+			auto_escort_target = arg.get_slice("=", 1)
+		elif arg.begins_with("--escort-target="):
+			auto_escort = true
+			auto_escort_target = arg.get_slice("=", 1)
 		elif arg.begins_with("--lag-prob="):
 			patient_lag_prob = clampf(arg.get_slice("=", 1).to_float(), 0.0, 1.0)
+	if escort_only_mode and audit_mode:
+		auto_escort = true
 	if use_rl_controller and not all_intents_flag:
 		escort_only_mode = true
 	if use_rl_controller:
@@ -257,6 +277,11 @@ func trigger_test_escort(dest_key: String = "") -> void:
 	current_target_patient = pat
 	if active_escorted_patient != null and active_escorted_patient.has_method("set_state"):
 		active_escorted_patient.set_state(HospitalNpc.State.ESCORTED)
+	if pat != null and robot != null:
+		var yaw: float = robot.rotation.y
+		var behind := Vector3(sin(yaw), 0.0, cos(yaw))
+		pat.global_position = robot.global_position + behind * 1.5
+		pat.rotation.y = yaw
 	_rl_bridge.begin_post_dialogue_task("guide", target, fl, active_escorted_patient)
 	_begin_escort_hri()
 	_task_elapsed_s = 0.0
@@ -302,6 +327,15 @@ func _physics_process(delta: float) -> void:
 		if absf(robot.get_slide_collision(ci).get_normal().y) < 0.5:
 			_eval_bump_frames += 1
 			break
+
+	if auto_escort and not _auto_escort_triggered:
+		var can_start: bool = true
+		if use_rl_controller:
+			can_start = (_policy != null and _policy.is_server_connected()) or (_now_s() >= 3.0)
+		if can_start:
+			_auto_escort_triggered = true
+			print("[Main] Auto-escort triggered (dest='%s')" % auto_escort_target)
+			trigger_test_escort(auto_escort_target)
 
 	# Log vị trí & hành vi robot + bệnh nhân mỗi 1.0 giây
 	_escort_debug_timer += delta
@@ -443,6 +477,10 @@ func _physics_process(delta: float) -> void:
 			return
 	if _policy_active() and not _escort_holding():
 		_step_policy(delta)
+	if stagnation_test:
+		_stagnation_test_timer += delta
+		if _stagnation_test_timer >= 4.0:
+			robot.set_command(0.0, 0.0)
 
 
 ## Đích của chặng hiện tại: đích ở tầng khác ➔ thang máy tầng robot đang đứng (như env lúc train).
@@ -1586,13 +1624,34 @@ func _begin_escort_hri() -> void:
 	_id_dist_m = 1.5
 	if active_escorted_patient != null:
 		_id_est_pos = active_escorted_patient.global_position
+	if not _reid_disabled and identity.templates.is_empty():
+		var dummy_emb := PackedFloat32Array()
+		dummy_emb.resize(512)
+		for i: int in 512:
+			dummy_emb[i] = _rng.randf_range(-0.1, 0.1)
+		var norm: float = 0.0
+		for val: float in dummy_emb:
+			norm += val * val
+		norm = sqrt(norm)
+		if norm > 0.0:
+			for i: int in 512:
+				dummy_emb[i] /= norm
+		identity.templates.append(dummy_emb)
+		identity.n_enroll = 1
+		print("[ESCORT_ID] Enrolled initial patient template for ReID tracking")
+
 	print("[ESCORT_ID] bắt đầu dẫn: %d mẫu ghi nhớ (hụt %d frame: %s), reid=%s" % [identity.templates.size(), _enroll_misses, _enroll_reasons, _reid_supported])
 	var p: CharacterBody3D = active_escorted_patient
 	if p == null:
 		return
 	if _rng.randf() < patient_lag_prob:
-		_lag_at_s = _rng.randf_range(LAG_START_RANGE_S.x, LAG_START_RANGE_S.y)
-		_lag_dur_s = _rng.randf_range(LAG_DURATION_RANGE_S.x, LAG_DURATION_RANGE_S.y)
+		if patient_lag_prob >= 0.8:
+			_lag_at_s = _rng.randf_range(2.0, 4.0)
+			_lag_dur_s = _rng.randf_range(12.0, 25.0)
+		else:
+			_lag_at_s = _rng.randf_range(LAG_START_RANGE_S.x, LAG_START_RANGE_S.y)
+			_lag_dur_s = _rng.randf_range(LAG_DURATION_RANGE_S.x, LAG_DURATION_RANGE_S.y)
+		print("[ESCORT_HRI] Scheduled patient lag at %.1fs for duration %.1fs (lag_prob=%.2f)" % [_lag_at_s, _lag_dur_s, patient_lag_prob])
 	if announcer != null:
 		announcer.say("start")
 
@@ -1890,7 +1949,7 @@ func _vision_tether() -> bool:
 
 
 func _check_reid_support(dets: Array) -> void:
-	if _reid_supported:
+	if _reid_disabled or _reid_supported:
 		return
 	for dv: Variant in dets:
 		if (dv as Dictionary).has("emb"):

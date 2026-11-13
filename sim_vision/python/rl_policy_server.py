@@ -464,7 +464,11 @@ async def handle_connection(ws: ServerConnection, runner: PolicyRunner) -> None:
             continue
         if not isinstance(msg, dict) or msg.get("type") != "rl_state":
             continue
-        reply = runner.act(msg)
+        try:
+            reply = runner.act(msg)
+        except Exception as e:
+            log.exception("Error in runner.act: %s", e)
+            reply = {"type": "rl_action", "v": 0.0, "omega": 0.0}
         await ws.send(json.dumps(reply))
 
 

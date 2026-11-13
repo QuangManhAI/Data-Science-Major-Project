@@ -52,12 +52,17 @@ from src.training.hospital_env_pure_vision_v2 import (
     DEPTH_HFOV_RAD, DEPTH_MAX_RANGE_M, HospitalPureVisionV2Env, OBS_DIM_V2, PERSON_RADIUS_M, tether_features,
 )
 from src.training.hospital_env_vision import TARGET_BOX_H
-from src.training.local_memory import MEM_SECTORS, RECOVERY_TURN_S, ObstacleMemory, RecoveryCue, flank_proximity
+from src.training.local_memory import (
+    MEM_SECTORS, PERSON_EXTRA_DIMS, RECOVERY_TURN_S, STILL_NORM_S, TRACK_DIMS, ObstacleMemory, PatientTrack, RecoveryCue,
+    flank_proximity, person_slots,
+)
 
-OBS_DIM_V3 = 45
+OBS_DIM_V3 = 59                   # round 11: + people slots with "already met" flags, escorted-patient track
 OBS_MEM0 = 35                     # [35..40] obstacle memory sectors
 OBS_STALL = 41
-OBS_PERSON0 = 42                  # [42..44] largest person box [seen, cx, h]
+OBS_PERSON0 = 42                  # [42..44] largest person box [seen, cx, h] (= person slot 0)
+OBS_PERSON_X0 = 45                # [45..53] known0, slots 1-2 [seen, cx, h, known] (local_memory.person_slots)
+OBS_TRACK0 = 54                   # [54..58] escorted patient: [valid, sin, cos (bearing, + = right), dist / 5, still / 20 s]
 DOA_HOLDS_MEMORY = False         # round 8 tried o[22:24] = remembered direction while silent: worse, off
 VOICE_MEMORY_S = 10.0             # remembered voice direction (odometry-rotated) is dropped after this
 ACT_DIM_V3 = 4
@@ -109,9 +114,9 @@ WALKUP_STEP_IN_BEARING_RAD = math.radians(100.0)
 
 # --- escorted / delivered people (as seen in Godot: the patient mostly walks BEHIND the robot, stops now and then,
 #     and after the delivery stands where they are, often between the robot and the door) ---
-FOLLOW_BEHIND_PROB = 0.6
+FOLLOW_BEHIND_PROB = 0.85                # Godot (round 10): every escorted patient walks behind; some front-right kept
 FOLLOW_BEHIND_GAP_M = (0.8, 1.3)
-LAG_PROB = 0.5                     # the escorted patient stops once during the escort ...
+LAG_PROB = 0.7                     # the escorted patient stops once during the escort ...
 LAG_AT_S = (5.0, 40.0)
 LAG_S = (5.0, 18.0)                # ... for this long (Godot: run_simulation.py --lag-prob)
 DELIVERED_LEAVE_PROB = 0.5         # the delivered person walks on into the room after a while; the rest stay put
@@ -137,8 +142,8 @@ R_FACE_DIALOGUE = 0.03
 R_NOT_ENROLLED = -1.0
 R_MOVE_DIALOGUE = -0.05
 R_DIALOGUE_ABORT = -1.0
-R_ASK_EMPTY = -0.5
-R_ASK_REPEAT = -0.3
+R_ASK_EMPTY = -1.5                 # round 11b: was -0.5 -> the policy learned to "ask just in case" (5 wasted / shift)
+R_ASK_REPEAT = -1.0
 R_ASK_DECLINED = -0.1
 R_CALL_IGNORED = -0.01
 R_CALLER_GAVE_UP = -1.0
@@ -149,6 +154,46 @@ R_TURN_TO_SPEAKER = 0.3
 R_FACE_CENTRE = 0.02               # per step while talking, scaled by how centred the speaker's face is (eye contact)
 R_PERSON_PUSH = -0.2               # per step driving into a person standing in the way
 R_EXIT_DRILL = 3.0                 # exit drill: reached the corridor
+# Round 10: the robot itself waits for a patient who stops (Godot no longer stops it by rule when they fall behind).
+R_LEAVE_BEHIND = -0.15             # per step driving on away from a patient more than LEAVE_BEHIND_M behind
+LEAVE_BEHIND_M = 3.0
+LAG_DRILL_S = 60.0                 # lag drill: an escort in which the patient stops after LAG_DRILL_AT_S
+LAG_DRILL_AT_S = (2.0, 6.0)
+LAG_DRILL_LAG_S = (8.0, 18.0)
+LAG_FAR_M = 2.5                    # lag drill bookkeeping: robot driving on while the stopped patient is this far
+
+
+def patient_left_behind(o: np.ndarray) -> bool:
+    """Evidence that the escorted patient has fallen behind: seen more than 2.5 m away; lost for 4 s after last being
+    seen beyond 1.8 m; or lost for 2 s while the robot is already 2.5 m from where it last saw them (round 11: someone
+    who stops close to the robot — a follower would have shown up in the rear camera by then). NOT "just not seen": a
+    patient walking close behind-beside is in the blind spot between the front and the rear camera (|bearing|
+    90-137 deg) — waiting there made the robot and the patient wait for each other (round 10, first attempt)."""
+    seen_far = o[19] > 0.5 and o[18] > 0.5
+    lost_far = o[19] < 0.5 and o[20] >= 0.8 and o[18] > 0.36
+    track = len(o) > OBS_TRACK0 + 4 and o[OBS_TRACK0] > 0.5
+    left_spot = track and o[19] < 0.5 and o[20] >= 0.4 and float(o[OBS_TRACK0 + 3]) * 5.0 > 2.5
+    return bool(seen_far or lost_far or left_spot)
+
+
+# Round 10: the tether the robot sees is a ReID estimate (Godot: box matched to the remembered person), not the truth:
+# it sometimes loses them for a moment, sometimes latches onto someone else, and the distance from the box is noisy.
+# Round 11: half the stops are "waits for the robot": the patient stays until the robot comes back, faces them and asks
+# "Anh/chị đi tiếp được không ạ?" (the ask action while escorting). The robot must go back, not only wait.
+LAG_WAIT_PROB = 0.5
+LAG_WAIT_MAX_S = 60.0
+REENGAGE_M = 2.5
+REENGAGE_HEAR_M = 2.0              # out of sight (corner, doorway) but this close: they hear the question
+R_REENGAGE = 3.0
+R_PATIENT_WAITING = -0.03           # per step a patient stands waiting for the robot to come back (round 11c: the
+                                   # policy came within 1.2-1.7 m, saw them and did not ask in 11 of 24 drills)
+RETURN_AFTER_S = 6.0               # teacher: the patient has not moved for this long while left behind -> go back
+TRACK_POS_NOISE_M = 0.15
+REID_MISS_HZ = 0.04
+REID_MISS_S = (0.5, 3.0)
+REID_SWAP_HZ = 0.015
+REID_SWAP_S = (0.5, 3.0)
+REID_D_NOISE = 0.10                # relative
 
 
 class HospitalEngageV3Env(HospitalPureVisionV2Env):
@@ -196,10 +241,25 @@ class HospitalEngageV3Env(HospitalPureVisionV2Env):
         self.dialogue_done = False
         self.v3_stats = {"asks": 0, "walkup": 0, "walkup_enrolled": 0, "asks_empty": 0, "asks_repeat": 0, "asks_declined": 0, "dialogues": 0,
                          "enrolled": 0, "not_enrolled": 0, "aborted": 0, "callers_gave_up": 0, "face_steps": 0,
-                         "dialogue_steps": 0, "push_steps": 0, "exit_ok": 0, "centre_sum": 0.0, "excuse": 0}
+                         "dialogue_steps": 0, "push_steps": 0, "exit_ok": 0, "centre_sum": 0.0, "excuse": 0,
+                         "leave_behind_steps": 0, "lag_steps": 0, "lag_far_m": 0.0, "lag_max_tether": 0.0,
+                         "lag_after_m": 0.0, "lag_done": 0, "reid_miss_steps": 0, "reid_swap_steps": 0,
+                         "lag_wait": 0, "reengaged": 0, "asks_continue_wasted": 0}
         self.last_face: dict[str, float] | None = None
         self.last_voice: tuple[float, float] | None = None
         self.voice_mem: tuple[float, float, float] | None = None   # world direction (x, z) + time heard (s)
+        self._reid_miss_left = 0.0
+        self._reid_swap_left = 0.0
+        self._reid_swap_idx: int | None = None
+        self._reid_last_d = 1.0
+        self._reid_unseen_s = 0.0
+        self._reid_step = -1
+        self._lag_seen = False
+        self._lag_drill_s = 0.0
+        self._lag_drill_wait: bool | None = None
+        self.track = PatientTrack()
+        self._track_phase = None
+        self._returning = False
         self._v3_ready = True
         self._remember_depth()
         self.last_obs_v2 = self._get_obs()
@@ -427,7 +487,16 @@ class HospitalEngageV3Env(HospitalPureVisionV2Env):
         p = self.patients[self.active_patient_idx]
         self.escort_t += self.dt
         if p["lag_at"] >= 0.0 and self.escort_t >= p["lag_at"]:
-            p["lag_at"], p["lag_left"] = -1.0, float(self.rng.uniform(*LAG_S))
+            p["lag_at"] = -1.0
+            wait = self._lag_drill_wait if self._lag_drill_wait is not None else bool(self.rng.random() < LAG_WAIT_PROB)
+            p["lag_wait"] = wait
+            if wait:
+                p["lag_left"] = LAG_WAIT_MAX_S                   # until the robot comes back and asks (or a minute)
+                self.v3_stats["lag_wait"] += 1
+            else:
+                p["lag_left"] = float(getattr(self, "_lag_drill_s", 0.0) or self.rng.uniform(*LAG_S))
+            self._lag_drill_s = 0.0
+            self._lag_drill_wait = None
         lagging = p["lag_left"] > 0.0
         if not lagging and not p["follows_behind"]:
             super()._step_escorted_patient()
@@ -474,6 +543,118 @@ class HospitalEngageV3Env(HospitalPureVisionV2Env):
                 self.patient_stuck_s = 0.0
         self.patient_x, self.patient_z = p["x"], p["z"]
 
+    def _escorted(self) -> dict[str, Any] | None:
+        if self.task_phase != TaskPhase.GUIDE_ESCORT or self.active_patient_idx is None \
+                or self.active_patient_idx >= len(self.patients):
+            return None
+        return self.patients[self.active_patient_idx]
+
+    def _step_lag_bookkeeping(self, x0: float, z0: float) -> float:
+        """Round 10: the robot must wait for a patient who stops. Penalty for driving on away from someone left more
+        than LEAVE_BEHIND_M behind (true distance), plus the lag-drill statistics."""
+        p = self._escorted()
+        if p is None or abs(self.robot_x - x0) > 5.0:            # not escorting / elevator ride
+            return 0.0
+        r = 0.0
+        d = math.hypot(p["x"] - self.robot_x, p["z"] - self.robot_z)
+        step = math.hypot(self.robot_x - x0, self.robot_z - z0)
+        if d > LEAVE_BEHIND_M and step > 0.02:
+            away = ((self.robot_x - x0) * (self.robot_x - p["x"]) + (self.robot_z - z0) * (self.robot_z - p["z"])) / max(d, 1e-6)
+            if away > 0.01:
+                r += R_LEAVE_BEHIND
+                self.v3_stats["leave_behind_steps"] += 1
+        if p["lag_left"] > 0.0 and p.get("lag_wait"):
+            r += R_PATIENT_WAITING
+        if p["lag_left"] > 0.0:
+            self.v3_stats["lag_steps"] += 1
+            self.v3_stats["lag_max_tether"] = max(self.v3_stats["lag_max_tether"], d)
+            if d > LAG_FAR_M:
+                self.v3_stats["lag_far_m"] += step
+            self._lag_seen = True
+        elif getattr(self, "_lag_seen", False):
+            self.v3_stats["lag_done"] = 1
+            self.v3_stats["lag_after_m"] += step
+        return r
+
+    def _reid_tether(self, t: np.ndarray) -> np.ndarray:
+        """The tether as a ReID tracker reports it: brief misses, brief swaps onto another visible person, noisy
+        distance. Timers advance once per env step (the observation may be built more than once per step)."""
+        new_step = self.step_count != self._reid_step
+        self._reid_step = self.step_count
+        if new_step:
+            self._reid_miss_left = max(0.0, self._reid_miss_left - self.dt)
+            self._reid_swap_left = max(0.0, self._reid_swap_left - self.dt)
+            if self._reid_miss_left <= 0.0 and self._reid_swap_left <= 0.0:
+                if self.rng.random() < REID_MISS_HZ * self.dt:
+                    self._reid_miss_left = float(self.rng.uniform(*REID_MISS_S))
+                elif self.rng.random() < REID_SWAP_HZ * self.dt:
+                    self._reid_swap_idx = self._other_visible_person()
+                    if self._reid_swap_idx is not None:
+                        self._reid_swap_left = float(self.rng.uniform(*REID_SWAP_S))
+        out = np.array(t, dtype=np.float32)
+        if self._reid_swap_left > 0.0 and self._reid_swap_idx is not None:
+            q = self.patients[self._reid_swap_idx]
+            d = self._box_distance(q)
+            if d is not None:
+                self.v3_stats["reid_swap_steps"] += int(new_step)
+                self._reid_last_d, self._reid_unseen_s = d, 0.0
+                return tether_features(d, True, 0.0)
+            self._reid_swap_left = 0.0
+        if self._reid_miss_left > 0.0 or out[1] < 0.5:
+            if new_step:
+                self._reid_unseen_s += self.dt
+            self.v3_stats["reid_miss_steps"] += int(new_step and out[1] >= 0.5)
+            return tether_features(self._reid_last_d, False, self._reid_unseen_s)
+        d = float(out[0]) * 5.0
+        if new_step:
+            d *= float(1.0 + self.rng.normal(0.0, REID_D_NOISE))
+            self._reid_last_d = float(np.clip(d, 0.5, 5.0))
+        self._reid_unseen_s = 0.0
+        return tether_features(self._reid_last_d, True, 0.0)
+
+    def _box_distance(self, q: dict[str, Any]) -> float | None:
+        """Distance estimate of person q from their box in the front or the rear camera (None = in neither)."""
+        if floor_of(q["x"]) != floor_of(self.robot_x):
+            return None
+        for yaw in (self.robot_yaw, self.robot_yaw + math.pi):
+            det = compute_pinhole_detection(
+                robot_x=self.robot_x, robot_z=self.robot_z, robot_yaw=yaw, target_x=q["x"], target_z=q["z"],
+                target_seated=q["seated"], is_blocked_fn=self._check_los_occluded, domain_randomization=False, rng=self.rng)
+            if det["seen"] >= 0.5:
+                return float(np.clip(1.20 / max(float(det["h"]), 0.05), 0.5, 5.0))
+        return None
+
+    def _other_visible_person(self) -> int | None:
+        cands = [i for i, q in enumerate(self.patients) if i != self.active_patient_idx and self._box_distance(q) is not None]
+        return int(self.rng.choice(cands)) if cands else None
+
+    def setup_lag_drill(self, max_prelude_steps: int = 1500) -> bool:
+        """Drill: an escort in which the patient stops after a few seconds for 8-18 s. The prelude (find someone,
+        talk, start the escort) is driven by the teacher; the drill then lasts LAG_DRILL_S. False if no escort began."""
+        for _ in range(max_prelude_steps):
+            if self.task_phase == TaskPhase.GUIDE_ESCORT and self._escorted() is not None:
+                break
+            _, _, done, _ = self.step(self.teacher_action())
+            if done:
+                return False
+        p = self._escorted()
+        if p is None:
+            return False
+        p["follows_behind"] = True
+        p["lag_at"] = self.escort_t + float(self.rng.uniform(*LAG_DRILL_AT_S))
+        p["lag_left"] = 0.0
+        self._lag_drill_s = float(self.rng.uniform(*LAG_DRILL_LAG_S))
+        self._lag_drill_wait = bool(self.rng.random() < LAG_WAIT_PROB)
+        self.drill = "lag"
+        self.max_steps = self.step_count + int(round(LAG_DRILL_S / self.dt))
+        self.shift_duration_s = self.max_steps * self.dt           # hospital_env_vision ends the episode on this
+        for k in ("leave_behind_steps", "lag_steps", "lag_far_m", "lag_max_tether", "lag_after_m", "lag_done",
+                  "lag_wait", "reengaged"):
+            self.v3_stats[k] = 0 if isinstance(self.v3_stats[k], int) else 0.0
+        self._lag_seen = False
+        self.last_obs_v2 = self._get_obs()
+        return True
+
     def _largest_person_box(self) -> tuple[float, float, float]:
         """[seen, cx (-0.5..0.5), h] of the biggest person box in the front camera (YOLO patient / doctor classes)."""
         fl = floor_of(self.robot_x)
@@ -490,6 +671,48 @@ class HospitalEngageV3Env(HospitalPureVisionV2Env):
             if det["seen"] > 0.5 and det["h"] > best[2]:
                 best = (1.0, float(det["cx"]) * 0.5, float(det["h"]))
         return best
+
+    def _person_items(self) -> list[tuple[float, float, bool]]:
+        """People in the front camera (YOLO boxes): (cx -0.5..0.5, h, known). known = already met (helped, declined,
+        engaged / escorted) or staff — what the robot's face / ReID gallery tells it (Godot: helped meta, staff role)."""
+        fl = floor_of(self.robot_x)
+        people = [(p["x"], p["z"], p["seated"], bool(p["served"] or p["declined"] or p["engaged"]))
+                  for p in self.patients if floor_of(p["x"]) == fl]
+        people += [(n["x"], n["z"], bool(n.get("seated", False)), True) for n in self.npcs if floor_of(n["x"]) == fl]
+        out = []
+        for x, z, seated, known in people:
+            if math.hypot(x - self.robot_x, z - self.robot_z) > 6.0:
+                continue
+            det = compute_pinhole_detection(
+                robot_x=self.robot_x, robot_z=self.robot_z, robot_yaw=self.robot_yaw, target_x=x, target_z=z,
+                target_seated=seated, is_blocked_fn=self._check_los_occluded,
+                domain_randomization=self.domain_randomization, rng=self.rng)
+            if det["seen"] > 0.5:
+                out.append((float(det["cx"]) * 0.5, float(det["h"]), known))
+        return out
+
+    def _update_track(self) -> None:
+        """Escorted patient's position as the robot perceives it (box in the front / rear camera, not during a ReID miss;
+        during a swap: the other person's position), noisy. Godot: ReID position estimate."""
+        p = self._escorted()
+        if p is None or floor_of(p["x"]) != floor_of(self.robot_x):
+            if self.task_phase != TaskPhase.GUIDE_ESCORT:
+                self.track.reset()
+                self._returning = False
+            return
+        if self._track_phase != self.active_patient_idx:
+            self.track.reset()
+            self._track_phase = self.active_patient_idx
+        q = p
+        if self.domain_randomization and self._reid_swap_left > 0.0 and self._reid_swap_idx is not None:
+            q = self.patients[self._reid_swap_idx]
+        elif self.domain_randomization and self._reid_miss_left > 0.0:
+            return
+        if self._box_distance(q) is None:
+            return
+        n = TRACK_POS_NOISE_M if self.domain_randomization else 0.0
+        self.track.update((q["x"] + float(self.rng.normal(0.0, n)), q["z"] + float(self.rng.normal(0.0, n))),
+                          self.step_count * self.dt)
 
     def _rear_tether(self, p: dict[str, Any]) -> float | None:
         """Distance estimate of the escorted patient from the rear camera box (None = not in the rear view)."""
@@ -630,6 +853,19 @@ class HospitalEngageV3Env(HospitalPureVisionV2Env):
             self.v3_stats["asks_repeat"] += 1
             return R_ASK_REPEAT
         self.since_ask_s = 0.0
+        p_esc = self._escorted()
+        if p_esc is not None:
+            # "Anh/chị đi tiếp được không ạ?": to the escorted patient who stopped, close and in front of the robot
+            ang, d = self._rel_angle(p_esc["x"], p_esc["z"])
+            in_view = abs(ang) <= CAMERA_HFOV_RAD * 0.5 and not self._check_los_occluded(
+                self.robot_x, self.robot_z, p_esc["x"], p_esc["z"])
+            # in view within REENGAGE_M, or heard round a corner / through a doorway when this close
+            if p_esc["lag_left"] > 0.0 and ((in_view and d <= REENGAGE_M) or d <= REENGAGE_HEAR_M):
+                p_esc["lag_left"] = 0.0
+                p_esc["lag_wait"] = False
+                p_esc["speak_t"] = max(p_esc["speak_t"], 1.5)          # "ừ, đi tiếp"
+                self.v3_stats["reengaged"] += 1
+                return R_REENGAGE
         cands = [] if self._busy_escorting() else self._ask_candidates()
         if not cands:
             r_exc = self._excuse()
@@ -727,6 +963,7 @@ class HospitalEngageV3Env(HospitalPureVisionV2Env):
         r_v3 += self._step_people()
 
         idx_before, goal_before = self.active_patient_idx, self.goal_key
+        x_before, z_before = self.robot_x, self.robot_z
         cmd_v = (float(a[0]) + 1.0) * 0.5 * (ESCORT_WALK_SPEED if self.task_phase == TaskPhase.GUIDE_ESCORT else V_MAX)
         obs, r, done, info = super().step(a[:2])
         if info.get("patient_engaged") and self.active_patient_idx is not None:
@@ -746,6 +983,8 @@ class HospitalEngageV3Env(HospitalPureVisionV2Env):
                     r_v3 += R_PERSON_PUSH
                     self.v3_stats["push_steps"] += 1
                     break
+        r_v3 += self._step_lag_bookkeeping(x_before, z_before)
+        self._update_track()
         if self.drill == "exit" and not done and abs(self.robot_z) < EXIT_DONE_Z_M:
             r_v3 += R_EXIT_DRILL
             self.v3_stats["exit_ok"] += 1
@@ -813,9 +1052,16 @@ class HospitalEngageV3Env(HospitalPureVisionV2Env):
             if d_rear is not None:
                 self.tether_last_d, self.tether_unseen_s = d_rear, 0.0
                 o[18:21] = tether_features(d_rear, True, 0.0)
+        if self.task_phase == TaskPhase.GUIDE_ESCORT and self.domain_randomization:
+            o[18:21] = self._reid_tether(o[18:21])
         o[OBS_MEM0:OBS_MEM0 + MEM_SECTORS] = self.mem.sectors(self.robot_x, self.robot_z, self.robot_yaw)
         o[OBS_STALL] = self.stall.obs()
-        o[OBS_PERSON0:OBS_PERSON0 + 3] = self._largest_person_box()
+        slot0, extra = person_slots(self._person_items())
+        o[OBS_PERSON0:OBS_PERSON0 + 3] = slot0
+        o[OBS_PERSON_X0:OBS_PERSON_X0 + PERSON_EXTRA_DIMS] = extra
+        if self.task_phase == TaskPhase.GUIDE_ESCORT:
+            o[OBS_TRACK0:OBS_TRACK0 + TRACK_DIMS] = self.track.obs(self.robot_x, self.robot_z, self.robot_yaw,
+                                                                  self.step_count * self.dt)
         # voice: loudest (closest) speaking person on this floor
         best = None
         for p in self.patients:
@@ -867,7 +1113,9 @@ class HospitalEngageV3Env(HospitalPureVisionV2Env):
         A function of the observation only, so the policy can imitate it exactly."""
         s, m, cue = o[0:5], o[OBS_MEM0:OBS_MEM0 + MEM_SECTORS], float(o[OBS_STALL])
         person_ahead = o[OBS_PERSON0] > 0.5 and abs(float(o[OBS_PERSON0 + 1])) < 0.25 and float(o[OBS_PERSON0 + 2]) >= 0.55
-        if person_ahead and s[2] > 0.8 and o[29] >= ASK_COOLDOWN_S / 5.0:
+        escort_ahead = (int(np.argmax(o[9:13])) == TaskPhase.GUIDE_ESCORT and o[19] > 0.5 and o[18] * 5.0 <= 1.6
+                        and o[OBS_TRACK0] > 0.5 and o[OBS_TRACK0 + 2] > 0.5)   # it is the patient being escorted
+        if person_ahead and s[2] > 0.8 and o[29] >= ASK_COOLDOWN_S / 5.0 and not escort_ahead:
             self._want_excuse = True                            # someone stands right ahead: ask them to make way
         if cue != 0.0:
             # recovery window (local_memory.RecoveryCue): turn away on the spot first, then drive clear
@@ -919,6 +1167,37 @@ class HospitalEngageV3Env(HospitalPureVisionV2Env):
             a_v = -1.0 if (abs(ang) > 0.5 or near or front > 0.8) else -0.4
         if o[30] < 0.5 and (self.robot_v > 0.2 or not face_seen):
             a_tilt = 0.0                                        # keep the head level while driving
+        if o[30] < 0.5 and phase == TaskPhase.GUIDE_ESCORT and patient_left_behind(o):
+            a_v = -1.0                                          # patient seen far behind / lost after being far: wait
+        still_s = float(o[OBS_TRACK0 + 4]) * STILL_NORM_S if o[OBS_TRACK0] > 0.5 else 0.0
+        if phase != TaskPhase.GUIDE_ESCORT or o[OBS_TRACK0] < 0.5 or still_s < 1.0:
+            self._returning = False
+        elif patient_left_behind(o) and still_s >= RETURN_AFTER_S:
+            self._returning = True                              # they are not coming: go back to them
+        if o[30] < 0.5 and self._returning:
+            b = math.atan2(float(o[OBS_TRACK0 + 1]), float(o[OBS_TRACK0 + 2]))   # + = right
+            d_track = float(o[OBS_TRACK0 + 3]) * 5.0
+            if o[19] > 0.5 and float(o[18]) * 5.0 <= REENGAGE_M - 0.3:
+                # seen, close: stop, face them, ask
+                a_v, a_w = -1.0, float(np.clip(-1.5 * b, -1.0, 1.0))
+                if abs(b) < 0.35 and o[29] >= ASK_COOLDOWN_S / 5.0:
+                    a_ask = 1.0                                  # "Anh/chị đi tiếp được không ạ?"
+            elif d_track <= REENGAGE_HEAR_M - 0.4:
+                # where they were last seen is this close but they are out of sight (wall / doorway): call them —
+                # once, then again only after a pause (the teacher used to call every 3 s: 4 wasted asks / shift)
+                a_v, a_w = -1.0, float(np.clip(-1.5 * b, -1.0, 1.0))
+                now = self.step_count * self.dt
+                if o[29] >= ASK_COOLDOWN_S / 5.0 and now - getattr(self, "_teacher_call_t", -1e9) >= 8.0:
+                    a_ask = 1.0
+                    self._teacher_call_t = now
+            elif d_track > 0.8:
+                # not seen yet (round a corner / out of view): head for where they were last seen
+                s5 = o[0:5]
+                repulsion = -0.9 * (s5[0] + 0.6 * s5[1]) + 0.9 * (s5[4] + 0.6 * s5[3])
+                a_w = float(np.clip(-1.5 * b + 0.5 * repulsion / OMEGA_MAX, -1.0, 1.0))
+                a_v = 0.2 if abs(b) < 0.6 else -1.0
+            else:
+                a_v, a_w = -1.0, float(np.clip(-1.5 * b, -1.0, 1.0))
         if o[30] < 0.5:
             a_v, a_w = self._teacher_escape(o, a_v, a_w)
         # ask the locked-on patient once the robot stops in front of them (V2 teacher stops at TARGET_BOX_H ~ 1.85 m)

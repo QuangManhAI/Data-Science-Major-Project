@@ -150,7 +150,7 @@ func test_escorted_patient_walks_behind_without_wobble() -> void:
 	var hi: float = xs.max()
 	assert_lt(hi - lo, 0.25, "lateral sway peak-to-peak %.2f m" % (hi - lo))
 	var gap: float = Human.flat_distance(human.global_position, robot_pos)
-	assert_between(gap, 0.8, 1.6, "theo kịp, cách robot ~FOLLOW_GAP_M")
+	assert_between(gap, 0.8, 1.7, "theo kịp, cách robot ~FOLLOW_GAP_M (+ một khoảng dấu chân 0.25 m)")
 	assert_gt(min_gap, RLEnvBridge.MIN_GAP_M - 0.05, "không chen sát robot")
 
 

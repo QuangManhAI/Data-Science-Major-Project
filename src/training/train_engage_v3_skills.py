@@ -41,11 +41,12 @@ from torch.distributions import Normal
 
 from src.models.ppo_agent import PPOHospitalAgent
 from src.training.hospital_env import TaskPhase
-from src.training.hospital_env_engage_v3 import ACT_DIM_V3, OBS_DIM_V3, OBS_STALL, HospitalEngageV3Env
+from src.training.hospital_env_engage_v3 import ACT_DIM_V3, OBS_DIM_V3, OBS_STALL, HospitalEngageV3Env, patient_left_behind
 from src.training.hospital_env_pure_vision_v2 import GAMMA_V2
 from src.training.train_engage_v3 import CKPT_PREFIX, EVAL_SEED_BASE, git_commit, load_widening, policy_mean, warm_start_from_v2, V2_CKPT
 
-KINDS = ("shift", "walkup", "exit")
+KINDS = ("shift", "walkup", "exit", "lag")
+LAG_PRELUDE_S = 400.0               # lag drill: the teacher first finds someone and starts an escort
 PROBE_SEED = 5_000
 
 
@@ -76,7 +77,10 @@ def setup_walkup_probe(i: int) -> HospitalEngageV3Env:
 
 def skill_state(env: HospitalEngageV3Env, obs: np.ndarray, kind: str) -> bool:
     """States in which the rule teacher is a good target: talking, stalled / getting clear, and the drills."""
-    return kind != "shift" or env.dialogue is not None or obs[OBS_STALL] != 0.0
+    if kind != "shift" or env.dialogue is not None or obs[OBS_STALL] != 0.0:
+        return True
+    # round 10: the patient fell behind / was lost -> the teacher stands and waits (Godot no longer stops it by rule)
+    return env.task_phase == TaskPhase.GUIDE_ESCORT and (patient_left_behind(obs) or env._returning)
 
 
 # --------------------------------------------------------------------------- workers
@@ -108,9 +112,13 @@ def rollout(task: dict) -> dict:
         kind = "shift"
     if kind == "exit" and not env.setup_exit_drill():
         kind = "shift"
+    if kind == "lag" and not env.setup_lag_drill():
+        env = make_env(seed, task["seconds"])
+        env.reset()
+        kind = "shift"
     obs = env.last_obs_v2
     std = agent.actor_logstd.exp()
-    O, A, T, LP, R, V, M = [], [], [], [], [], [], []
+    O, A, T, LP, R, V, M, X = [], [], [], [], [], [], [], []
     done, info = False, {}
     while not done:
         skill = skill_state(env, obs, kind)
@@ -119,9 +127,11 @@ def rollout(task: dict) -> dict:
         mean = policy_mean(agent, obs_t)
         dist = Normal(mean, std.expand_as(mean))
         a = dist.sample().squeeze(0).numpy()
-        if skill and task["teacher_w"] > 0.0 and rng.random() < task["teacher_w"]:
+        executed_teacher = skill and task["teacher_w"] > 0.0 and rng.random() < task["teacher_w"]
+        if executed_teacher:
             a = teacher.copy()
         O.append(obs); A.append(a.astype(np.float32)); T.append(teacher); M.append(1.0 if skill else 0.0)
+        X.append(0.0 if executed_teacher else 1.0)       # PPO only on the policy's own (on-policy) actions
         LP.append(float(dist.log_prob(torch.as_tensor(a).unsqueeze(0)).sum(-1)))
         V.append(float(agent.critic(obs_t)))
         obs, r, done, info = env.step(np.clip(a, -1.0, 1.0))
@@ -137,6 +147,7 @@ def rollout(task: dict) -> dict:
     return {"obs": np.asarray(O, dtype=np.float32), "act": np.asarray(A, dtype=np.float32),
             "tea": np.asarray(T, dtype=np.float32), "logp": np.asarray(LP, dtype=np.float32), "adv": adv,
             "ret": adv + np.asarray(V, dtype=np.float32), "mask": np.asarray(M, dtype=np.float32),
+            "onp": np.asarray(X, dtype=np.float32),
             "kind": kind, "return": float(np.sum(R)), "helped": info.get("patients_helped", 0),
             "collisions": info.get("collisions", 0), "exit": info.get("exit_reason", ""), "v3": info["v3"]}
 
@@ -176,6 +187,23 @@ def eval_task(task: dict) -> dict:
         v3 = info["v3"]
         return {"kind": kind, "dialogue": int(v3["dialogues"] >= 1), "enrolled": int(v3["enrolled"] >= 1),
                 "side": int(b0 >= math.radians(45.0)), "centre": v3["centre_sum"] / max(1, v3["face_steps"])}
+    if kind == "lag":
+        env = make_env(PROBE_SEED + 7_000 + i, LAG_PRELUDE_S)
+        env.reset(seed=PROBE_SEED + 7_000 + i)
+        if not env.setup_lag_drill():
+            return {"kind": kind, "valid": 0}
+        done, info = False, {}
+        while not done:
+            _, _, done, info = env.step(act(env))
+        v3 = info["v3"]
+        if v3["lag_wait"]:
+            ok = v3["reengaged"] >= 1 and (v3["lag_after_m"] >= 3.0 or not v3["lag_done"])   # went back, asked, went on
+        else:
+            ok = v3["lag_max_tether"] <= 3.5 and (v3["lag_after_m"] >= 3.0 or not v3["lag_done"])
+        return {"kind": kind, "valid": int(v3["lag_steps"] > 0), "ok": int(ok), "wait": int(v3["lag_wait"] > 0),
+                "reengaged": int(v3["reengaged"] >= 1),
+                "far_m": v3["lag_far_m"], "max_tether": v3["lag_max_tether"], "after_m": v3["lag_after_m"],
+                "leave": v3["leave_behind_steps"], "collisions": info["collisions"]}
     env = make_env(PROBE_SEED + i, 40.0)
     env.reset(seed=PROBE_SEED + i)
     assert env.setup_exit_drill()
@@ -192,7 +220,16 @@ def summarise(rows: list[dict]) -> dict[str, float]:
     sh = [r for r in rows if r["kind"] == "shift"]
     wu = [r for r in rows if r["kind"] == "walkup"]
     ex = [r for r in rows if r["kind"] == "exit"]
+    lg = [r for r in rows if r["kind"] == "lag" and r.get("valid")]
     out: dict[str, float] = {}
+    if lg:
+        out.update({"lag_ok": float(np.mean([r["ok"] for r in lg])), "lag_far_m": float(np.mean([r["far_m"] for r in lg])),
+                    "lag_max_tether": float(np.mean([r["max_tether"] for r in lg])),
+                    "lag_after_m": float(np.mean([r["after_m"] for r in lg])),
+                    "lag_collisions": float(np.mean([r["collisions"] for r in lg]))})
+        lw = [r for r in lg if r["wait"]]
+        if lw:
+            out["lag_wait_reengaged"] = float(np.mean([r["reengaged"] for r in lw]))
     if sh:
         st = collections.Counter()
         for r in sh:
@@ -224,13 +261,16 @@ def summarise(rows: list[dict]) -> dict[str, float]:
 def selection_score(ev: dict[str, float]) -> float:
     """Checkpoint choice: the shift return plus the two skills that the return alone hardly measures."""
     return (ev.get("return", 0.0) + 40.0 * ev.get("walkup_enrolled", 0.0) + 40.0 * ev.get("exit_ok", 0.0)
-            - 5.0 * ev.get("exit_push_s", 0.0) - 3.0 * ev.get("wasted_asks_per_ep", 0.0))
+            - 5.0 * ev.get("exit_push_s", 0.0) - 15.0 * ev.get("wasted_asks_per_ep", 0.0)
+            + 40.0 * ev.get("lag_ok", 0.0) - 10.0 * ev.get("lag_far_m", 0.0)
+            + 10.0 * ev.get("helped", 0.0) + 40.0 * ev.get("lag_wait_reengaged", 0.0))        # a timid robot (waits for nothing) must not win on fewer collisions
 
 
 def evaluate(pool, agent: PPOHospitalAgent | None, n_shift: int, n_probe: int, shift_s: float) -> dict[str, float]:
     sd = {k: v.numpy() for k, v in agent.state_dict().items()} if agent is not None else None
     tasks = [{"sd": sd, "kind": "shift", "i": i, "seconds": shift_s} for i in range(n_shift)]
     tasks += [{"sd": sd, "kind": k, "i": i} for k in ("walkup", "exit") for i in range(n_probe)]
+    tasks += [{"sd": sd, "kind": "lag", "i": i} for i in range(max(10, n_probe // 2))]
     return summarise(pool.map(eval_task, tasks, chunksize=1))
 
 
@@ -246,6 +286,7 @@ def train(args: argparse.Namespace) -> Path:
     else:
         warm_start_from_v2(agent, Path(args.v2_ckpt))
     with torch.no_grad():                                    # re-open exploration (stds had collapsed)
+        agent.actor_logstd[0, 0] = max(float(agent.actor_logstd[0, 0]), math.log(args.init_std_v))
         agent.actor_logstd[0, 1] = max(float(agent.actor_logstd[0, 1]), math.log(args.init_std))
         agent.actor_logstd[0, 2] = max(float(agent.actor_logstd[0, 2]), math.log(args.init_std))
     opt = torch.optim.AdamW(agent.parameters(), lr=args.lr, eps=1e-5, weight_decay=0.0)
@@ -267,12 +308,12 @@ def train(args: argparse.Namespace) -> Path:
                     "obs_dim": OBS_DIM_V3, "act_dim": ACT_DIM_V3, "git_commit": git_commit(), **extra},
                    run_dir / "checkpoints" / name)
 
-    fr = np.array([args.frac_shift, args.frac_walkup, args.frac_exit], dtype=np.float64)
+    fr = np.array([args.frac_shift, args.frac_walkup, args.frac_exit, args.frac_lag], dtype=np.float64)
     fr /= fr.sum()
-    secs = {"shift": args.shift, "walkup": args.drill_s, "exit": args.exit_s}
+    secs = {"shift": args.shift, "walkup": args.drill_s, "exit": args.exit_s, "lag": LAG_PRELUDE_S}
     pool = mp.get_context("spawn").Pool(args.workers, initializer=_init_worker)
     try:
-        log(f"PPO Engagement V3 skills | episodes={args.episodes} ({iters} iters x {args.batch_episodes}) mix shift/walkup/exit="
+        log(f"PPO Engagement V3 skills | episodes={args.episodes} ({iters} iters x {args.batch_episodes}) mix shift/walkup/exit/lag="
             f"{fr.round(2).tolist()} shift={args.shift}s lr={args.lr} bc {args.bc_start}->{args.bc_end} "
             f"teacher_w {args.teacher_start}->0 over {args.teacher_frac:.0%} | obs={OBS_DIM_V3} | "
             f"init={args.resume or 'V2 warm start'} | out={run_dir}")
@@ -295,18 +336,24 @@ def train(args: argparse.Namespace) -> Path:
             eps = pool.map(rollout, tasks, chunksize=1)
             ep += len(eps)
 
-            b = {k: torch.as_tensor(np.concatenate([e[k] for e in eps])) for k in ("obs", "act", "tea", "logp", "adv", "ret", "mask")}
+            b = {k: torch.as_tensor(np.concatenate([e[k] for e in eps])) for k in ("obs", "act", "tea", "logp", "adv", "ret", "mask", "onp")}
             b["adv"] = (b["adv"] - b["adv"].mean()) / (b["adv"].std() + 1e-8)
             n = b["obs"].shape[0]
             stats = collections.defaultdict(list)
             for _ in range(args.ppo_epochs):
+                if stats["kl"] and np.mean(stats["kl"][-max(1, n // args.batch_size):]) > args.target_kl:
+                    break                                     # this batch already moved the policy far enough
                 perm = torch.randperm(n)
                 for s in range(0, n, args.batch_size):
                     idx = perm[s:s + args.batch_size]
                     mean = policy_mean(agent, b["obs"][idx])
                     dist = Normal(mean, agent.actor_logstd.expand_as(mean).exp())
                     ratio = torch.exp(dist.log_prob(b["act"][idx]).sum(-1) - b["logp"][idx])
-                    pg = -torch.min(ratio * b["adv"][idx], torch.clamp(ratio, 1 - args.clip, 1 + args.clip) * b["adv"][idx]).mean()
+                    # Teacher-executed steps are off-policy (an action the policy may give ~0 probability): their ratio
+                    # explodes and wrecks the update (round 10 first run: KL median 0.16, max 36). They train BC only.
+                    onp = b["onp"][idx]
+                    pg_t = -torch.min(ratio * b["adv"][idx], torch.clamp(ratio, 1 - args.clip, 1 + args.clip) * b["adv"][idx])
+                    pg = (onp * pg_t).sum() / onp.sum().clamp(min=1.0)
                     v_loss = 0.5 * ((agent.critic(b["obs"][idx]).squeeze(-1) - b["ret"][idx]) ** 2).mean()
                     ent = dist.entropy().sum(-1).mean()
                     bc = (b["mask"][idx] * ((mean - b["tea"][idx]) ** 2).sum(-1)).sum() / b["mask"][idx].sum().clamp(min=1.0)
@@ -320,7 +367,7 @@ def train(args: argparse.Namespace) -> Path:
                     with torch.no_grad():
                         agent.actor_logstd.clamp_(-2.5, 0.0)
                     stats["pg"].append(pg.item()); stats["v"].append(v_loss.item()); stats["bc"].append(bc.item())
-                    stats["kl"].append(((ratio - 1) - torch.log(ratio)).mean().item())
+                    stats["kl"].append((onp * ((ratio - 1) - torch.log(ratio))).sum().item() / max(1.0, onp.sum().item()))
             sched.step()
 
             by = collections.defaultdict(list)
@@ -334,6 +381,8 @@ def train(args: argparse.Namespace) -> Path:
                 parts.append(f"walkup enr {np.mean([e['v3']['enrolled'] > 0 for e in dl]) if dl else 0:.2f}")
             if by["exit"]:
                 parts.append(f"exit ok {np.mean([e['v3']['exit_ok'] for e in by['exit']]):.2f} push {np.mean([e['v3']['push_steps'] for e in by['exit']]) * 0.2:.1f}s")
+            if by["lag"]:
+                parts.append(f"lag far {np.mean([e['v3']['lag_far_m'] for e in by['lag']]):.2f}m max {np.mean([e['v3']['lag_max_tether'] for e in by['lag']]):.2f}m")
             el = time.time() - t0
             log(f"It {it:4d}/{iters} ep {ep:5d} | {' | '.join(parts)} | n={n} pg {np.mean(stats['pg']):+.3f} v {np.mean(stats['v']):.3f} "
                 f"bc {np.mean(stats['bc']):.3f} kl {np.mean(stats['kl']):.4f} std {agent.actor_logstd.exp().detach().numpy().round(2).tolist()[0]} "
@@ -369,6 +418,7 @@ def main() -> None:
     p.add_argument("--frac-shift", type=float, default=0.2)
     p.add_argument("--frac-walkup", type=float, default=0.4)
     p.add_argument("--frac-exit", type=float, default=0.4)
+    p.add_argument("--frac-lag", type=float, default=0.0, help="round 10: escorts in which the patient stops")
     p.add_argument("--ppo-epochs", type=int, default=4)
     p.add_argument("--batch-size", type=int, default=1024)
     p.add_argument("--lr", type=float, default=2e-4)
@@ -381,6 +431,8 @@ def main() -> None:
     p.add_argument("--teacher-start", type=float, default=0.5, help="prob. the teacher acts in skill states at the start")
     p.add_argument("--teacher-frac", type=float, default=0.4, help="share of training over which that prob. goes to 0")
     p.add_argument("--init-std", type=float, default=0.3)
+    p.add_argument("--init-std-v", type=float, default=0.08, help="speed std at start (round 10: 0.3 to learn waiting)")
+    p.add_argument("--target-kl", type=float, default=0.03, help="stop the PPO epochs of a batch beyond this KL")
     p.add_argument("--eval-every", type=int, default=10, help="iterations")
     p.add_argument("--eval-episodes", type=int, default=16)
     p.add_argument("--probe-n", type=int, default=100)

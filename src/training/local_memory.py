@@ -140,3 +140,69 @@ class RecoveryCue:
     def elapsed_s(cue: float) -> float:
         """Seconds since the recovery window started, from the cue value."""
         return (1.0 - abs(float(cue))) * RECOVERY_S
+
+
+# --------------------------------------------------------------------------- round 11: people in view, escorted patient
+N_PERSON_SLOTS = 3
+PERSON_EXTRA_DIMS = 1 + 4 * (N_PERSON_SLOTS - 1)   # known flag of slot 0 + slots 1..2 [seen, cx, h, known]
+TRACK_DIMS = 5                                     # escorted patient: [valid, sin(b), cos(b), dist / 5 m, still / STILL_NORM_S]
+TRACK_KEEP_S = 120.0                               # remembered position forgotten after this long unseen
+TRACK_MOVE_M = 0.5                                 # smoothed position moved more than this from the anchor = walking
+TRACK_SMOOTH = 0.25                                # EMA weight of a new sighting (detections are noisy)
+STILL_NORM_S = 20.0
+
+
+def person_slots(items: list[tuple[float, float, bool]]) -> tuple[np.ndarray, np.ndarray]:
+    """People in the front camera, biggest box (closest) first: items = (cx -0.5..0.5, h, known).
+    known = already met (helped / declined / being escorted) or staff — the robot's gallery of faces / ReID.
+    Returns (slot0 [seen, cx, h] — the old 'largest person box' inputs, kept in place for warm start —,
+    extra [known0, seen1, cx1, h1, known1, seen2, cx2, h2, known2])."""
+    s = sorted(items, key=lambda t: -float(t[1]))[:N_PERSON_SLOTS]
+    slot0 = np.zeros(3, dtype=np.float32)
+    extra = np.zeros(PERSON_EXTRA_DIMS, dtype=np.float32)
+    for k, (cx, h, known) in enumerate(s):
+        if k == 0:
+            slot0[:] = (1.0, float(cx), float(h))
+            extra[0] = 1.0 if known else 0.0
+        else:
+            extra[1 + 4 * (k - 1): 1 + 4 * k] = (1.0, float(cx), float(h), 1.0 if known else 0.0)
+    return slot0, extra
+
+
+class PatientTrack:
+    """Where the escorted patient was last seen (world frame, kept with odometry) and how long they have not moved.
+    Lets the policy go back to someone who stopped, instead of only waiting (round 11). Same class in the env and in
+    the Godot policy server."""
+
+    def __init__(self) -> None:
+        self.reset()
+
+    def reset(self) -> None:
+        self.pos: tuple[float, float] | None = None
+        self.seen_t = -1e9
+        self.anchor: tuple[float, float] | None = None
+        self.anchor_t = 0.0
+
+    def update(self, seen_pos: tuple[float, float] | None, t: float) -> None:
+        if seen_pos is None:
+            return
+        if self.pos is None or t - self.seen_t > 3.0:
+            self.pos = (float(seen_pos[0]), float(seen_pos[1]))
+        else:
+            k = TRACK_SMOOTH
+            self.pos = (self.pos[0] + k * (float(seen_pos[0]) - self.pos[0]), self.pos[1] + k * (float(seen_pos[1]) - self.pos[1]))
+        self.seen_t = t
+        if self.anchor is None or math.hypot(self.pos[0] - self.anchor[0], self.pos[1] - self.anchor[1]) > TRACK_MOVE_M:
+            self.anchor, self.anchor_t = self.pos, t
+
+    def obs(self, x: float, z: float, yaw: float, t: float) -> np.ndarray:
+        out = np.zeros(TRACK_DIMS, dtype=np.float32)
+        if self.pos is None or t - self.seen_t > TRACK_KEEP_S:
+            return out
+        dx, dz = self.pos[0] - x, self.pos[1] - z
+        fwd = dx * -math.sin(yaw) + dz * -math.cos(yaw)
+        right = dx * math.cos(yaw) + dz * -math.sin(yaw)
+        b = math.atan2(right, fwd)                      # + = right
+        out[:] = (1.0, math.sin(b), math.cos(b), min(1.0, math.hypot(dx, dz) / 5.0),
+                  min(1.0, (t - self.anchor_t) / STILL_NORM_S))
+        return out

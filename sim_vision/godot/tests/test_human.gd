@@ -18,7 +18,7 @@ func test_scene_has_capsule_collision_and_idle() -> void:
 func test_materials_have_textures() -> void:
 	var human := HumanScene.instantiate() as Human
 	add_child_autofree(human)
-	var mesh := human.get_node("Model/Skeleton3D/m011_hipoly_81_bones_opacity") as MeshInstance3D
+	var mesh := human.get_node("Model/Skeleton3D/m003_hipoly_81_bones_opacity") as MeshInstance3D
 	for s: int in mesh.mesh.get_surface_count():
 		var mat := mesh.get_surface_override_material(s) as StandardMaterial3D
 		assert_not_null(mat, "surface %d override" % s)

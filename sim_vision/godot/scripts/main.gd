@@ -103,6 +103,7 @@ const ESCORT_GRACE_S: float = 4.0                 # đầu ca: bệnh nhân đan
 const ENROLL_WAIT_S: float = 4.0                  # chưa ghi nhớ được mặt ➔ đứng chờ tối đa chừng này, nhờ nhìn về robot
 const SPEAKER_TURN_GAIN: float = 2.0
 const ID_SEEN_S: float = 0.5                      # khớp trong 0.5 s gần nhất ➔ đang thấy
+const LOST_CLOSE_M: float = 1.8                     # lần cuối thấy gần hơn ➔ mất dấu là do đứng cạnh (điểm mù), không phải tụt lại
 const ID_ASSUME_FAR_S: float = 4.0                # không thấy quá 4 s ➔ coi như đã xa (lúc rẽ bệnh nhân hay ra khỏi khung 1–3 s)
 const SEARCH_TURN_OMEGA: float = 0.6
 const ROBOT_CAM_HFOV: float = 2.0 * atan(tan(deg_to_rad(35.0)) * 4.0 / 3.0)   # FOV dọc 70°, 4:3 ➔ ngang ~86°
@@ -1605,10 +1606,16 @@ func accepts_patient_turn() -> bool:
 	return _ask_pending
 
 
+## Luật giữ robot đứng chờ: policy V3 (vòng 10) tự chờ khi bệnh nhân tụt lại ➔ chỉ giữ lúc đang hỏi / bệnh nhân xin
+## nghỉ; controller luật / V2 vẫn giữ cả lúc bệnh nhân ở xa.
+func _monitor_holds() -> bool:
+	return escort_monitor.holds_for_dialogue() if policy_v3 else escort_monitor.hold_robot()
+
+
 func _escort_holding() -> bool:
 	return active_escorted_patient != null and _rl_bridge != null \
 			and _rl_bridge.task_phase == RLEnvBridgeScript.TaskPhase.GUIDE_ESCORT \
-			and (escort_monitor.hold_robot() or _waiting_enroll())
+			and (_monitor_holds() or _waiting_enroll())
 
 
 ## Đầu ca dẫn mà chưa ghi nhớ được mặt (server có ReID) ➔ đứng lại, quay về phía bệnh nhân, nhờ họ nhìn về robot.
@@ -1676,14 +1683,20 @@ func _update_escort_hri(p: CharacterBody3D, d_tether: float, delta: float) -> vo
 		# Robot thật: chỉ biết bệnh nhân qua camera (box khớp người đã ghi nhớ).
 		var unseen: float = _now_s() - _id_seen_s
 		seen = unseen <= ID_SEEN_S
-		dist = _id_dist_m if unseen <= ID_ASSUME_FAR_S else maxf(_id_dist_m, EscortMonitor.FAR_M + 0.5)
+		# Mất dấu lâu chỉ coi là "đã xa" khi lần cuối thấy họ đã xa (như hospital_env_engage_v3.patient_left_behind):
+		# mất dấu khi họ đang ở sát robot = đứng cạnh, trong điểm mù giữa camera trước / sau (log run_2311, tầng 3:
+		# bệnh nhân cách 0.7 m mà robot nhắc / hỏi mãi, hai bên chờ nhau).
+		var lost_far: bool = unseen > ID_ASSUME_FAR_S and _id_dist_m > LOST_CLOSE_M
+		dist = maxf(_id_dist_m, EscortMonitor.FAR_M + 0.5) if lost_far else _id_dist_m
+		if unseen > ID_SEEN_S and _id_dist_m <= LOST_CLOSE_M:
+			seen = true                    # ở sát robot mà ngoài khung: không đếm là mất dấu
 	else:
 		# Không có ReID (yolo_server --no-reid / thiếu model) ➔ dùng vị trí thật trong sim.
 		seen = has_line_of_sight(robot, p)
 		dist = d_tether
 	for ev: String in escort_monitor.step(dist, seen, delta):
 		_on_escort_event(ev, p, dist)
-	if escort_monitor.hold_robot():
+	if _monitor_holds():
 		# Đứng chờ, quay mặt về phía bệnh nhân (camera nhìn thấy họ, cử chỉ hướng về họ).
 		var target: Vector3 = _id_est_pos if vis else p.global_position
 		var to: Vector3 = target - robot.global_position
@@ -2201,7 +2214,7 @@ func _apply_face_paste() -> int:
 	await get_tree().process_frame
 	var targets: Array = []
 	if human != null:
-		targets.append([human, "human_m06"])
+		targets.append([human, "patient_m02"])   # human.tscn: Male_Adult_02 (thay human_m06 áo đỏ, YOLO nhầm thành pccc_station)
 	var furn: Node = room.get_node_or_null(^"Furniture") if room != null else null
 	if furn != null:
 		for c: Node in furn.get_children():
@@ -2354,6 +2367,7 @@ func _on_policy_engage(tilt: float, ask: bool) -> void:
 	if not policy_v3:
 		policy_v3 = true
 		print("[V3] policy V3: tự quay / ngẩng đầu / hỏi (luật quay về người nói tắt)")
+	escort_monitor.auto_ask = not bool(_policy.get("policy_returns_to_patient")) if _policy != null else true
 	robot.set_head_tilt_action(tilt)
 	if ask:
 		_robot_ask()
@@ -2395,6 +2409,32 @@ var _anon_dist_m: float = 1.0
 
 
 ## Chiều cao (0..1) box người (YOLO patient / doctor) to nhất trong `dets`; không có ➔ 0.
+## [cx −0.5..0.5, h, đã gặp] của các box người (YOLO patient / doctor) ở camera trước.
+func _person_items(dets: Array) -> Array:
+	var out: Array = []
+	for dv: Variant in dets:
+		var d: Dictionary = dv
+		if not (int(d.get("class_id", -1)) in [0, 1] or str(d.get("class_name", "")) in ["patient", "doctor"]):
+			continue
+		var owner: CharacterBody3D = _box_owner(d)
+		var known: bool = owner != null and (owner == active_escorted_patient or owner.get_meta("helped", false)
+				or str(owner.get("staff_role")) in ["doctor", "nurse"])
+		if not known and not _served_det.is_empty() and is_same(d, _served_det):
+			known = true
+		out.append([(float(d["x1"]) + float(d["x2"])) * 0.5 - 0.5, float(d["y2"]) - float(d["y1"]), 1.0 if known else 0.0])
+	return out
+
+
+## Người thật có ngực / hông / mặt chiếu vào box `d` (camera trước); không có ➔ null.
+func _box_owner(d: Dictionary) -> CharacterBody3D:
+	for p: CharacterBody3D in _all_people():
+		for h: float in [1.3, 0.9, 1.55]:
+			var uv: Vector2 = _gt_uv(p, false, h)
+			if uv.x >= 0.0 and Main._uv_in(uv, d):
+				return p
+	return null
+
+
 static func largest_patient_h(dets: Array) -> float:
 	var best: float = 0.0
 	for dv: Variant in dets:
@@ -2428,6 +2468,12 @@ func _v3_features() -> Dictionary:
 				_anon_dist_m = clampf(1.20 / maxf(h, 0.05), 0.5, 5.0)
 			var unseen_a: float = _now_s() - _anon_seen_s
 			out["tether"] = [_anon_dist_m, 1.0 if unseen_a <= ID_SEEN_S else 0.0, unseen_a]
+	# Vòng 11: người trong khung camera trước (box YOLO) + "đã gặp" (đã giúp / đang dẫn / nhân viên / ReID người vừa
+	# giúp) ➔ policy tự chọn một người chưa gặp, bỏ qua người đã giúp. Sim: chủ box theo chiếu 3D (thay gallery ReID).
+	out["persons"] = _person_items(_latest_yolo_dets)
+	# Vị trí bệnh nhân đang dẫn mà robot ước lượng (ReID + khoảng cách từ box) ➔ policy nhớ chỗ họ dừng để quay lại.
+	if active_escorted_patient != null and _vision_tether():
+		out["id_pos"] = [1.0 if _now_s() - _id_seen_s <= ID_SEEN_S else 0.0, _id_est_pos.x, _id_est_pos.z]
 	var spk: CharacterBody3D = _current_speaker()
 	var expect_cx: float = -1.0
 	if spk != null:
@@ -2457,7 +2503,10 @@ func _v3_features() -> Dictionary:
 			best = f
 	if not best.is_empty():
 		var owner: CharacterBody3D = _face_owner(best)
-		var known: float = 1.0 if (owner != null and owner.get_meta("helped", false)) \
+		# "Đã gặp": người đã giúp / vừa giúp (ReID) — và nhân viên (bác sĩ, y tá: robot bệnh viện có sẵn ảnh nhân viên).
+		# Lúc train camera chỉ thấy mặt bệnh nhân; mặt nhân viên báo "chưa gặp" ➔ policy hỏi họ liên tục (run_2311).
+		var staff: bool = owner != null and str(owner.get("staff_role")) in ["doctor", "nurse"]
+		var known: float = 1.0 if (owner != null and owner.get_meta("helped", false)) or staff \
 				or not Main.face_in_box([best], _served_det).is_empty() else 0.0
 		out["face"] = [1.0, (float(best["x1"]) + float(best["x2"])) * 0.5 - 0.5,
 				(float(best["y1"]) + float(best["y2"])) * 0.5 - 0.5, float(best["y2"]) - float(best["y1"]), known]
@@ -2507,6 +2556,32 @@ func _blocking_person() -> CharacterBody3D:
 ##   người đó quay lại và nói;
 ## - không thì với người đứng chắn ngay trước mặt (người vừa giao xong, người đi ngang) ➔ "Xin lỗi, cho tôi đi nhờ ạ",
 ##   người đó bước sang bên. Robot tự xin đường chứ không trông vào việc người ta tự né.
+var _wasted_asks: int = 0
+const REENGAGE_M: float = 2.5          # như hospital_env_engage_v3: thấy họ trước mặt trong tầm này ...
+const REENGAGE_HEAR_M: float = 1.8     # ... hoặc khuất (góc tường, cửa) mà gần chừng này thì vẫn nghe thấy
+
+
+## Hành động hỏi lúc đang dẫn, bệnh nhân đang dừng lại ở gần robot ➔ "Anh/chị đi tiếp được không ạ?" và chờ trả lời
+## (vòng 11: robot tự quay lại hỏi, không còn luật tự hỏi trong EscortMonitor). Không đúng lúc ➔ false.
+func _policy_asks_continue() -> bool:
+	var p: CharacterBody3D = active_escorted_patient
+	if p == null or _rl_bridge == null or _rl_bridge.task_phase != RLEnvBridgeScript.TaskPhase.GUIDE_ESCORT:
+		return false
+	if float(p.get_meta("escort_hold_s", 0.0)) <= 0.0:
+		return false                          # họ đang đi theo: không có gì để hỏi
+	var local: Vector3 = robot.to_local(p.global_position)
+	var d: float = Vector2(local.x, local.z).length()
+	var in_view: bool = absf(atan2(local.x, -local.z)) <= deg_to_rad(43.0) and has_line_of_sight(robot, p)
+	if not ((in_view and d <= REENGAGE_M) or d <= REENGAGE_HEAR_M):
+		return false
+	if not escort_monitor.begin_ask():
+		return false
+	print("[V3] robot quay lại hỏi \"Anh/chị đi tiếp được không ạ?\" ➔ %s (cách %.1fm)" % [p.name, d])
+	_say_then("ask_continue", {}, _start_answer_turn.bind(p))
+	return true
+
+
+
 func _robot_ask() -> void:
 	if Main.is_dialogue_state(state) or _now_s() - _last_ask_s < ASK_COOLDOWN_S:
 		return
@@ -2519,11 +2594,14 @@ func _robot_ask() -> void:
 			var local: Vector3 = robot.to_local(p.global_position)
 			var d: float = Vector2(local.x, local.z).length()
 			var cx: float = Main.bearing_to_cx(atan2(local.x, -local.z))
-			if d > ASK_RANGE_M or cx < 0.0 or absf(cx - 0.5) > ASK_CENTRE_CX or p.get_meta("helped", false):
-				continue
+			if d > ASK_RANGE_M or cx < 0.0 or absf(cx - 0.5) > ASK_CENTRE_CX or p.get_meta("helped", false) \
+					or str(p.get("staff_role")) in ["doctor", "nurse"]:
+				continue                          # đã giúp / nhân viên: không hỏi "cần giúp gì"
 			if absf(cx - 0.5) < best and has_line_of_sight(robot, p):
 				best = absf(cx - 0.5)
 				target = p
+	if target == null and _policy_asks_continue():
+		return
 	if target == null:
 		var blocker: CharacterBody3D = _blocking_person()
 		if blocker != null:
@@ -2537,7 +2615,10 @@ func _robot_ask() -> void:
 			return
 		if busy:
 			return                            # đang bận mà không ai chắn lối: không nói gì
-	print("[V3] robot hỏi \"Cần tôi giúp gì không ạ?\" ➔ %s" % (target.name if target != null else "không có ai"))
+	if target == null:
+		_wasted_asks += 1                     # policy hỏi khi không có ai chưa được giúp trước mặt: lỗi của policy, để lộ ra
+	print("[V3] robot hỏi \"Cần tôi giúp gì không ạ?\" ➔ %s" % (target.name if target != null else
+			"không có ai (hỏi thừa lần %d)" % _wasted_asks))
 	if robot.arms != null:
 		robot.arms.wave(1.5)
 	_say_then("ask_help", {}, _ask_answered.bind(target))

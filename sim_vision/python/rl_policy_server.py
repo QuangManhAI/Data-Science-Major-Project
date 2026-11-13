@@ -57,11 +57,15 @@ from src.training.hospital_env_pure_vision_v2 import (  # noqa: E402
 )
 from src.training.hospital_env import ROBOT_RADIUS_M  # noqa: E402
 from src.training.hospital_env_engage_v3 import DOA_HOLDS_MEMORY, OBS_DIM_V3, VOICE_MEMORY_S  # noqa: E402
-from src.training.local_memory import ObstacleMemory, RecoveryCue, flank_proximity  # noqa: E402
+from src.training.local_memory import (  # noqa: E402
+    ObstacleMemory, PatientTrack, RecoveryCue, flank_proximity, person_slots,
+)
 
 OBS_DIM_V3_R8 = 35               # tới vòng 8: chưa có trí nhớ vật cản / kẹt / box người
 # 31 = trước "mặt đã gặp"; 32 = trước "nhớ hướng giọng nói"; 35 = vòng 8; OBS_DIM_V3 (45) = vòng 9
-V3_DIMS = (31, 32, OBS_DIM_V3_R8, OBS_DIM_V3)
+OBS_DIM_V3_R9 = 45               # vòng 9-10: + trí nhớ vật cản, gỡ kẹt, box người to nhất
+# OBS_DIM_V3 (59) = vòng 11: + người trong khung có cờ "đã gặp", nhớ chỗ bệnh nhân đang dẫn (quay lại hỏi)
+V3_DIMS = (31, 32, OBS_DIM_V3_R8, OBS_DIM_V3_R9, OBS_DIM_V3)
 STEP_DT_S = 0.2
 from src.training.hospital_env_vision import (  # noqa: E402
     PUBLIC_PATROL_WAYPOINTS,
@@ -97,7 +101,9 @@ class PolicyRunner:
         self.tether_last_d: float = 1.0
         self.tether_unseen_s: float = 0.0
         # Vòng 9 (45-D): cùng lớp với môi trường train ➔ quan sát không lệch nhau
-        self.round9: bool = self.obs_dim >= OBS_DIM_V3
+        self.round9: bool = self.obs_dim >= OBS_DIM_V3_R9
+        self.round11: bool = self.obs_dim >= OBS_DIM_V3
+        self.track = PatientTrack()
         self.mem = ObstacleMemory(DEPTH_HFOV_RAD, DEPTH_MAX_RANGE_M, ROBOT_RADIUS_M)
         self.stall = RecoveryCue()
         self.last_cmd_v: float = 0.0
@@ -137,6 +143,7 @@ class PolicyRunner:
         if task_id != self.task_id:
             self.task_id = task_id
             self.lost_det_frames = 0
+            self.track.reset()
             env.task_phase = TaskPhase.SEARCH_PATIENT
         if phase in (TaskPhase.GUIDE_ESCORT, TaskPhase.CALL_STAFF):
             env.task_phase = TaskPhase(phase)
@@ -388,7 +395,22 @@ class PolicyRunner:
             left, right = flank_proximity(obs[0:5], mem)
             cue = self.stall.update(self.last_cmd_v, v, STEP_DT_S, not (in_dialogue or bool(v3.get("held"))), left, right,
                                     math.atan2(float(obs[14]), float(obs[15])))
-            obs = np.concatenate([obs, mem, [cue], largest_person_box(dets)]).astype(np.float32)
+            if self.round11:
+                items = [(float(p[0]), float(p[1]), float(p[2]) > 0.5) for p in v3.get("persons", [])] \
+                    if "persons" in v3 else [(float(b[1]), float(b[2]), False) for b in [largest_person_box(dets)] if b[0] > 0.5]
+                slot0, extra = person_slots(items)
+                t = self.n_steps * STEP_DT_S
+                if env.task_phase == TaskPhase.GUIDE_ESCORT:
+                    idp = v3.get("id_pos")
+                    if idp is not None and len(idp) >= 3 and float(idp[0]) > 0.5:
+                        self.track.update((float(idp[1]), float(idp[2])), t)
+                    track = self.track.obs(x, z, yaw, t)
+                else:
+                    self.track.reset()
+                    track = np.zeros(5, dtype=np.float32)
+                obs = np.concatenate([obs, mem, [cue], slot0, extra, track]).astype(np.float32)
+            else:
+                obs = np.concatenate([obs, mem, [cue], largest_person_box(dets)]).astype(np.float32)
 
         self.last_obs = obs                    # test so khớp với môi trường train (tests/test_policy_v3.py)
         # Forward through Actor network
@@ -430,6 +452,7 @@ class PolicyRunner:
         if len(a_all) >= 4:   # V3: đầu ngẩng / cúi (mục tiêu, [-1, 1]) và hỏi "Cần tôi giúp gì không ạ?"
             reply["tilt"] = float(np.clip(a_all[2], -1.0, 1.0))
             reply["ask"] = bool(a_all[3] > 0.5)
+            reply["returns"] = self.round11     # policy tự quay lại hỏi bệnh nhân dừng lại (Godot tắt luật tự hỏi)
         return reply
 
 

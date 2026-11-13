@@ -227,3 +227,19 @@ func test_ask_without_answer_times_out() -> void:
 	assert_has(_run(m, 6.0, true, EscortMonitor.ANSWER_WAIT_S + 0.2), "no_answer", "hỏi lại cũng không ai đáp")
 	assert_eq(m.answer(""), "end", "lần hai ➔ robot kết thúc ca, không đứng chịu trận")
 	assert_false(m.hold_robot())
+
+
+## Vòng 11: policy tự quay lại hỏi ➔ monitor (auto_ask = false) không tự hỏi / bỏ cuộc khi bệnh nhân ở xa, chỉ nhắc.
+func test_policy_driven_ask_continue() -> void:
+	var m := EscortMonitor.new()
+	m.auto_ask = false
+	var ev := _run(m, 6.0, false, 60.0)
+	assert_has(ev, "remind")
+	assert_does_not_have(ev, "ask_continue", "không tự hỏi")
+	assert_does_not_have(ev, "give_up")
+	assert_false(m.holds_for_dialogue(), "bệnh nhân ở xa: robot không bị giữ, policy tự quyết")
+	assert_true(m.begin_ask(), "policy hỏi")
+	assert_true(m.holds_for_dialogue(), "đang hỏi ➔ đứng chờ câu trả lời")
+	assert_false(m.begin_ask(), "đang hỏi thì không hỏi chồng")
+	assert_eq(m.answer("tiep_tuc"), "continue")
+	assert_false(m.holds_for_dialogue())

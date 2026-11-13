@@ -34,6 +34,9 @@ var reminds: int = 0
 var asks: int = 0
 var unclear: int = 0
 var total_wait_s: float = 0.0
+## false (policy V3 vòng 11): monitor không tự hỏi "có dẫn tiếp không" / bỏ cuộc khi bệnh nhân ở xa; policy tự quay lại
+## và hỏi (begin_ask). Câu nhắc vẫn nói.
+var auto_ask: bool = true
 
 
 func reset() -> void:
@@ -51,6 +54,13 @@ func reset() -> void:
 ## Robot phải đứng chờ (không đi tiếp theo policy).
 func hold_robot() -> bool:
 	return state in [State.FAR, State.ASK, State.REST]
+
+
+## Phần chờ thuộc về hội thoại (đang hỏi "có dẫn tiếp không", bệnh nhân xin nghỉ): robot đứng yên vì đang nói chuyện /
+## làm theo lời người bệnh. Bệnh nhân chỉ tụt lại (FAR) thì KHÔNG giữ: policy V3 vòng 10 tự học đứng chờ
+## (hospital_env_engage_v3: R_LEAVE_BEHIND, bài tập "lag"); Main vẫn nói câu nhắc.
+func holds_for_dialogue() -> bool:
+	return state in [State.ASK, State.REST]
 
 
 ## Cập nhật; trả danh sách sự kiện: "remind", "remind_again", "resumed", "ask_continue", "no_answer", "give_up".
@@ -75,7 +85,7 @@ func step(dist_m: float, seen: bool, dt: float) -> Array[String]:
 			if dist_m <= OK_M:
 				_to_ok()
 				ev.append("resumed")
-			elif dist_m > LOST_M or unseen_s >= LOST_UNSEEN_S or wait_s >= ASK_AFTER_S:
+			elif auto_ask and (dist_m > LOST_M or unseen_s >= LOST_UNSEEN_S or wait_s >= ASK_AFTER_S):
 				ev.append(_ask())
 			elif since_remind_s >= REMIND_EVERY_S:
 				since_remind_s = 0.0
@@ -86,8 +96,10 @@ func step(dist_m: float, seen: bool, dt: float) -> Array[String]:
 			if dist_m <= OK_M and wait_s >= REST_MIN_S:
 				_to_ok()
 				ev.append("resumed")
-			elif wait_s >= REST_WAIT_S:
+			elif wait_s >= REST_WAIT_S and auto_ask:
 				ev.append(_ask())
+			elif wait_s >= REST_WAIT_S:
+				_to_ok()                        # nghỉ xong: policy tự xem họ có theo kịp không
 		State.ASK:
 			# Chờ answer(). Không có câu trả lời (lượt nói hỏng, người không đáp) thì không được chờ mãi: báo
 			# "no_answer" ➔ Main xử như câu không rõ (hỏi lại, lần hai thì kết thúc ca). Log run_1932: chờ 190 s.
@@ -120,6 +132,16 @@ func answer(intent: String) -> String:
 	asks += 1
 	wait_s = 0.0
 	return "ask_again"
+
+
+## Policy hỏi "Anh/chị đi tiếp được không ạ?" (hành động hỏi lúc đang dẫn, bệnh nhân đang dừng ở gần).
+func begin_ask() -> bool:
+	if state in [State.ASK, State.ENDED]:
+		return false
+	asks += 1
+	state = State.ASK
+	wait_s = 0.0
+	return true
 
 
 func _ask() -> String:

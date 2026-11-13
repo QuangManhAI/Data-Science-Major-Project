@@ -369,3 +369,65 @@ def test_recovery_cue_keeps_side_and_counts_down() -> None:
         v2 = c.update(0.0, 0.0, 0.2, True, 0.0, 0.0, 0.0)
     assert v2 == 0.0
     assert c.update(0.5, 0.0, 0.2, False, 0.9, 0.1, 0.0) == 0.0 and c.stall_s == 0.0, "đang nói chuyện ➔ không tính kẹt"
+
+
+# ---------------------------------------------------------------- round 10: waiting for a stopped patient, ReID noise
+def _lag_env(seed: int):
+    from src.training.train_engage_v3_skills import make_env
+    env = make_env(seed, 400.0)
+    env.reset(seed=seed)
+    assert env.setup_lag_drill()
+    return env
+
+
+def test_lag_drill_patient_stops_and_teacher_waits():
+    far = []
+    for seed in range(101, 111):
+        env = _lag_env(seed)
+        done, info = False, {}
+        while not done:
+            _, _, done, info = env.step(env.teacher_action())
+        v = info["v3"]
+        assert v["lag_steps"] > 0, "the patient stopped during the drill"
+        far.append(v["lag_max_tether"])
+    assert float(np.mean(far)) < 3.5, f"the teacher waits instead of walking off (mean max tether {np.mean(far):.2f} m)"
+
+
+def test_teacher_does_not_wait_for_a_patient_in_the_blind_spot():
+    from src.training.hospital_env_engage_v3 import patient_left_behind
+    o = np.zeros(45, dtype=np.float32)
+    o[18], o[19], o[20] = 1.4 / 5.0, 0.0, 1.0     # last seen 1.4 m away, unseen for 5 s: close behind-beside
+    assert not patient_left_behind(o)
+    o[18] = 2.2 / 5.0                               # lost after being seen 2.2 m away -> fell behind
+    assert patient_left_behind(o)
+    o[18], o[19], o[20] = 3.0 / 5.0, 1.0, 0.0       # seen 3 m behind
+    assert patient_left_behind(o)
+
+
+def test_driving_away_from_stopped_patient_is_penalised():
+    from src.training.hospital_env_engage_v3 import LEAVE_BEHIND_M, R_LEAVE_BEHIND
+    env = _lag_env(102)
+    p = env._escorted()
+    p["lag_left"], p["lag_at"] = 30.0, -1.0
+    # put the patient far behind the robot and drive straight ahead
+    fx, fz = -np.sin(env.robot_yaw), -np.cos(env.robot_yaw)
+    p["x"], p["z"] = env.robot_x - fx * (LEAVE_BEHIND_M + 1.0), env.robot_z - fz * (LEAVE_BEHIND_M + 1.0)
+    before = env.v3_stats["leave_behind_steps"]
+    for _ in range(5):
+        env.step(np.array([1.0, 0.0, 0.0, -1.0], dtype=np.float32))
+    assert env.v3_stats["leave_behind_steps"] > before
+    assert R_LEAVE_BEHIND < 0.0
+
+
+def test_reid_tether_misses_and_swaps():
+    env = _lag_env(103)
+    env.rng = np.random.default_rng(0)
+    import src.training.hospital_env_engage_v3 as m
+    old = (m.REID_MISS_HZ, m.REID_SWAP_HZ)
+    try:
+        m.REID_MISS_HZ, m.REID_SWAP_HZ = 2.0, 0.0
+        for _ in range(30):
+            env.step(env.teacher_action())
+        assert env.v3_stats["reid_miss_steps"] > 0, "misses happen and show as 'not seen'"
+    finally:
+        m.REID_MISS_HZ, m.REID_SWAP_HZ = old

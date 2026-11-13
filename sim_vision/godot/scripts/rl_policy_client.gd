@@ -7,6 +7,8 @@ extends Node
 signal action_received(v: float, omega: float, phase: int)
 ## Policy V3 (docs/RL_V3_DESIGN.md): góc đầu mục tiêu [−1, 1] và có hỏi "Cần tôi giúp gì không ạ?" không.
 signal engage_received(tilt: float, ask: bool)
+## Vòng 11: policy tự quay lại hỏi bệnh nhân dừng lại ➔ EscortMonitor không tự hỏi nữa.
+var policy_returns_to_patient: bool = false
 signal sectors_received(sectors: Array)
 signal connection_changed(connected: bool)
 
@@ -82,5 +84,6 @@ func _handle_message(text: String) -> void:
 	if data.has("sectors") and data["sectors"] is Array:
 		sectors_received.emit(data["sectors"])
 	if data.has("tilt"):
+		policy_returns_to_patient = bool(data.get("returns", false))
 		engage_received.emit(float(data["tilt"]), bool(data.get("ask", false)))
 	action_received.emit(float(data["v"]), float(data["omega"]), int(data.get("phase", 0)))

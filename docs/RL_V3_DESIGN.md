@@ -190,3 +190,77 @@ chặng 3. Chặng 2 chạy qua `rl_policy_server.py` (quan sát dựng từ th�
 - YOLO nhận người áo đỏ (`human_m06`) thành `pccc_station` ở gần ➔ không có box người ➔ không ghi nhớ / xin đường theo box được.
 - Câu `excuse_me` chưa có giọng sinh sẵn (`python -m tts.pregen`).
 - Model vòng 8 giữ ở `experiments/checkpoints/PPOHospital-EngageV3_round8_35d.pt` (server vẫn chạy được model 35-D).
+
+## Vòng 10 (2026-11-13): robot tự chờ bệnh nhân, bớt luật trong Godot
+
+**Vì sao.** Trong Godot, khi bệnh nhân tụt lại thì `EscortMonitor` giữ robot đứng bằng luật (tắt policy). Đo trên bài
+tập mới thì model vòng 9 tự nó chỉ chờ đúng 22%, bỏ bệnh nhân xa tới 5.1 m — luật đang che lỗi của model.
+
+**Godot.** Với policy V3, `EscortMonitor` không giữ robot khi bệnh nhân chỉ ở xa (FAR) nữa; chỉ giữ lúc đang hỏi "có dẫn
+tiếp không" và khi bệnh nhân xin nghỉ (`holds_for_dialogue`). Câu nhắc vẫn nói. Controller luật / V2 giữ như cũ.
+
+**Env train** (`hospital_env_engage_v3.py`):
+- Bài tập "lag" (`setup_lag_drill`): đang dẫn thì bệnh nhân dừng 8–18 s; phạt `R_LEAVE_BEHIND` mỗi bước đi xa thêm
+  khỏi người đã tụt quá 3 m (vị trí thật).
+- Tether như ReID thật: mất dấu ngắn, thỉnh thoảng bám nhầm người khác đang trong khung, sai số khoảng cách ~10%.
+- Bệnh nhân đi sau lưng 85% (khớp Godot sau khi viết lại bộ đi theo), dừng lại 70% số ca.
+- Teacher chỉ chờ khi có bằng chứng tụt lại (`patient_left_behind`: thấy xa > 2.5 m, hoặc mất dấu 4 s sau khi lần cuối
+  thấy > 1.8 m). Bản đầu chờ cả khi "không thấy" ➔ đứng chờ người đang ở điểm mù giữa hai camera (90–137°) ngay sau
+  lưng: 83% số lần chờ là chờ nhầm, robot học thành rụt rè.
+
+**Trainer** (`train_engage_v3_skills.py`): bước do teacher lái chỉ dùng cho BC, không vào PPO (off-policy, ratio bùng nổ:
+lần chạy 2 có KL trung vị 0.16, max 36, va chạm tăng lên 5.9/ca); mở lại std tốc độ 0.3 (`--init-std-v`); dừng epoch khi
+KL > 0.03; điểm chọn checkpoint cộng số người giúp.
+
+**Kết quả** (40 ca 700 s + bài tập; `experiments/runs/20261113_211240_PPOHospital-EngageV3`, ep 4800):
+
+| | Vòng 9 | Vòng 10 | Teacher |
+|---|---|---|---|
+| Chờ đúng (lag drill) | 22% | 88% | 92% |
+| Khoảng cách xa nhất lúc bệnh nhân dừng | 5.1 m | 3.0 m | 3.0 m |
+| Va chạm / ca | 2.5 | 1.1 | 2.2 |
+| Đẩy vào người / ca | 3.2 s | 0.9 s | 5.1 s |
+| Giúp / ca | 4.85 | 4.08 | 3.88 |
+| Phục vụ hết | 80% | 60% | 50% |
+| Thoát phòng | 100% | 100% | 98% |
+
+Số người giúp giảm là cái giá của việc chờ (70% ca có bệnh nhân dừng 5–18 s; vòng 9 đi tiếp bỏ họ lại). Đã cài làm
+`PPOHospital-EngageV3_best.pt`; vòng 9 lưu ở `PPOHospital-EngageV3_round9_45d.pt`.
+
+## Vòng 11 (2026-11-14): robot tự chọn người, tự quay lại hỏi bệnh nhân dừng lại
+
+**Vì sao.** Trong Godot (run_2311): robot hỏi "Cần tôi giúp gì" liên tục vào người đã giúp / nhân viên; bệnh nhân dừng
+lâu thì robot đứng chờ mãi; bệnh nhân đứng sát cạnh robot (điểm mù giữa camera trước / sau) bị coi là "ở xa 3.3 m" ➔ hai
+bên chờ nhau. Người dùng yêu cầu bỏ luật, để policy tự học.
+
+**Quan sát 59-D** (giữ nguyên 45 ô cũ để train tiếp từ vòng 10): + cờ "đã gặp" của người to nhất, 2 người kế tiếp
+[thấy, cx, cao, đã gặp] (`local_memory.person_slots`; Godot: chủ box theo chiếu 3D ➔ đã giúp / đang dẫn / nhân viên);
++ bệnh nhân đang dẫn [còn nhớ, hướng sin/cos, khoảng cách tới chỗ thấy lần cuối, số giây đứng im] (`PatientTrack`,
+từ vị trí ReID ước lượng; Godot gửi `id_pos`).
+
+**Env.** Một nửa số lần bệnh nhân dừng là "chờ robot" (tới 60 s): chỉ đi tiếp khi robot quay lại, ở trước mặt trong
+2.5 m (hoặc khuất góc tường trong 2 m) và hỏi — hành động hỏi lúc đang dẫn = "Anh/chị đi tiếp được không ạ?"
+(`R_REENGAGE` +3, `R_PATIENT_WAITING` −0.03/bước khi để người ta chờ). Mất dấu chỉ là "tụt lại" khi có bằng chứng
+(`patient_left_behind`: thấy xa, mất dấu sau khi thấy xa, hoặc robot đã cách chỗ thấy họ > 2.5 m). Hỏi thừa phạt nặng
+hơn (`R_ASK_EMPTY` −1.5, `R_ASK_REPEAT` −1.0). Teacher: quay lại theo vị trí đã nhớ, thấy ở gần thì hỏi, khuất thì gọi
+(một lần / 8 s), không xin đường với chính bệnh nhân đang dẫn.
+
+**Godot.** `EscortMonitor.auto_ask = false` khi server báo `returns` (model 59-D): monitor chỉ nhắc, không tự hỏi / bỏ
+cuộc; hỏi lúc đang dẫn đi qua `_policy_asks_continue` ➔ luồng trả lời bằng giọng thật. Mất dấu khi lần cuối thấy họ ở
+gần (≤ 1.8 m) không tính là đã xa. Mặt / người là nhân viên = "đã gặp".
+
+**Train.** 11a (6000 ep từ vòng 10; dừng ở ep 4400 vì hỏi thừa tăng lên 5/ca) ➔ 11b (phạt hỏi thừa nặng hơn, teacher
+bớt gọi) ➔ 11c (thêm `R_PATIENT_WAITING`, thưởng hỏi trúng +3: policy từng tới gần 1.2–1.7 m, thấy mà không hỏi).
+
+**Kết quả** (40 ca 700 s + 50 bài tập bệnh nhân dừng; `experiments/runs/20261114_003142_PPOHospital-EngageV3`):
+
+| | Vòng 11c | Vòng 10 | Teacher |
+|---|---|---|---|
+| Quay lại hỏi bệnh nhân đang chờ robot | 64% | 0% | 86% |
+| Xử lý đúng khi bệnh nhân dừng | 82% | 48% | 86% |
+| Giúp / ca | 4.55 | 2.48 | 3.42 |
+| Va chạm / ca | 0.62 | 0.55 | 1.55 |
+| Đẩy vào người / ca | 1.3 s | 0.7 s | 6.2 s |
+| Hỏi thừa / ca | 0.82 | 0.25 | 1.45 |
+
+Đã cài làm `PPOHospital-EngageV3_best.pt`; vòng 10 lưu ở `PPOHospital-EngageV3_round10_45d.pt`. Chưa chạy thử trong Godot.

@@ -117,6 +117,8 @@ def _env_msg(env, phase: int | None = None) -> dict:
                          "y1": 0.5 - d["h"] / 2, "y2": 0.5 + d["h"] / 2})
     o = env.last_obs_v2
     v3 = {"tilt": float(o[28]), "since_ask_s": env.since_ask_s, "dialogue": env.dialogue is not None}
+    if hasattr(env, "_person_items"):       # vòng 11: Godot gửi người trong khung kèm cờ "đã gặp"
+        v3["persons"] = [[cx, h, 1.0 if known else 0.0] for cx, h, known in env._person_items()]
     if o[21] > 0.5:
         v3["voice"] = [1.0, math.atan2(float(o[22]), float(o[23]))]
     if o[34] < 1.0:

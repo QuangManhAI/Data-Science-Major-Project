@@ -19,6 +19,10 @@ const STAGNATION_VEL: float = 0.05
 const STAGNATION_MAX_S: float = 5.0
 
 @export var enabled: bool = true
+@export var flush_on_exit: bool = true
+var max_audit_duration_s: float = -1.0
+var _elapsed_audit_s: float = 0.0
+var _audit_start_ms: int = -1
 var output_dir: String = ""
 var python_bin: String = ""
 var stitch_script_path: String = ""
@@ -40,6 +44,10 @@ var main: Main = null
 var robot: Node3D = null
 
 
+func _init() -> void:
+	_locate_python_tools()
+
+
 func setup(p_main: Main, p_robot: Node3D, p_output_dir: String = "") -> void:
 	main = p_main
 	robot = p_robot
@@ -47,6 +55,10 @@ func setup(p_main: Main, p_robot: Node3D, p_output_dir: String = "") -> void:
 		output_dir = p_output_dir
 	else:
 		output_dir = ProjectSettings.globalize_path("res://../../sim_vision/reports/audit_evidence")
+	for arg: String in OS.get_cmdline_user_args() + OS.get_cmdline_args():
+		if arg.begins_with("--audit-duration="):
+			max_audit_duration_s = arg.get_slice("=", 1).to_float()
+			print("[AuditWatchdog] Configured max audit duration: %.1f s" % max_audit_duration_s)
 	_locate_python_tools()
 
 
@@ -62,6 +74,24 @@ func _process(delta: float) -> void:
 	if not enabled or main == null or robot == null:
 		return
 
+	if max_audit_duration_s > 0.0:
+		if _audit_start_ms < 0:
+			_audit_start_ms = Time.get_ticks_msec()
+		var elapsed_wall_s: float = float(Time.get_ticks_msec() - _audit_start_ms) / 1000.0
+		if elapsed_wall_s >= max_audit_duration_s:
+			max_audit_duration_s = -1.0
+			print("[AuditWatchdog] Max audit duration reached (%.1fs wall-clock). Concluding episode..." % elapsed_wall_s)
+			if not _is_recording_event and _frame_buffer.size() >= 10:
+				var robot_pos: Vector3 = robot.global_position if robot != null else Vector3.ZERO
+				trigger_failure("EPISODE_SAMPLE", {
+					"note": "Routine audit sample captured at episode conclusion",
+					"robot_state": Config.state_name(main.state) if main != null else "UNKNOWN",
+					"robot_pos": [robot_pos.x, robot_pos.y, robot_pos.z],
+				})
+			_flush_event_to_video()
+			get_tree().quit(0)
+			return
+
 	_time_since_capture += delta
 	if _time_since_capture >= CAPTURE_INTERVAL_S:
 		_time_since_capture = 0.0
@@ -73,6 +103,30 @@ func _process(delta: float) -> void:
 		_post_event_countdown -= 1
 		if _post_event_countdown <= 0:
 			_flush_event_to_video()
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if not enabled:
+		return
+	if event is InputEventKey and event.pressed and not event.echo:
+		if event.keycode == KEY_V:
+			var robot_pos: Vector3 = robot.global_position if robot != null else Vector3.ZERO
+			trigger_failure("MANUAL_SNAP", {
+				"note": "User triggered manual video snap with key V",
+				"robot_state": Config.state_name(main.state) if main != null else "UNKNOWN",
+				"robot_pos": [robot_pos.x, robot_pos.y, robot_pos.z],
+			})
+
+
+func _exit_tree() -> void:
+	if flush_on_exit and _event_counter == 0 and _frame_buffer.size() >= 15:
+		var robot_pos: Vector3 = robot.global_position if robot != null else Vector3.ZERO
+		trigger_failure("EPISODE_SAMPLE", {
+			"note": "Routine audit sample captured at episode conclusion",
+			"robot_state": Config.state_name(main.state) if main != null else "UNKNOWN",
+			"robot_pos": [robot_pos.x, robot_pos.y, robot_pos.z],
+		})
+		_flush_event_to_video()
 
 
 func _capture_frame() -> void:
@@ -180,20 +234,27 @@ func _flush_event_to_video() -> void:
 		frame_idx += 1
 
 	var output_mp4: String = output_dir.path_join("fail_%s_%s.mp4" % [err_tag, ts])
-	var json_meta_str: String = JSON.stringify(_active_metadata)
+	var meta_file: String = temp_dir.path_join("input_meta.json")
+	var f_meta: FileAccess = FileAccess.open(meta_file, FileAccess.WRITE)
+	if f_meta != null:
+		f_meta.store_string(JSON.stringify(_active_metadata))
+		f_meta.close()
 
 	var args: PackedStringArray = [
+		"-u", "LD_LIBRARY_PATH",
+		python_bin,
 		stitch_script_path,
 		"--frame-dir", temp_dir,
 		"--output", output_mp4,
 		"--fps", "15.0",
-		"--metadata", json_meta_str,
+		"--metadata-file", meta_file,
 		"--delete-frames",
 	]
 
 	print("[AuditWatchdog] Stitching %d frames into %s..." % [frame_idx, output_mp4])
-	var pid: int = OS.create_process(python_bin, args)
-	print("[AuditWatchdog] Started stitch process with PID: %d" % pid)
+	var exec_out: Array = []
+	var exit_code: int = OS.execute("env", args, exec_out, true)
+	print("[AuditWatchdog] Stitch process finished with code %d: %s" % [exit_code, " ".join(exec_out)])
 
 	export_completed.emit(_active_error_type, output_mp4, output_mp4.replace(".mp4", ".json"))
 	# Giữ lại 30 frames cuối làm buffer nối tiếp

@@ -130,6 +130,16 @@ class PolicyRunner:
         return remap_v1_obs(obs29, sectors, tether)
 
     def act(self, msg: dict) -> dict:
+        """Quan sát ➔ hành động tất định của policy ➔ lệnh cho Godot."""
+        obs = self.observe(msg)
+        with torch.no_grad():
+            action, _, _, _ = self.agent.get_action_and_value(
+                torch.as_tensor(obs, dtype=torch.float32).unsqueeze(0), deterministic=True
+            )
+        return self.respond(msg, [float(t) for t in action[0]])
+
+    def observe(self, msg: dict) -> np.ndarray:
+        """Dựng quan sát policy từ trạng thái thô Godot gửi (dùng chung cho chạy thật và train trong Godot)."""
         env = self.env
         x, z, yaw, v, omega = (float(t) for t in msg["robot"])
         env.robot_x, env.robot_z, env.robot_yaw = x, z, yaw
@@ -413,12 +423,15 @@ class PolicyRunner:
                 obs = np.concatenate([obs, mem, [cue], largest_person_box(dets)]).astype(np.float32)
 
         self.last_obs = obs                    # test so khớp với môi trường train (tests/test_policy_v3.py)
-        # Forward through Actor network
-        with torch.no_grad():
-            action, _, _, _ = self.agent.get_action_and_value(
-                torch.as_tensor(obs, dtype=torch.float32).unsqueeze(0), deterministic=True
-            )
-        a_all = [float(t) for t in action[0]]
+        self._final_xz = (final_x, final_z)
+        return obs
+
+    def respond(self, msg: dict, a_all: list[float]) -> dict:
+        """Hành động chuẩn hoá [-1, 1] của policy ➔ message rl_action cho Godot."""
+        env = self.env
+        obs = self.last_obs
+        x, z = float(msg["robot"][0]), float(msg["robot"][1])
+        final_x, final_z = self._final_xz
         if OBS_DUMP_PATH:                       # debug sim-to-sim: quan sát thật Godot gửi (so với lúc train)
             with open(OBS_DUMP_PATH, "a", encoding="utf-8") as f:
                 f.write(json.dumps({"step": self.n_steps, "obs": [round(float(o), 4) for o in obs],

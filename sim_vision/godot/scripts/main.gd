@@ -183,10 +183,18 @@ func _ready() -> void:
 		if dialogue != null:
 			dialogue.turn_completed.connect(_on_dialogue_turn_completed)
 			dialogue.clarify_gave_up.connect(_on_clarify_gave_up)
+		if SimClock.train_env:
+			_train = TrainEnv.new()
+			_train.name = "TrainEnv"
+			add_child(_train)
+			_train.setup(self, _policy)
+			get_viewport().disable_3d = true     # train: chỉ camera robot cần render (SubViewport riêng)
 	else:
 		_controller = get_node(controller_path)
 	if inspection_panel != null:
 		inspection_panel.set_pure_vision_mode(true)
+	if SimClock.train_env:
+		seed = SimClock.base_seed * 100003 + SimClock.episode
 	if seed >= 0:
 		_rng.seed = seed
 	else:
@@ -196,7 +204,7 @@ func _ready() -> void:
 	_setup_rear_vision()
 	vision.detections_received.connect(_on_detections)
 	vision.connection_changed.connect(_on_connection_changed)
-	_start_ms = Time.get_ticks_msec()
+	_start_ms = SimClock.now_ms()
 	if logger != null:
 		logger.open()
 	if human != null:
@@ -273,7 +281,7 @@ func _process(delta: float) -> void:
 	_update_inspection_panel()
 	_update_vision_modes()
 	# Quá LOST_TIMEOUT_S không có kết quả mới (nhưng vẫn kết nối) ➔ coi như không thấy ai.
-	var now: int = Time.get_ticks_msec()
+	var now: int = SimClock.now_ms()
 	if Main.is_dialogue_state(state):
 		return
 	if _rl_bridge != null and _rl_bridge.task_phase in [RLEnvBridgeScript.TaskPhase.GUIDE_ESCORT, RLEnvBridgeScript.TaskPhase.CALL_STAFF]:
@@ -300,6 +308,8 @@ func _physics_process(delta: float) -> void:
 	for ci: int in robot.get_slide_collision_count():
 		if absf(robot.get_slide_collision(ci).get_normal().y) < 0.5:
 			_eval_bump_frames += 1
+			if _train != null:
+				_train.bump_frames += 1
 			break
 
 	# Log vị trí & hành vi robot + bệnh nhân mỗi 1.0 giây
@@ -325,7 +335,7 @@ func _physics_process(delta: float) -> void:
 		var d_p_goal: float = Human.flat_distance(p_pos, g_pos)
 		var trail_count: int = _rl_bridge.escort_trail.size() if _rl_bridge != null else 0
 		print("[ESCORT_DEBUG] t=%5.1fs | State=%-8s | Phase=%-12s | Robot=(%5.2f, %5.2f) cmd=(v=%.2f, w=%+5.2f) vel=%4.2f | Patient=(%5.2f, %5.2f) tether=%4.2fm | Goal=%s (dist_r=%4.2fm, dist_p=%4.2fm) | Trail=%d" % [
-			(Time.get_ticks_msec() - _start_ms) / 1000.0,
+			(SimClock.now_ms() - _start_ms) / 1000.0,
 			Config.state_name(state), ph_name,
 			r_pos.x, r_pos.z, r_cmd.x, r_cmd.y, r_vel.length(),
 			p_pos.x, p_pos.z, d_tether,
@@ -355,6 +365,7 @@ func _physics_process(delta: float) -> void:
 			# Trong chế độ RL inference: không ép reset vị trí làm gián đoạn thử nghiệm
 			if _task_elapsed_s > TASK_TIMEOUT_S:
 				_task_elapsed_s = 0.0
+				train_event("stagnation")
 				print("[ESCORT_DEBUG] >>> RL Inference: timeout suppressed to keep policy exploring without auto-reset.")
 		elif _task_elapsed_s > TASK_TIMEOUT_S:
 			print("[ESCORT_DEBUG] >>> Task TIMED OUT! elapsed=%.1fs > %.1fs, Goal=%s" % [_task_elapsed_s, TASK_TIMEOUT_S, _rl_bridge.goal_key])
@@ -393,6 +404,7 @@ func _physics_process(delta: float) -> void:
 			robot.set_command(0.0, 0.0)
 			_rl_bridge.cumulative_team_reward += RLEnvBridgeScript.REWARD_GUIDE_ARRIVED
 			_rl_bridge.patients_helped += 1
+			train_event("delivered" if has_escort else "arrived_alone")
 			_rl_bridge.task_phase = RLEnvBridgeScript.TaskPhase.SEARCH_PATIENT
 			overlay.set_status("Đã dẫn tới: %s (R_team=%.0f)" % [_rl_bridge.goal_key, _rl_bridge.cumulative_team_reward])
 			if has_escort and esc_p.has_method("end_escort"):
@@ -435,6 +447,8 @@ func _physics_process(delta: float) -> void:
 			robot.set_command(0.0, 0.0)
 			_rl_bridge.cumulative_team_reward += RLEnvBridgeScript.REWARD_CALL_STAFF
 			_rl_bridge.patients_helped += 1
+			train_event("lobby_return" if _returning_lobby else "staff_called")
+			_returning_lobby = false
 			_rl_bridge.task_phase = RLEnvBridgeScript.TaskPhase.SEARCH_PATIENT
 			overlay.set_status("Đã báo nhân viên y tế (R_team=%.0f)" % _rl_bridge.cumulative_team_reward)
 			reset_positions(true)
@@ -455,6 +469,52 @@ func _leg_target(target: Vector3) -> Vector3:
 		return target
 	var station_key: String = "thang_may" if robot_floor == 1 else ("thang_may_t2" if robot_floor == 2 else "thang_may_t3")
 	return room.get_room_waypoint(station_key)
+
+
+## Train trong Godot (scripts/train_env.gd): null khi chạy thường.
+var _train: TrainEnv = null
+var _returning_lobby: bool = false
+var _train_spotted: Dictionary = {}
+
+
+func train_event(name: String, n: float = 1.0) -> void:
+	if _train != null:
+		_train.event(name, n)
+
+
+## Trạng thái thật cho phần thưởng lúc train (policy không thấy).
+func _train_gt() -> Dictionary:
+	var rp: Vector3 = robot.global_position
+	var fl: int = Room.get_floor(rp)
+	var needy: Array = []
+	if not is_task_busy():
+		for p: CharacterBody3D in get_available_patients():
+			if p.visible and Room.get_floor(p.global_position) == fl and not p.get_meta("helped", false):
+				needy.append([p.get_instance_id(), p.global_position.x, p.global_position.z])
+	if not needy.is_empty():
+		# Lần đầu một người cần giúp lọt vào khung camera trước (box YOLO chiếu đúng người đó) ➔ thưởng "tìm thấy".
+		for dv: Variant in _latest_yolo_dets:
+			var owner: CharacterBody3D = _box_owner(dv as Dictionary)
+			if owner == null or _train_spotted.has(owner.get_instance_id()):
+				continue
+			for n: Array in needy:
+				if int(n[0]) == owner.get_instance_id():
+					_train_spotted[owner.get_instance_id()] = true
+					train_event("spotted")
+	var gt: Dictionary = {"robot": [rp.x, rp.z, robot.rotation.y], "floor": fl, "phase": _rl_bridge.task_phase,
+			"busy": is_task_busy(), "returning": _returning_lobby, "dialogue": Main.is_dialogue_state(state),
+			"state": state, "v": robot.get_real_velocity().length(), "needy": needy,
+			"target": current_target_patient.get_instance_id() if current_target_patient != null else 0}
+	if is_task_busy():
+		var g: Vector3 = _leg_target(_rl_bridge.goal_position)
+		gt["goal"] = [g.x, g.z, _rl_bridge.goal_key]
+	if active_escorted_patient != null:
+		var pp: Vector3 = active_escorted_patient.global_position
+		gt["escort"] = [pp.x, pp.z, Human.flat_distance(rp, pp), float(active_escorted_patient.get_meta("escort_hold_s", 0.0))]
+	var blk: CharacterBody3D = _blocking_person()
+	if blk != null:
+		gt["blocker_m"] = Human.flat_distance(rp, blk.global_position)
+	return gt
 
 
 func _policy_active() -> bool:
@@ -616,6 +676,7 @@ func _step_policy(delta: float) -> void:
 		if state == Config.RobotState.ARRIVED:
 			_arrived_wait_s += delta
 			if _arrived_wait_s > ARRIVED_WAIT_S:
+				train_event("arrived_timeout")
 				overlay.set_status("Bệnh nhân không phản hồi, chuyển sang người khác")
 				reset_positions(true)
 				return
@@ -662,7 +723,8 @@ func _step_policy(delta: float) -> void:
 		yolo_feat,
 		policy_dets,
 		robot.get_depth_readings(),
-		_v3_features()
+		_v3_features(),
+		_train.payload(_train_gt()) if _train != null else {}
 	)
 
 
@@ -736,6 +798,7 @@ func _on_dialogue_turn_completed(row: Dictionary) -> void:
 			fl
 		)
 	if act == "guide" or act == "call_staff" or act == "emergency":
+		train_event("task_started")
 		active_escorted_patient = speaking_pat
 		current_target_patient = speaking_pat
 		if active_escorted_patient != null and active_escorted_patient.has_method("set_state"):
@@ -754,6 +817,7 @@ func _on_dialogue_turn_completed(row: Dictionary) -> void:
 		overlay.show_detections([], _display_state_name(), _connected)
 	else:
 		if act in ["answer", "repeat", "refuse", "adjust"]:
+			train_event("answered")
 			_rl_bridge.cumulative_team_reward += RLEnvBridgeScript.REWARD_ANSWER
 			_rl_bridge.patients_helped += 1
 			overlay.set_status("Đã hỗ trợ bệnh nhân (R_team=%.0f)" % _rl_bridge.cumulative_team_reward)
@@ -1135,6 +1199,7 @@ func _hide_wall_ghost(wall: MeshInstance3D) -> void:
 ## Đặt robot và người ở vị trí ngẫu nhiên mới, robot hướng ngẫu nhiên, về SEARCH.
 func reset_positions(is_task_transition: bool = false) -> void:
 	_clear_wall_transparency()
+	_returning_lobby = false
 	if _rl_bridge != null:
 		# Không đặt lại pha thì bệnh nhân vẫn ở GUIDE_ESCORT và cứ đi theo robot sau khi reset
 		_rl_bridge.task_phase = RLEnvBridgeScript.TaskPhase.SEARCH_PATIENT
@@ -1200,7 +1265,7 @@ func reset_positions(is_task_transition: bool = false) -> void:
 	if npc != null:
 		npc.reset()
 	_last_seen_ms = -1
-	_last_result_ms = Time.get_ticks_msec()
+	_last_result_ms = SimClock.now_ms()
 	overlay.show_detections([], _display_state_name(), _connected)
 	_update_viewer_camera()
 
@@ -1328,7 +1393,7 @@ func build_log_row(frame_id: int, dets: Array, cmd: Dictionary, infer_ms: float,
 func _on_detections(frame_id: int, dets: Array, infer_ms: float) -> void:
 	_latest_yolo_dets = dets
 	_update_identity(dets)
-	var now: int = Time.get_ticks_msec()
+	var now: int = SimClock.now_ms()
 	_last_result_ms = now
 	if not dets.is_empty():
 		_last_seen_ms = now
@@ -1361,7 +1426,7 @@ func _on_connection_changed(connected: bool) -> void:
 	if not connected:
 		robot.set_command(0.0, 0.0)  # giữ nguyên trạng thái
 	else:
-		_last_result_ms = Time.get_ticks_msec()
+		_last_result_ms = SimClock.now_ms()
 	overlay.show_detections([], _display_state_name(), connected)
 
 
@@ -1407,7 +1472,7 @@ func set_dialogue_state(s: int) -> void:
 			_pending_turn_reset = false
 			if _policy_active():
 				reset_positions(true)
-	_last_result_ms = Time.get_ticks_msec()
+	_last_result_ms = SimClock.now_ms()
 	overlay.show_detections([], _display_state_name(), _connected)
 
 
@@ -1524,6 +1589,7 @@ func _finish_escort(cur_floor: int) -> void:
 		_rl_bridge.goal_position = room.get_room_waypoint("tiep_don") if room != null else Vector3.ZERO
 		_rl_bridge.final_target_key = "tiep_don"
 		_rl_bridge.task_phase = RLEnvBridgeScript.TaskPhase.CALL_STAFF
+		_returning_lobby = true
 		_task_elapsed_s = 0.0
 		_task_best_dist = -1.0
 		overlay.set_status("Đã dẫn bệnh nhân tới %s. Đang tự di chuyển về Thang máy Tầng %d để xuống Sảnh..." % [_rl_bridge.goal_key, cur_floor])
@@ -1732,6 +1798,7 @@ func _on_escort_event(ev: String, p: CharacterBody3D, d_tether: float) -> void:
 				p_npc.reset()
 			_on_continue_answer("")
 		"give_up":
+			train_event("escort_given_up")
 			_end_escort_declined(p)
 
 
@@ -1903,7 +1970,7 @@ func _pick_weighted(weights: Dictionary) -> String:
 # ===================== Nhận diện đúng bệnh nhân (docs/UPGRADE_HRI_PLAN.md D3–D5) =====================
 
 func _now_s() -> float:
-	return Time.get_ticks_msec() / 1000.0
+	return SimClock.now_ms() / 1000.0
 
 
 ## Client YOLO thứ hai cho camera sau: chỉ chạy khi đang dẫn, 10 Hz, frame nào cũng có ReID.
@@ -2576,6 +2643,7 @@ func _policy_asks_continue() -> bool:
 		return false
 	if not escort_monitor.begin_ask():
 		return false
+	train_event("reengaged")
 	print("[V3] robot quay lại hỏi \"Anh/chị đi tiếp được không ạ?\" ➔ %s (cách %.1fm)" % [p.name, d])
 	_say_then("ask_continue", {}, _start_answer_turn.bind(p))
 	return true
@@ -2605,6 +2673,7 @@ func _robot_ask() -> void:
 	if target == null:
 		var blocker: CharacterBody3D = _blocking_person()
 		if blocker != null:
+			train_event("excuse")
 			print("[V3] robot xin đường \"Xin lỗi, cho tôi đi nhờ ạ\" ➔ %s" % blocker.name)
 			_say_then("excuse_me", {}, func() -> void:
 				if is_instance_valid(blocker) and blocker.has_method("make_way"):
@@ -2615,6 +2684,7 @@ func _robot_ask() -> void:
 			return
 		if busy:
 			return                            # đang bận mà không ai chắn lối: không nói gì
+	train_event("ask_ok" if target != null else "ask_wasted")
 	if target == null:
 		_wasted_asks += 1                     # policy hỏi khi không có ai chưa được giúp trước mặt: lỗi của policy, để lộ ra
 	print("[V3] robot hỏi \"Cần tôi giúp gì không ạ?\" ➔ %s" % (target.name if target != null else

@@ -32,8 +32,22 @@ func _process(_delta: float) -> void:
 	if state == WebSocketPeer.STATE_CLOSED \
 			and (_last_attempt_ms < 0 or now - _last_attempt_ms >= int(Config.RECONNECT_S * 1000.0)):
 		_try_connect(now)
+	_poll()
+
+
+func _poll() -> void:
+	if _ws == null:
+		return
+	_ws.poll()
+	if _ws.get_ready_state() != WebSocketPeer.STATE_OPEN:
+		SimClock.release("tts", true)
 	while _ws != null and _ws.get_available_packet_count() > 0:
+		SimClock.release("tts")
 		handle_message(_ws.get_packet().get_string_from_utf8())
+
+
+func _ready() -> void:
+	SimClock.register_poller(_poll)
 
 
 func _set_connected(value: bool) -> void:
@@ -59,6 +73,7 @@ func send_speak(utt_id: int, text: String, voice: String) -> bool:
 	if err != OK:
 		push_warning("TtsClient: send failed: %s" % error_string(err))
 		return false
+	SimClock.hold("tts")
 	return true
 
 

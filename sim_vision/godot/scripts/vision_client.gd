@@ -31,6 +31,7 @@ var _viewport: SubViewport = null
 var _connected: bool = false
 var _last_attempt_ms: int = -1
 var _capture_accum: float = 0.0
+var _render_pending: bool = false
 var _next_id: int = 0
 var _last_id: int = -1
 var _sent_at: Dictionary = {}  # frame_id ➔ thời điểm gửi (ms)
@@ -42,6 +43,18 @@ var last_image: Image = null
 
 func setup(viewport: SubViewport) -> void:
 	_viewport = viewport
+	if SimClock.capture_hz > 0.0 and capture_hz == Config.CAPTURE_HZ:   # camera trước (camera sau đã tự đặt 10 Hz)
+		capture_hz = SimClock.capture_hz
+	if SimClock.yolo_url != "":
+		url = SimClock.yolo_url
+	if SimClock.lockstep and _viewport != null:
+		_viewport.render_target_update_mode = SubViewport.UPDATE_DISABLED
+	SimClock.register_poller(_poll)
+
+
+## Khoá chờ của SimClock (lockstep): mỗi client một khoá (camera trước / sau).
+func _hold_key() -> String:
+	return "vision_%d" % get_instance_id()
 
 
 func is_server_connected() -> bool:
@@ -49,24 +62,42 @@ func is_server_connected() -> bool:
 
 
 func _process(delta: float) -> void:
-	var now: int = Time.get_ticks_msec()
+	var now: int = SimClock.now_ms()
 	var state: int = WebSocketPeer.STATE_CLOSED
 	if _ws != null:
 		_ws.poll()
 		state = _ws.get_ready_state()
 	_set_connected(state == WebSocketPeer.STATE_OPEN)
+	var wall: int = Time.get_ticks_msec()
 	if state == WebSocketPeer.STATE_CLOSED \
-			and (_last_attempt_ms < 0 or now - _last_attempt_ms >= int(Config.RECONNECT_S * 1000.0)):
-		_try_connect(now)
+			and (_last_attempt_ms < 0 or wall - _last_attempt_ms >= int(Config.RECONNECT_S * 1000.0)):
+		_try_connect(wall)
 	if _connected and _viewport != null and enabled:
+		if _render_pending:
+			_render_pending = false        # lockstep: frame xin render ở bước trước đã vẽ xong
+			_send_frame(now)
 		_capture_accum += delta
 		var period: float = 1.0 / capture_hz
-		if _capture_accum >= period:
+		if SimClock.lockstep and _capture_accum >= period:
+			# Chỉ render camera ở frame cần chụp (đỡ tải GPU khi chạy nhiều bản Godot): xin vẽ, frame sau mới chụp.
+			_capture_accum = fmod(_capture_accum, period)
+			_viewport.render_target_update_mode = SubViewport.UPDATE_ONCE
+			_render_pending = true
+		elif not SimClock.lockstep and _capture_accum >= period:
 			_capture_accum = fmod(_capture_accum, period)
 			_send_frame(now)
+	_poll()
+	_drop_expired(SimClock.now_ms())
+
+
+func _poll() -> void:
+	if _ws == null:
+		return
+	_ws.poll()
+	if _ws.get_ready_state() != WebSocketPeer.STATE_OPEN:
+		SimClock.release(_hold_key(), true)
 	while _ws != null and _ws.get_available_packet_count() > 0:
-		handle_message(_ws.get_packet().get_string_from_utf8(), Time.get_ticks_msec())
-	_drop_expired(Time.get_ticks_msec())
+		handle_message(_ws.get_packet().get_string_from_utf8(), SimClock.now_ms())
 
 
 func _set_connected(value: bool) -> void:
@@ -105,6 +136,7 @@ func _send_frame(now: int) -> void:
 		_set_connected(false)
 		return
 	record_sent(_next_id, now)
+	SimClock.hold(_hold_key())
 	_sent_img[_next_id] = img
 	_next_id += 1
 
@@ -119,6 +151,7 @@ func pending_count() -> int:
 
 ## Xử lý một message từ server; phát `detections_received` nếu hợp lệ, mới và không trễ.
 func handle_message(text: String, now_ms: int) -> void:
+	SimClock.release(_hold_key())
 	var r: Dictionary = VisionClient.parse_message(text)
 	if not r["ok"]:
 		push_warning("VisionClient: %s" % r["error"])

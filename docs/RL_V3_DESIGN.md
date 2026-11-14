@@ -264,3 +264,30 @@ bớt gọi) ➔ 11c (thêm `R_PATIENT_WAITING`, thưởng hỏi trúng +3: poli
 | Hỏi thừa / ca | 0.82 | 0.25 | 1.45 |
 
 Đã cài làm `PPOHospital-EngageV3_best.pt`; vòng 10 lưu ở `PPOHospital-EngageV3_round10_45d.pt`. Chưa chạy thử trong Godot.
+
+## Vòng 12: train ngay trong Godot (xoá khoảng cách env Python ↔ Godot)
+
+Vòng 10–11 đạt điểm cao trong env Python mà vào Godot vẫn hời hợt: không chủ động đi tìm, hỏi thừa sau khi giao, chọn
+người rồi bỏ. Lý do: env Python khác Godot ở YOLO (box lý tưởng), mặt (chỉ thấy mặt bệnh nhân), NPC (hay tự tới nói),
+lượt cảm ơn (2 s so với ~8 s), va chạm, và checkpoint được chọn theo điểm env Python. Vòng 12 dùng Godot làm env.
+
+- **SimClock** (`scripts/sim_clock.gd`, autoload): đồng hồ giờ sim cho mọi hẹn giờ logic (thay `Time.get_ticks_msec`).
+  `--lockstep` / `--train-env`: client nào gửi yêu cầu (YOLO trước / sau, STT, TTS, policy) thì giữ frame sau tới khi có
+  trả lời ➔ chạy `--fixed-fps 30 --disable-vsync` nhanh hơn thời gian thực mà không lệch giờ. Âm thanh không phát ra loa,
+  `finished` hẹn đúng độ dài clip theo giờ sim. Camera robot chỉ render ở frame cần chụp (UPDATE_ONCE).
+- **TrainEnv** (`scripts/train_env.gd`): mỗi bước policy gửi kèm `train` = sự kiện (tìm thấy người cần giúp, nhận việc,
+  dẫn tới, hỏi thừa, xin đường, quay lại hỏi, bỏ dở, kẹt 45 s, hội thoại bị bỏ, cọ tường) + trạng thái thật (người cần
+  giúp, đích chặng, bệnh nhân đang dẫn, người chắn lối). Policy không thấy phần này. Hết ca ➔ nạp lại scene, seed mới.
+- **Thưởng** (`src/training/godot_reward.py`): hệ số như env Python + shaping theo đường đi (NavGrid) tới người cần giúp
+  gần nhất khi rảnh (chủ động đi tìm) và tới đích chặng khi dẫn; +0.5 lần đầu thấy một người cần giúp trong khung.
+- **Trainer** (`src/training/train_godot_v3.py`): server WebSocket; `/train` lấy mẫu hành động + PPO, `/eval` tất định.
+  Quan sát dựng bằng đúng `rl_policy_server.PolicyRunner.observe` như lúc chạy demo. Mỗi bản Godot một YOLO server
+  (một server phục vụ tuần tự là cổ chai). Checkpoint `_best` chọn theo điểm các ca `/eval` trong Godot.
+
+Tốc độ đo trên máy dev (M-series, 16 GB): 1 bản ~1.4× thời gian thực; 3 train + 1 eval ~1× mỗi bản (GPU dùng chung
+cho render, YOLO, PhoWhisper) ➔ ~3 giờ sim train / giờ thật.
+
+    sim_vision/python/.venv/bin/python -m src.training.train_godot_v3 --envs 3 --eval-envs 1 --shift-s 480 --hours 6
+
+Chạy demo với policy train trong Godot: camera trước 10 Hz như lúc train (`run_simulation.py --capture-hz`, mặc định 10
+khi `--controller rl`).

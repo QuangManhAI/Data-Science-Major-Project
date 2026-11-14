@@ -53,7 +53,7 @@ var _row: Dictionary = {}           # dòng log chờ kết quả TTS
 
 
 func _ready() -> void:
-	_start_ms = Time.get_ticks_msec()
+	_start_ms = SimClock.now_ms()
 	# Main chưa _ready (con _ready trước cha) ➔ lấy Robot bằng get_node, đọc main.state lúc gọi.
 	active_npc = npc
 	npc.setup(main.get_node(^"Robot"), func() -> int: return main.state)
@@ -77,7 +77,7 @@ func _ready() -> void:
 
 
 func _process(_delta: float) -> void:
-	var now: int = Time.get_ticks_msec()
+	var now: int = SimClock.now_ms()
 	if main.state == Config.RobotState.THINK and DialogueManager.is_timed_out(deadline_ms, now):
 		_fail("timeout")
 	elif main.state == Config.RobotState.RESPOND and waiting_tts \
@@ -85,6 +85,10 @@ func _process(_delta: float) -> void:
 		_speak_failed("timeout")
 	elif speaking and DialogueManager.is_timed_out(speak_deadline_ms, now) and voice != null:
 		voice.stop_speaking()
+		if speaking:
+			# Loa đã bị câu khác (thông báo bắt đầu dẫn) cắt ngang ➔ không còn ai phát finished_speaking: tự kết thúc
+			# lượt, không thì robot kẹt ở RESPOND mãi (eval Godot 2026-11-14: đứng yên 225 s giữa lúc đang dẫn).
+			_on_finished_speaking()
 
 
 ## Đặt lại khi Main đặt lại vị trí (phím R). utt_id giữ nguyên để transcript / audio muộn của lượt cũ bị bỏ.
@@ -104,7 +108,7 @@ func reset() -> void:
 	active_npc = npc
 	if voice != null and voice.speaking:
 		voice.speaking = false            # không phát finished_speaking cho lượt đã hủy
-		voice.stop()
+		SimClock.stop(voice)
 	if subtitle != null:
 		subtitle.hide_now()
 	if main != null and main.overlay != null:
@@ -137,7 +141,7 @@ static func clip_take(clip_id: String) -> String:
 
 func build_log_row(r: Dictionary, error: String) -> Dictionary:
 	var row: Dictionary = {
-		"time_s": (Time.get_ticks_msec() - _start_ms) / 1000.0, "utt_id": utt_id, "clip_id": pending_clip,
+		"time_s": (SimClock.now_ms() - _start_ms) / 1000.0, "utt_id": utt_id, "clip_id": pending_clip,
 		"speaker": DialogueManager.clip_speaker(pending_clip), "take": DialogueManager.clip_take(pending_clip),
 		"distance_m": sent_distance_m, "snr_db": snr_db, "noise": noise, "error": error,
 	}
@@ -169,6 +173,8 @@ func _on_talk_started(clip_id: String) -> void:
 
 
 func _on_talk_aborted(_clip_id: String) -> void:
+	if main.has_method("train_event"):
+		main.train_event("dialogue_abort")
 	if main.state == Config.RobotState.LISTEN:
 		main.set_dialogue_state(Config.RobotState.ARRIVED)
 
@@ -181,7 +187,7 @@ func _on_utterance_finished(clip_id: String) -> void:
 	var speaker_node: Node3D = active_npc.human if (active_npc != null and active_npc.human != null) else npc.human
 	sent_distance_m = Human.flat_distance(main.get_node(^"Robot").global_position, speaker_node.global_position)
 	main.set_dialogue_state(Config.RobotState.THINK)
-	deadline_ms = Time.get_ticks_msec() + int(Config.STT_TIMEOUT_S * 1000.0)
+	deadline_ms = SimClock.now_ms() + int(Config.STT_TIMEOUT_S * 1000.0)
 	if not stt.send_utterance(utt_id, clip_id, sent_distance_m, snr_db, noise):
 		_fail("stt disconnected")
 
@@ -207,7 +213,7 @@ func _on_transcript(r: Dictionary) -> void:
 		_speak_failed("disconnected")
 		return
 	waiting_tts = true
-	tts_deadline_ms = Time.get_ticks_msec() + int(Config.TTS_TIMEOUT_S * 1000.0)
+	tts_deadline_ms = SimClock.now_ms() + int(Config.TTS_TIMEOUT_S * 1000.0)
 
 
 func _on_tts_audio(a: Dictionary) -> void:
@@ -218,7 +224,7 @@ func _on_tts_audio(a: Dictionary) -> void:
 	var stream: AudioStreamWAV = TtsClient.pcm16_to_stream(a["pcm"], a["sample_rate"])
 	var duration: float = float(a["duration_s"])
 	speaking = true
-	speak_deadline_ms = Time.get_ticks_msec() + int((duration + SPEAK_GRACE_S) * 1000.0)
+	speak_deadline_ms = SimClock.now_ms() + int((duration + SPEAK_GRACE_S) * 1000.0)
 	voice.say(stream)
 	subtitle.show_reply(_reply["text"], _reply["response"], duration + SPEAK_GRACE_S)
 	_row["tts_ms"] = a["tts_ms"]

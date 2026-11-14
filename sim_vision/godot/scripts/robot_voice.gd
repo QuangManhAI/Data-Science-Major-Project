@@ -14,12 +14,12 @@ func _ready() -> void:
 func say(stream: AudioStream) -> void:
 	self.stream = stream
 	speaking = true
-	play()
+	SimClock.play(self)
 
 
 func stop_speaking() -> void:
 	if speaking:
-		stop()
+		SimClock.stop(self)
 		_on_finished()
 
 

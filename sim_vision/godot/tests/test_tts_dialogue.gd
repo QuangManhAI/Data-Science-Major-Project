@@ -238,7 +238,7 @@ func test_tts_timeout_subtitle_only() -> void:
 	watch_signals(dm)
 	_heard(main, dm, "A_07_r")
 	dm._on_transcript(_transcript(dm.utt_id, "A_07_r", "answer", "Dạ, nhà thuốc ở cuối sảnh."))
-	dm.tts_deadline_ms = Time.get_ticks_msec() - 1
+	dm.tts_deadline_ms = SimClock.now_ms() - 1
 	await wait_process_frames(2)
 	assert_eq(main.state, S.RESPOND, "phụ đề vẫn hiện")
 	assert_true(dm.subtitle.is_showing())

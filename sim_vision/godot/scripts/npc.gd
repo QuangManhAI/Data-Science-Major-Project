@@ -222,7 +222,7 @@ func reset() -> void:
 		_tween.kill()
 	_turning = false
 	if player != null:
-		player.stop()
+		SimClock.stop(player)
 	if state != IDLE:
 		_resume_walking()
 	state = IDLE
@@ -251,7 +251,7 @@ func say_again(id: String) -> bool:
 	current_clip = id
 	state = TALK
 	player.stream = stream
-	player.play()
+	SimClock.play(player)
 	talk_started.emit(id)
 	return true
 
@@ -310,7 +310,7 @@ func _turn_then_play(stream: AudioStream) -> void:
 	if state != TALK or current_clip == "":
 		return  # lượt bị hủy trong lúc quay (reset / robot đi xa)
 	player.stream = stream
-	player.play()
+	SimClock.play(player)
 
 
 ## Đang quay người chậm (HospitalNpc không tự xoay nhanh về robot lúc này).
@@ -425,13 +425,13 @@ func _start_talk() -> void:
 		anim.play(TALK_ANIM, 0.3)
 	if player != null:
 		player.stream = stream
-		player.play()
+		SimClock.play(player)
 	talk_started.emit(id)
 
 
 func _abort_talk() -> void:
 	scripted_turn = false
-	player.stop()
+	SimClock.stop(player)
 	_turning = false
 	state = IDLE
 	_resume_walking()

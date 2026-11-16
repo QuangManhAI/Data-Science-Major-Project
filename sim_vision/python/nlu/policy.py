@@ -56,7 +56,10 @@ def decide(r: IntentResult, clarify_count: int, last_response: str | None,
            threshold: float = config.CONF_THRESHOLD_DEFAULT) -> PolicyResult:
     if r.intent == "cap_cuu":
         return PolicyResult("emergency", responses.CAP_CUU)
-    if r.intent_conf < threshold:
+    if r.intent_conf < threshold or r.intent == "unknown":
+        # Không hiểu (kể cả khi PhoBERT chắc chắn là "unknown": STT nghe méo, câu ngoài phạm vi) ➔ nhờ nói lại; hỏi lại
+        # MAX_CLARIFY lần vẫn không rõ ➔ gọi nhân viên. Trước đây "unknown" ➔ "answer" ("anh chị cần tôi giúp gì ạ?")
+        # và Godot (escort-only) dắt người đó tới quầy tiếp đón (log run_0145).
         return _clarify(CLARIFY, clarify_count)
     if r.intent in PLACE_INTENTS:
         guided = _guide(r.intent, r.slots)

@@ -62,7 +62,7 @@ FACILITY_NOUNS: dict[str, tuple[str, ...]] = {
 # Khoa cấp cứu thuộc intent cap_cuu (A_26), không ghép vào mẫu hoi_khoa / dan_duong.
 EXCLUDED_DEPARTMENTS: frozenset[str] = frozenset({"Cấp cứu"})
 # Bí danh phòng quá chung (dễ lẫn với thoi_gian_cho, khong_ho_tro) không dùng làm {room_name}.
-EXCLUDED_ROOM_ALIASES: frozenset[str] = frozenset({"kết quả", "xét nghiệm"})
+EXCLUDED_ROOM_ALIASES: frozenset[str] = frozenset({"kết quả", "xét nghiệm", "cấp cứu", "phòng cấp cứu"})   # cấp cứu ➔ cap_cuu
 # Câu đã kết thúc bằng tiểu từ ➔ không thêm hậu tố; kết thúc bằng "không" ➔ chỉ thêm hậu tố hợp với câu hỏi có/không.
 FINAL_PARTICLES: frozenset[str] = frozenset({"nhé", "nha", "với", "ạ", "đi", "đã", "thôi", "nhỉ", "thế", "vậy"})
 AFTER_KHONG: frozenset[str] = frozenset({"", " ạ", " vậy", " bạn ơi"})
@@ -292,7 +292,9 @@ def build(out_dir: Path, manifest_csv: Path, stt_csv: Path, script_md: Path,
     test_stt = load_test_stt(pd.read_csv(stt_csv), set(test_ref["clip_id"]) |
                              set(manifest.loc[manifest["ref_verified"] == "True", "clip_id"]))
     script_texts = [r.text for r in load_script_table(script_md).values()]
-    tests = sorted(set(test_ref["text"]) | set(test_stt["text"]) | set(script_texts))
+    # Mọi câu đã thu âm (cả kịch bản bổ sung "T…", không chỉ clip ref_verified) là câu test: không để lọt vào train.
+    recorded = set(manifest["text_ref"].dropna())
+    tests = sorted(set(test_ref["text"]) | set(test_stt["text"]) | set(script_texts) | recorded)
 
     pool = build_pool(seed_rows, hmap, reviewed, rng)
     pool, leaked = remove_similar(pool, tests)

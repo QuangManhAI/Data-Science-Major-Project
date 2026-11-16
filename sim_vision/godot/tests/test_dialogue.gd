@@ -228,7 +228,7 @@ func test_timeout_says_sorry_and_returns_to_arrived() -> void:
 	watch_signals(dm)
 	main.state = S.LISTEN
 	dm._on_utterance_finished("A_07_r")
-	dm.deadline_ms = Time.get_ticks_msec() - 1
+	dm.deadline_ms = SimClock.now_ms() - 1
 	await wait_process_frames(2)
 	assert_eq(main.state, S.ARRIVED)
 	assert_eq((dm.subtitle.get_node("Panel/Box/Reply") as Label).text, "Robot: " + Subtitle.SORRY)

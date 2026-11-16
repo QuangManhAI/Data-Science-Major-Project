@@ -178,12 +178,19 @@ func get_rear_camera() -> Camera3D:
 	return get_node(^"RearViewport/RearCamera") as Camera3D
 
 
+## Lockstep (train trong Godot): camera không render mỗi frame; VisionClient xin render đúng frame cần chụp (UPDATE_ONCE).
+var _rear_on: bool = false
+
+
 func set_rear_camera_enabled(on: bool) -> void:
+	_rear_on = on
+	if SimClock.lockstep:
+		return
 	get_rear_viewport().render_target_update_mode = SubViewport.UPDATE_ALWAYS if on else SubViewport.UPDATE_DISABLED
 
 
 func is_rear_camera_enabled() -> bool:
-	return get_rear_viewport().render_target_update_mode == SubViewport.UPDATE_ALWAYS
+	return _rear_on
 
 
 ## Khoảng cách từ đầu raycast phía trước tới vật cản; không chạm ➔ INF.

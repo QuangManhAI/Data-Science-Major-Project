@@ -10,6 +10,8 @@ extends Node
 
 ## Phát sau mỗi lượt (kể cả lỗi), cùng nội dung dòng log; G17 dùng. Có TTS ➔ phát khi biết kết quả TTS.
 signal turn_completed(row: Dictionary)
+## Robot vẫn chưa nghe rõ mà người bệnh không còn câu nào để nói lại ➔ Main quyết định (escort-only: gọi nhân viên).
+signal clarify_gave_up(row: Dictionary)
 
 ## Phụ đề giữ thêm sau khi âm thanh hết (ẩn ngay khi robot nói xong); quá thời lượng + SPEAK_GRACE_S mà player
 ## chưa báo xong ➔ coi như xong (tránh treo).
@@ -51,7 +53,7 @@ var _row: Dictionary = {}           # dòng log chờ kết quả TTS
 
 
 func _ready() -> void:
-	_start_ms = Time.get_ticks_msec()
+	_start_ms = SimClock.now_ms()
 	# Main chưa _ready (con _ready trước cha) ➔ lấy Robot bằng get_node, đọc main.state lúc gọi.
 	active_npc = npc
 	npc.setup(main.get_node(^"Robot"), func() -> int: return main.state)
@@ -75,7 +77,7 @@ func _ready() -> void:
 
 
 func _process(_delta: float) -> void:
-	var now: int = Time.get_ticks_msec()
+	var now: int = SimClock.now_ms()
 	if main.state == Config.RobotState.THINK and DialogueManager.is_timed_out(deadline_ms, now):
 		_fail("timeout")
 	elif main.state == Config.RobotState.RESPOND and waiting_tts \
@@ -83,6 +85,10 @@ func _process(_delta: float) -> void:
 		_speak_failed("timeout")
 	elif speaking and DialogueManager.is_timed_out(speak_deadline_ms, now) and voice != null:
 		voice.stop_speaking()
+		if speaking:
+			# Loa đã bị câu khác (thông báo bắt đầu dẫn) cắt ngang ➔ không còn ai phát finished_speaking: tự kết thúc
+			# lượt, không thì robot kẹt ở RESPOND mãi (eval Godot 2026-11-14: đứng yên 225 s giữa lúc đang dẫn).
+			_on_finished_speaking()
 
 
 ## Đặt lại khi Main đặt lại vị trí (phím R). utt_id giữ nguyên để transcript / audio muộn của lượt cũ bị bỏ.
@@ -102,7 +108,7 @@ func reset() -> void:
 	active_npc = npc
 	if voice != null and voice.speaking:
 		voice.speaking = false            # không phát finished_speaking cho lượt đã hủy
-		voice.stop()
+		SimClock.stop(voice)
 	if subtitle != null:
 		subtitle.hide_now()
 	if main != null and main.overlay != null:
@@ -135,7 +141,7 @@ static func clip_take(clip_id: String) -> String:
 
 func build_log_row(r: Dictionary, error: String) -> Dictionary:
 	var row: Dictionary = {
-		"time_s": (Time.get_ticks_msec() - _start_ms) / 1000.0, "utt_id": utt_id, "clip_id": pending_clip,
+		"time_s": (SimClock.now_ms() - _start_ms) / 1000.0, "utt_id": utt_id, "clip_id": pending_clip,
 		"speaker": DialogueManager.clip_speaker(pending_clip), "take": DialogueManager.clip_take(pending_clip),
 		"distance_m": sent_distance_m, "snr_db": snr_db, "noise": noise, "error": error,
 	}
@@ -167,6 +173,8 @@ func _on_talk_started(clip_id: String) -> void:
 
 
 func _on_talk_aborted(_clip_id: String) -> void:
+	if main.has_method("train_event"):
+		main.train_event("dialogue_abort")
 	if main.state == Config.RobotState.LISTEN:
 		main.set_dialogue_state(Config.RobotState.ARRIVED)
 
@@ -179,7 +187,7 @@ func _on_utterance_finished(clip_id: String) -> void:
 	var speaker_node: Node3D = active_npc.human if (active_npc != null and active_npc.human != null) else npc.human
 	sent_distance_m = Human.flat_distance(main.get_node(^"Robot").global_position, speaker_node.global_position)
 	main.set_dialogue_state(Config.RobotState.THINK)
-	deadline_ms = Time.get_ticks_msec() + int(Config.STT_TIMEOUT_S * 1000.0)
+	deadline_ms = SimClock.now_ms() + int(Config.STT_TIMEOUT_S * 1000.0)
 	if not stt.send_utterance(utt_id, clip_id, sent_distance_m, snr_db, noise):
 		_fail("stt disconnected")
 
@@ -205,7 +213,7 @@ func _on_transcript(r: Dictionary) -> void:
 		_speak_failed("disconnected")
 		return
 	waiting_tts = true
-	tts_deadline_ms = Time.get_ticks_msec() + int(Config.TTS_TIMEOUT_S * 1000.0)
+	tts_deadline_ms = SimClock.now_ms() + int(Config.TTS_TIMEOUT_S * 1000.0)
 
 
 func _on_tts_audio(a: Dictionary) -> void:
@@ -216,7 +224,7 @@ func _on_tts_audio(a: Dictionary) -> void:
 	var stream: AudioStreamWAV = TtsClient.pcm16_to_stream(a["pcm"], a["sample_rate"])
 	var duration: float = float(a["duration_s"])
 	speaking = true
-	speak_deadline_ms = Time.get_ticks_msec() + int((duration + SPEAK_GRACE_S) * 1000.0)
+	speak_deadline_ms = SimClock.now_ms() + int((duration + SPEAK_GRACE_S) * 1000.0)
 	voice.say(stream)
 	subtitle.show_reply(_reply["text"], _reply["response"], duration + SPEAK_GRACE_S)
 	_row["tts_ms"] = a["tts_ms"]
@@ -275,15 +283,18 @@ func _on_subtitle_finished() -> void:
 ## Robot nói xong. clarify ➔ người bệnh nói lại bằng clip khác take (tối đa MAX_CLARIFY lần), không thì kết thúc.
 func _after_response() -> void:
 	var target_npc: Npc = active_npc if active_npc != null else npc
-	var is_escort_only: bool = bool(main.get("escort_only_mode")) if main != null and "escort_only_mode" in main else false
-	if action == "clarify" and clarify_count < Config.MAX_CLARIFY and not is_escort_only:
-		var alt: String = Npc.alternate_clip(target_npc.get_clips(), pending_clip, used_clips)
-		if alt != "":
-			main.set_dialogue_state(Config.RobotState.LISTEN)
-			if target_npc.say_again(alt):
-				clarify_count += 1
-				used_clips.append(alt)
-				return
+	# Đang dẫn (câu trả lời "đi tiếp?" / cảm ơn) thì không hỏi lại: Main đã xử lý lượt đó rồi.
+	var mid_task: bool = main != null and main.has_method("is_task_busy") and main.is_task_busy()
+	if action == "clarify" and not mid_task:
+		if clarify_count < Config.MAX_CLARIFY:
+			var alt: String = Npc.alternate_clip(target_npc.get_clips(), pending_clip, used_clips)
+			if alt != "":
+				main.set_dialogue_state(Config.RobotState.LISTEN)
+				if target_npc.say_again(alt):
+					clarify_count += 1
+					used_clips.append(alt)
+					return
+		clarify_gave_up.emit(_row)
 	_finish()
 
 

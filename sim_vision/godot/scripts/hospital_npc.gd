@@ -22,6 +22,7 @@ const PARDON_CLEARANCE_M: float = 0.35    # khoảng trống cần có sau đi�
 const PARDON_MAX_S: float = 4.0           # né quá 4 s (vd. lỡ đứng chắn cửa robot cần qua) ➔ đi tiếp lộ trình...
 const PARDON_COOLDOWN_S: float = 3.0      # ...và 3 s sau mới được né lại
 const PARDON_DOORWAY_KEEP_CLEAR_M: float = 1.2  # điểm né không chắn cửa (đường robot có thể rẽ vào cửa)
+const MAKE_WAY_S: float = 6.0             # được robot xin đường: đứng tránh chừng này rồi mới đi tiếp việc của mình
 const PERSONAL_SPACE_M: float = 0.9       # không bước lại gần tâm robot hơn 0.9 m; đứng chờ...
 const BLOCKED_TURN_S: float = 2.0         # ...chờ quá 2 s khi đi tuần ➔ quay đầu về điểm tuần còn lại
 
@@ -60,6 +61,7 @@ var _is_pardoning: bool = false
 var _pardon_target: Vector3 = Vector3.ZERO
 var _pardon_elapsed_s: float = 0.0
 var _pardon_cooldown_s: float = 0.0
+var _make_way_left_s: float = 0.0
 var _blocked_s: float = 0.0
 var _state_timer: float = 0.0
 var _last_pos: Vector3 = Vector3.ZERO
@@ -161,6 +163,22 @@ func setup_robot(robot_node: Node3D, state_fn: Callable = Callable()) -> void:
 
 func is_pardoning() -> bool:
 	return _is_pardoning
+
+
+## Robot nói "Xin lỗi, cho tôi đi nhờ ạ" với người này ➔ bước sang bên (đang đứng trong ô cửa thì bước hẳn ra khỏi cửa),
+## kể cả khi `pardon_enabled` tắt và robot đang đứng yên: robot chủ động xin đường chứ không trông vào việc người ta tự né.
+## Trả false nếu không nhường được (đang ngồi / đang được dẫn / không còn chỗ).
+func make_way(robot: Node3D) -> bool:
+	if robot == null or current_state in [State.SITTING, State.ESCORTED]:
+		return false
+	var target: Variant = HospitalNpc.pick_clear_pardon_target(self, global_position, robot)
+	if target == null:
+		return false
+	_is_pardoning = true
+	_pardon_target = target
+	_pardon_elapsed_s = 0.0
+	_make_way_left_s = MAKE_WAY_S
+	return true
 
 
 func set_state(new_state: State) -> void:
@@ -309,12 +327,18 @@ func _physics_process(delta: float) -> void:
 				_is_pardoning = true
 				_pardon_target = target
 				_pardon_elapsed_s = 0.0
+		elif _is_pardoning and _make_way_left_s > 0.0:
+			pass                                # đang nhường theo lời robot xin: giữ tới hết MAKE_WAY_S
 		elif _is_pardoning and dist_robot >= PARDON_CLEAR_DIST:
 			_is_pardoning = false
 		elif _is_pardoning and _pardon_elapsed_s >= PARDON_MAX_S:
 			_is_pardoning = false
 			_pardon_cooldown_s = PARDON_COOLDOWN_S
 
+	if _make_way_left_s > 0.0:
+		_make_way_left_s -= delta
+		if _make_way_left_s <= 0.0:
+			_is_pardoning = false
 	if _is_pardoning:
 		var d_target: float = Human.flat_distance(global_position, _pardon_target)
 		if d_target > ARRIVE_TOL:
@@ -509,7 +533,50 @@ static func pick_clear_pardon_target(npc: Node3D, anchor: Vector3, robot: Node3D
 		query.exclude = exclude
 		if space == null or space.intersect_ray(query).is_empty():
 			return target
+	# Đang đứng ngay trong ô cửa (vd. bệnh nhân vừa được dẫn tới, robot ở trong phòng): mọi điểm né ngang đều
+	# "chắn cửa" nên bị loại ở trên ➔ trước đây NPC đứng im mãi, robot (không lùi được) kẹt. Bước hẳn ra khỏi cửa,
+	# về phía không có robot, chéo sang một bên (không đứng ngay lối robot đi ra).
+	var door: Node3D = HospitalNpc.nearest_door(npc, npc.global_position)
+	if door == null:
+		return null
+	for t: Vector3 in HospitalNpc.doorway_exit_targets(door, npc.global_position, robot.global_position):
+		if HospitalNpc.near_doorway(npc, t):
+			continue
+		var from := Vector3(npc.global_position.x, 0.5, npc.global_position.z)
+		var to := Vector3(t.x, 0.5, t.z)
+		var query := PhysicsRayQueryParameters3D.create(from, to + (to - from).normalized() * PARDON_CLEARANCE_M)
+		query.exclude = exclude
+		if space == null or space.intersect_ray(query).is_empty():
+			return t
 	return null
+
+
+## Cửa trượt gần `p` nhất trong tầm PARDON_DOORWAY_KEEP_CLEAR_M; không có ➔ null.
+static func nearest_door(npc: Node, p: Vector3) -> Node3D:
+	var best: Node3D = null
+	var best_d: float = PARDON_DOORWAY_KEEP_CLEAR_M
+	for d: Node in npc.get_tree().get_nodes_in_group(&"sliding_doors"):
+		var dist: float = Human.flat_distance(p, (d as Node3D).global_position)
+		if dist < best_d:
+			best_d = dist
+			best = d as Node3D
+	return best
+
+
+## Điểm ra khỏi ô cửa, phía bên kia so với robot: chéo trái / phải (ưu tiên phía NPC đang lệch), cuối cùng thẳng ra.
+static func doorway_exit_targets(door: Node3D, npc_pos: Vector3, robot_pos: Vector3) -> Array[Vector3]:
+	var n3: Vector3 = door.global_transform.basis.z
+	var n := Vector2(n3.x, n3.z)
+	n = Vector2(0.0, 1.0) if n.length() < 1e-4 else n.normalized()
+	var c := Vector2(door.global_position.x, door.global_position.z)
+	if (Vector2(robot_pos.x, robot_pos.z) - c).dot(n) > 0.0:
+		n = -n                                   # n: hướng từ cửa ra phía KHÔNG có robot
+	var lat := Vector2(-n.y, n.x)
+	var side: float = 1.0 if (Vector2(npc_pos.x, npc_pos.z) - c).dot(lat) >= 0.0 else -1.0
+	var out: Array[Vector3] = []
+	for v: Vector2 in [n * 1.0 + lat * side * 1.0, n * 1.0 - lat * side * 1.0, n * 1.4]:
+		out.append(Vector3(c.x + v.x, npc_pos.y, c.y + v.y))
+	return out
 
 
 static func near_doorway(npc: Node, p: Vector3) -> bool:

@@ -117,3 +117,192 @@ chuyện xong, tức là sau khi đối mặt và (thường là) ghi nhớ đư
    Nguyên nhân: policy không dùng dấu của hướng giọng nói, luôn quay trái (người ở sau-phải ➔ quay cả vòng, dừng khi người
    vẫn sau lưng). Trọng số vào DOA khởi tạo 0, std của ω đã co về 0.11, thưởng ghi nhớ chỉ đến cuối hội thoại.
    Sửa: thêm shaping theo góc tới người nói, đặt lại std của ω = 0.3 khi train tiếp.
+
+## Vòng 9 (2026-11-13): thoát khỏi người chắn lối, quay hẳn về người nói
+
+### Vì sao
+
+Log `run_1335`, `run_1427`, `run_1500`: dẫn xong robot kẹt trong phòng, đẩy vào bệnh nhân vừa giao; ca đầu `run_1500` ghi nhớ
+nhầm người. Nguyên nhân tìm được:
+
+1. **Godot che người vừa giao khỏi depth** (`robot.depth_ignore` vẫn trỏ vào họ ở pha quay về) ➔ 3 sector giữa báo "trống"
+   trong khi người đứng cách 0.63 m. Lỗi harness, không phải policy.
+2. **Lúc train bệnh nhân đi chếch trước robot, trong Godot họ đi sau lưng** (camera trước chỉ thấy 4–8% thời gian) ➔ tới nơi họ
+   đứng giữa robot và cửa. Policy chưa từng gặp cảnh này. Đưa đúng cảnh đó vào môi trường train, model vòng 8 còn 1.9 người
+   / ca, 31 va chạm, đẩy vào người 53 s / ca.
+3. **Lúc nói chuyện policy vẫn bị kéo về điểm tuần tra** (ô "đích" 13–15) ➔ quay về giọng nói rồi dừng khi còn lệch ~60°;
+   người bên hông / sau lưng chỉ ghi nhớ được 42–44%.
+4. Godot ép robot dừng khi cách người gần nhất 1.85 m (kể cả người đi ngang) và không cho policy quay lúc đứng chờ.
+5. Camera 86° không có trí nhớ: người vừa ra khỏi khung (đứng bên hông) là "không tồn tại" với policy.
+6. Tâm box bệnh nhân server gửi (−0.5..0.5) bằng nửa lúc train (−1..1); pha quay về Godot gửi `CALL_STAFF`, lúc train là
+   `SEARCH` + "đang quay về".
+
+### Thay đổi
+
+Quan sát 35 ➔ **45-D** (`hospital_env_engage_v3.py`, dựng bằng cùng code ở `rl_policy_server.py`, lớp dùng chung
+`src/training/local_memory.py`):
+
+| Chỉ số | Ý nghĩa | Nguồn |
+|---|---|---|
+| 13–15 lúc nói chuyện | "đích" = hướng giọng nói đã nhớ ➔ quay về người nói dùng lại kỹ năng "quay về đích" | DOA + odometry |
+| 18–20 | tether tính cả camera sau (bệnh nhân thường đi sau lưng) | ReID trước / sau (`v3.tether`) |
+| 35–40 | trí nhớ vật cản: độ gần ở 6 sector ngoài khung nhìn (trái .. sau .. phải), từ depth 8 s gần nhất + odometry | depth + odometry |
+| 41 | tín hiệu gỡ kẹt: ra lệnh đi 0.4 s mà không nhúc nhích ➔ cửa sổ 2.2 s, dấu = phía nên quay (cố định trong cửa sổ) | odometry so với lệnh |
+| 42–44 | box người to nhất trong khung [thấy, cx, h], bất kể là ai (tường và người đều lấp depth, chỉ người mới xin đường được) | YOLO |
+
+Hành động "hỏi" (a[3]) thêm nghĩa thứ hai: với người đã gặp, hoặc khi robot đang bận (dẫn / quay về), nó là
+**"Xin lỗi, anh chị cho tôi đi nhờ một chút ạ"** với người đứng ngay trước mặt (≤ 1.5 m, ±40°); 85% số người bước sang bên
+(đang đứng trong ô cửa thì bước hẳn ra). Robot chủ động xin đường, không trông vào việc NPC tự né.
+
+Mô hình người lúc train: 60% bệnh nhân đi sau lưng robot theo vết đường, 50% dừng lại 5–18 s một lần; giao xong họ đứng tại
+chỗ (50% sau 3–20 s mới đi tiếp vào phòng); NPC nhân viên chỉ tự né 50% số lần. Thưởng thêm: −0.2 / bước khi lái vào người
+đứng chắn, +0.02 × độ chính giữa của mặt lúc nói chuyện.
+
+Train (`src/training/train_engage_v3_skills.py`, rollout song song): trộn ca đầy đủ với 2 bài tập ngắn, **người tự tới
+nói** và **thoát khỏi phòng** (`setup_exit_drill`). Ở các "trạng thái kỹ năng" (đang nói chuyện, đang gỡ kẹt, bài tập) luật
+thầy cho nhãn bắt chước (DAgger) cạnh loss PPO, trọng số giảm dần tới sàn; lái thường để PPO tự lo. Thầy chỉ dùng quan sát
+(không có trạng thái ẩn) nên policy bắt chước được chính xác.
+
+Godot: bỏ che người vừa giao khỏi depth; V3 bỏ luật ép dừng 1.85 m, policy tự quay / ngẩng đầu khi đứng chờ;
+`_robot_ask()` thêm nhánh xin đường, `HospitalNpc.make_way()` / `Human.make_way()`; gửi thêm `v3.held`, `v3.tether`.
+
+### Kết quả (môi trường train mới, 40 ca × 700 s + 200 lượt mỗi bài tập, cùng seed)
+
+| Chỉ số | Vòng 8 | Vòng 9 | Luật thầy |
+|---|---|---|---|
+| Người dẫn tới nơi / ca (trung bình 20% số người từ chối) | 1.94 | 4.95 | 4.48 |
+| Ca phục vụ hết mọi người | 12% | 85% | 78% |
+| Va chạm / ca | 30.9 | 0.82 | 1.05 |
+| Thời gian đẩy vào người / ca | 53.5 s | 1.6 s | 5.3 s |
+| Người tự tới nói: ghi nhớ được mặt (bên hông / sau lưng) | 87% (83%) | 99% (99%) | 98% (98%) |
+| Thoát khỏi phòng qua người vừa giao | 35% | 100% | 98% |
+| Hỏi thừa / ca | 2.19 | 0.12 | 0.98 |
+
+Số vòng 8 đo trên 16 ca / 100 lượt (dòng `[INIT policy]` của log train). Vòng 9 train 3 chặng × 6000 ca
+(`experiments/runs/20261113_154054`, `_180145`, `_184022`; chặng 2–3 tăng tỉ lệ ca đầy đủ lên 50%), model cài là best của
+chặng 3. Chặng 2 chạy qua `rl_policy_server.py` (quan sát dựng từ thông điệp như Godot gửi) thoát phòng 30/31 lượt.
+
+### Chưa xong / rủi ro
+
+- Chưa đo trong Godot: cần chạy `run_simulation.py --policy v3` và đọc log.
+- Người gọi bị bỏ qua tới mức bỏ cuộc: 0.72 / ca.
+- Robot chưa tự đứng chờ khi bệnh nhân dừng lại giữa đường (Godot vẫn có luật `EscortMonitor` giữ robot).
+- YOLO nhận người áo đỏ (`human_m06`) thành `pccc_station` ở gần ➔ không có box người ➔ không ghi nhớ / xin đường theo box được.
+- Câu `excuse_me` chưa có giọng sinh sẵn (`python -m tts.pregen`).
+- Model vòng 8 giữ ở `experiments/checkpoints/PPOHospital-EngageV3_round8_35d.pt` (server vẫn chạy được model 35-D).
+
+## Vòng 10 (2026-11-13): robot tự chờ bệnh nhân, bớt luật trong Godot
+
+**Vì sao.** Trong Godot, khi bệnh nhân tụt lại thì `EscortMonitor` giữ robot đứng bằng luật (tắt policy). Đo trên bài
+tập mới thì model vòng 9 tự nó chỉ chờ đúng 22%, bỏ bệnh nhân xa tới 5.1 m — luật đang che lỗi của model.
+
+**Godot.** Với policy V3, `EscortMonitor` không giữ robot khi bệnh nhân chỉ ở xa (FAR) nữa; chỉ giữ lúc đang hỏi "có dẫn
+tiếp không" và khi bệnh nhân xin nghỉ (`holds_for_dialogue`). Câu nhắc vẫn nói. Controller luật / V2 giữ như cũ.
+
+**Env train** (`hospital_env_engage_v3.py`):
+- Bài tập "lag" (`setup_lag_drill`): đang dẫn thì bệnh nhân dừng 8–18 s; phạt `R_LEAVE_BEHIND` mỗi bước đi xa thêm
+  khỏi người đã tụt quá 3 m (vị trí thật).
+- Tether như ReID thật: mất dấu ngắn, thỉnh thoảng bám nhầm người khác đang trong khung, sai số khoảng cách ~10%.
+- Bệnh nhân đi sau lưng 85% (khớp Godot sau khi viết lại bộ đi theo), dừng lại 70% số ca.
+- Teacher chỉ chờ khi có bằng chứng tụt lại (`patient_left_behind`: thấy xa > 2.5 m, hoặc mất dấu 4 s sau khi lần cuối
+  thấy > 1.8 m). Bản đầu chờ cả khi "không thấy" ➔ đứng chờ người đang ở điểm mù giữa hai camera (90–137°) ngay sau
+  lưng: 83% số lần chờ là chờ nhầm, robot học thành rụt rè.
+
+**Trainer** (`train_engage_v3_skills.py`): bước do teacher lái chỉ dùng cho BC, không vào PPO (off-policy, ratio bùng nổ:
+lần chạy 2 có KL trung vị 0.16, max 36, va chạm tăng lên 5.9/ca); mở lại std tốc độ 0.3 (`--init-std-v`); dừng epoch khi
+KL > 0.03; điểm chọn checkpoint cộng số người giúp.
+
+**Kết quả** (40 ca 700 s + bài tập; `experiments/runs/20261113_211240_PPOHospital-EngageV3`, ep 4800):
+
+| | Vòng 9 | Vòng 10 | Teacher |
+|---|---|---|---|
+| Chờ đúng (lag drill) | 22% | 88% | 92% |
+| Khoảng cách xa nhất lúc bệnh nhân dừng | 5.1 m | 3.0 m | 3.0 m |
+| Va chạm / ca | 2.5 | 1.1 | 2.2 |
+| Đẩy vào người / ca | 3.2 s | 0.9 s | 5.1 s |
+| Giúp / ca | 4.85 | 4.08 | 3.88 |
+| Phục vụ hết | 80% | 60% | 50% |
+| Thoát phòng | 100% | 100% | 98% |
+
+Số người giúp giảm là cái giá của việc chờ (70% ca có bệnh nhân dừng 5–18 s; vòng 9 đi tiếp bỏ họ lại). Đã cài làm
+`PPOHospital-EngageV3_best.pt`; vòng 9 lưu ở `PPOHospital-EngageV3_round9_45d.pt`.
+
+## Vòng 11 (2026-11-14): robot tự chọn người, tự quay lại hỏi bệnh nhân dừng lại
+
+**Vì sao.** Trong Godot (run_2311): robot hỏi "Cần tôi giúp gì" liên tục vào người đã giúp / nhân viên; bệnh nhân dừng
+lâu thì robot đứng chờ mãi; bệnh nhân đứng sát cạnh robot (điểm mù giữa camera trước / sau) bị coi là "ở xa 3.3 m" ➔ hai
+bên chờ nhau. Người dùng yêu cầu bỏ luật, để policy tự học.
+
+**Quan sát 59-D** (giữ nguyên 45 ô cũ để train tiếp từ vòng 10): + cờ "đã gặp" của người to nhất, 2 người kế tiếp
+[thấy, cx, cao, đã gặp] (`local_memory.person_slots`; Godot: chủ box theo chiếu 3D ➔ đã giúp / đang dẫn / nhân viên);
++ bệnh nhân đang dẫn [còn nhớ, hướng sin/cos, khoảng cách tới chỗ thấy lần cuối, số giây đứng im] (`PatientTrack`,
+từ vị trí ReID ước lượng; Godot gửi `id_pos`).
+
+**Env.** Một nửa số lần bệnh nhân dừng là "chờ robot" (tới 60 s): chỉ đi tiếp khi robot quay lại, ở trước mặt trong
+2.5 m (hoặc khuất góc tường trong 2 m) và hỏi — hành động hỏi lúc đang dẫn = "Anh/chị đi tiếp được không ạ?"
+(`R_REENGAGE` +3, `R_PATIENT_WAITING` −0.03/bước khi để người ta chờ). Mất dấu chỉ là "tụt lại" khi có bằng chứng
+(`patient_left_behind`: thấy xa, mất dấu sau khi thấy xa, hoặc robot đã cách chỗ thấy họ > 2.5 m). Hỏi thừa phạt nặng
+hơn (`R_ASK_EMPTY` −1.5, `R_ASK_REPEAT` −1.0). Teacher: quay lại theo vị trí đã nhớ, thấy ở gần thì hỏi, khuất thì gọi
+(một lần / 8 s), không xin đường với chính bệnh nhân đang dẫn.
+
+**Godot.** `EscortMonitor.auto_ask = false` khi server báo `returns` (model 59-D): monitor chỉ nhắc, không tự hỏi / bỏ
+cuộc; hỏi lúc đang dẫn đi qua `_policy_asks_continue` ➔ luồng trả lời bằng giọng thật. Mất dấu khi lần cuối thấy họ ở
+gần (≤ 1.8 m) không tính là đã xa. Mặt / người là nhân viên = "đã gặp".
+
+**Train.** 11a (6000 ep từ vòng 10; dừng ở ep 4400 vì hỏi thừa tăng lên 5/ca) ➔ 11b (phạt hỏi thừa nặng hơn, teacher
+bớt gọi) ➔ 11c (thêm `R_PATIENT_WAITING`, thưởng hỏi trúng +3: policy từng tới gần 1.2–1.7 m, thấy mà không hỏi).
+
+**Kết quả** (40 ca 700 s + 50 bài tập bệnh nhân dừng; `experiments/runs/20261114_003142_PPOHospital-EngageV3`):
+
+| | Vòng 11c | Vòng 10 | Teacher |
+|---|---|---|---|
+| Quay lại hỏi bệnh nhân đang chờ robot | 64% | 0% | 86% |
+| Xử lý đúng khi bệnh nhân dừng | 82% | 48% | 86% |
+| Giúp / ca | 4.55 | 2.48 | 3.42 |
+| Va chạm / ca | 0.62 | 0.55 | 1.55 |
+| Đẩy vào người / ca | 1.3 s | 0.7 s | 6.2 s |
+| Hỏi thừa / ca | 0.82 | 0.25 | 1.45 |
+
+Đã cài làm `PPOHospital-EngageV3_best.pt`; vòng 10 lưu ở `PPOHospital-EngageV3_round10_45d.pt`. Chưa chạy thử trong Godot.
+
+## Vòng 12: train ngay trong Godot (xoá khoảng cách env Python ↔ Godot)
+
+Vòng 10–11 đạt điểm cao trong env Python mà vào Godot vẫn hời hợt: không chủ động đi tìm, hỏi thừa sau khi giao, chọn
+người rồi bỏ. Lý do: env Python khác Godot ở YOLO (box lý tưởng), mặt (chỉ thấy mặt bệnh nhân), NPC (hay tự tới nói),
+lượt cảm ơn (2 s so với ~8 s), va chạm, và checkpoint được chọn theo điểm env Python. Vòng 12 dùng Godot làm env.
+
+- **SimClock** (`scripts/sim_clock.gd`, autoload): đồng hồ giờ sim cho mọi hẹn giờ logic (thay `Time.get_ticks_msec`).
+  `--lockstep` / `--train-env`: client nào gửi yêu cầu (YOLO trước / sau, STT, TTS, policy) thì giữ frame sau tới khi có
+  trả lời ➔ chạy `--fixed-fps 30 --disable-vsync` nhanh hơn thời gian thực mà không lệch giờ. Âm thanh không phát ra loa,
+  `finished` hẹn đúng độ dài clip theo giờ sim. Camera robot chỉ render ở frame cần chụp (UPDATE_ONCE).
+- **TrainEnv** (`scripts/train_env.gd`): mỗi bước policy gửi kèm `train` = sự kiện (tìm thấy người cần giúp, nhận việc,
+  dẫn tới, hỏi thừa, xin đường, quay lại hỏi, bỏ dở, kẹt 45 s, hội thoại bị bỏ, cọ tường) + trạng thái thật (người cần
+  giúp, đích chặng, bệnh nhân đang dẫn, người chắn lối). Policy không thấy phần này. Hết ca ➔ nạp lại scene, seed mới.
+- **Thưởng** (`src/training/godot_reward.py`): hệ số như env Python + shaping theo đường đi (NavGrid) tới người cần giúp
+  gần nhất khi rảnh (chủ động đi tìm) và tới đích chặng khi dẫn; +0.5 lần đầu thấy một người cần giúp trong khung.
+- **Trainer** (`src/training/train_godot_v3.py`): server WebSocket; `/train` lấy mẫu hành động + PPO, `/eval` tất định.
+  Quan sát dựng bằng đúng `rl_policy_server.PolicyRunner.observe` như lúc chạy demo. Mỗi bản Godot một YOLO server
+  (một server phục vụ tuần tự là cổ chai). Checkpoint `_best` chọn theo điểm các ca `/eval` trong Godot.
+
+Tốc độ đo trên máy dev (M-series, 16 GB): 1 bản ~1.4× thời gian thực; 3 train + 1 eval ~1× mỗi bản (GPU dùng chung
+cho render, YOLO, PhoWhisper) ➔ ~3 giờ sim train / giờ thật.
+
+    sim_vision/python/.venv/bin/python -m src.training.train_godot_v3 --envs 3 --eval-envs 1 --shift-s 480 --hours 6
+
+Chạy demo với policy train trong Godot: camera trước 10 Hz như lúc train (`run_simulation.py --capture-hz`, mặc định 10
+khi `--controller rl`).
+
+**Kết quả vòng 12** (train 6 h: 83 lần cập nhật, 340k bước, từ 11c). Đối chứng trong Godot, cùng seed, 6 ca × 480 s,
+policy tất định (`train_godot_v3.py --eval-only`):
+
+| / ca | 11c (env Python) | Godot cập nhật 52 (`_best`) | Godot cập nhật 83 (`_last`) |
+|---|---|---|---|
+| Giúp được | 1.50 | **2.83** | 2.50 |
+| Hỏi thừa | 3.67 | **2.00** | 2.00 |
+| Kẹt 45 s | 4.00 | **1.00** | 1.67 |
+| Va chạm | 3.50 | **1.33** | 1.67 |
+| Điểm Godot | +0.4 (−9.2 … +6.9) | **+25.9** (+12.9 … +32.8) | +20.0 |
+
+Đã cài cập nhật 52 làm `PPOHospital-EngageV3_best.pt` (sha 4718919c…); 11c lưu ở `PPOHospital-EngageV3_round11c_59d.pt`.
+Lỗi tìm ra lúc đối chứng: câu "bắt đầu dẫn" cắt loa giữa lúc robot đang trả lời ➔ kẹt RESPOND mãi; đã sửa (hết giờ nói
+thì tự kết thúc lượt, dialogue_manager.gd).

@@ -107,7 +107,7 @@ func cancel() -> void:
 	if _speaking and voice != null:
 		_speaking = false
 		voice.speaking = false
-		voice.stop()
+		SimClock.stop(voice)
 	_current_key = ""
 	_done_at_ms = -1
 
@@ -119,7 +119,7 @@ func _start(key: String, text: String) -> void:
 	line_started.emit(key)
 	if tts != null and voice != null and tts.is_server_connected() and tts.send_speak(_next_utt, text, Config.ROBOT_VOICE):
 		_waiting_utt = _next_utt
-		_wait_deadline_ms = Time.get_ticks_msec() + int(Config.TTS_TIMEOUT_S * 1000.0)
+		_wait_deadline_ms = SimClock.now_ms() + int(Config.TTS_TIMEOUT_S * 1000.0)
 		return
 	_subtitle_only()
 
@@ -127,7 +127,7 @@ func _start(key: String, text: String) -> void:
 func _subtitle_only() -> void:
 	_waiting_utt = -1
 	_show(LINE_SUBTITLE_S)
-	_done_at_ms = Time.get_ticks_msec() + int(LINE_SUBTITLE_S * 1000.0)
+	_done_at_ms = SimClock.now_ms() + int(LINE_SUBTITLE_S * 1000.0)
 
 
 func _show(duration: float) -> void:
@@ -144,7 +144,7 @@ func _on_tts_audio(a: Dictionary) -> void:
 		return
 	var duration: float = float(a["duration_s"])
 	_speaking = true
-	_done_at_ms = Time.get_ticks_msec() + int((duration + SPEAK_GRACE_S + 1.0) * 1000.0)   # chống treo
+	_done_at_ms = SimClock.now_ms() + int((duration + SPEAK_GRACE_S + 1.0) * 1000.0)   # chống treo
 	voice.say(TtsClient.pcm16_to_stream(a["pcm"], a["sample_rate"]))
 	_show(duration + SPEAK_GRACE_S)
 
@@ -160,7 +160,7 @@ func _on_voice_finished() -> void:
 
 
 func _process(_delta: float) -> void:
-	var now: int = Time.get_ticks_msec()
+	var now: int = SimClock.now_ms()
 	if _waiting_utt >= 0 and now > _wait_deadline_ms:
 		_subtitle_only()
 	elif _current_key != "" and _done_at_ms >= 0 and now > _done_at_ms and _waiting_utt < 0:

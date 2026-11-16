@@ -5,7 +5,8 @@ nguyên vẹn được trong sim và ngoài đời. Chỉ dùng nội bộ: ản
 id ảnh, không lưu tên người.
 
 Chạy: .venv/bin/python -m identity.make_npc_faces
-Ra:   sim_vision/godot/assets/textures/npc_faces/<npc>.png (RGBA 256x320, mặt thẳng theo hai mắt, cắt oval sắc)
+Ra:   sim_vision/godot/assets/textures/npc_faces/<npc>.png (RGB 256x256 vuông, mặt thẳng theo hai mắt, không cắt viền:
+      dán nguyên lên mặt trước của đầu hình hộp, npc_face.gd)
 """
 
 from __future__ import annotations
@@ -21,9 +22,9 @@ from identity.models import PROJECT_ROOT, FaceModel
 
 SRC = PROJECT_ROOT / "data" / "faces_vn"
 OUT = PROJECT_ROOT / "sim_vision" / "godot" / "assets" / "textures" / "npc_faces"
-W, H = 256, 320
+W, H = 256, 256
 # Vị trí chuẩn của hai mắt và miệng trong texture (tỉ lệ) ➔ khớp chỗ mắt / miệng trên đầu NPC.
-EYE_L, EYE_R, MOUTH = (0.32, 0.40), (0.68, 0.40), (0.50, 0.74)
+EYE_L, EYE_R, MOUTH = (0.34, 0.42), (0.66, 0.42), (0.50, 0.72)
 # NPC ➔ person_id trong labels.csv (chọn tay: mặt thẳng, không kính, đúng giới, người lớn tuổi cho NPC cao tuổi).
 MAPPING: dict[str, int] = {
     "patient_elder_m03": 173, "patient_elder_m14": 102, "patient_elder_f09": 1,
@@ -56,10 +57,7 @@ def align(img: np.ndarray, lm: np.ndarray) -> np.ndarray:
     dst = np.float32([[EYE_L[0] * W, EYE_L[1] * H], [EYE_R[0] * W, EYE_R[1] * H], [MOUTH[0] * W, MOUTH[1] * H]])
     face = cv2.warpAffine(img, cv2.getAffineTransform(src, dst), (W, H), flags=cv2.INTER_CUBIC,
                           borderMode=cv2.BORDER_REPLICATE)
-    # Oval cắt sắc (chỉ khử răng cưa 1 px), không làm mờ viền.
-    mask = np.zeros((H, W), np.uint8)
-    cv2.ellipse(mask, (W // 2, int(H * 0.52)), (int(W * 0.40), int(H * 0.44)), 0, 0, 360, 255, -1, cv2.LINE_AA)
-    return np.dstack([face, mask])
+    return face                       # ảnh vuông nguyên vẹn (tóc, tai, nền quanh mặt giữ nguyên)
 
 
 def main() -> int:

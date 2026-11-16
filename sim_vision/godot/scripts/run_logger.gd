@@ -31,7 +31,7 @@ func open(dir: String = "") -> bool:
 		_report_error("cannot open %s (%s)" % [path, error_string(FileAccess.get_open_error())])
 		return false
 	_file.store_line(",".join(COLUMNS))
-	_last_flush_ms = Time.get_ticks_msec()
+	_last_flush_ms = SimClock.now_ms()
 	return true
 
 
@@ -50,7 +50,7 @@ func flush() -> void:
 	_file.flush()
 	if _file.get_error() != OK:
 		_report_error("write failed: %s" % error_string(_file.get_error()))
-	_last_flush_ms = Time.get_ticks_msec()
+	_last_flush_ms = SimClock.now_ms()
 
 
 func close() -> void:
@@ -66,7 +66,7 @@ func is_open() -> bool:
 
 
 func _process(_delta: float) -> void:
-	if _file != null and Time.get_ticks_msec() - _last_flush_ms >= FLUSH_MS:
+	if _file != null and SimClock.now_ms() - _last_flush_ms >= FLUSH_MS:
 		flush()
 
 

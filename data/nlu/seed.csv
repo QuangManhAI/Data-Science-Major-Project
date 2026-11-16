@@ -99,3 +99,55 @@ s097,unknown,q,hôm nay trời có mưa không
 s098,unknown,q,tối nay đội nào đá bóng
 s099,unknown,q,bạn tên là gì
 s100,unknown,q,bạn có biết hát không
+s201,hoi_phong,q,phòng {room} đi lối nào vậy
+s202,hoi_phong,q,đường tới phòng {room} đi hướng nào
+s203,hoi_phong,q,phòng lấy mẫu xét nghiệm đi hướng nào
+s204,hoi_phong,q,phòng nội soi nằm ở đâu vậy
+s205,hoi_phong,q,kết quả siêu âm thì nhận ở chỗ nào
+s206,hoi_phong,q,muốn nhận kết quả xét nghiệm nước tiểu thì đến đâu
+s207,hoi_phong,q,trả kết quả xét nghiệm ở phòng nào
+s208,hoi_phong,q,quầy trả kết quả cận lâm sàng nằm ở đâu
+s209,hoi_phong,q,nhận phim chụp x quang ở quầy nào
+s210,hoi_phong,q,giấy chỉ định chụp chiếu thì nộp ở phòng nào
+s211,hoi_phong,q,tôi cầm phiếu xét nghiệm thì đưa cho ai ở phòng nào
+s212,hoi_phong,q,có kết quả rồi thì quay lại phòng khám nào cho bác sĩ xem
+s213,hoi_phong,q,đọc kết quả với bác sĩ ở phòng nào
+s214,cap_cuu,q,phòng cấp cứu nằm ở đâu
+s215,cap_cuu,q,đường tới khoa cấp cứu đi lối nào
+s216,cap_cuu,q,cấp cứu ở tầng mấy chỉ giúp tôi nhanh lên
+s217,cap_cuu,c,người nhà tôi cần cấp cứu ngay
+s218,gap_nhan_vien,q,tôi chờ cả tiếng rồi mà chưa được gọi thì hỏi ai bây giờ
+s219,gap_nhan_vien,q,đợi mãi chưa tới số thì phải báo với ai
+s220,gap_nhan_vien,c,tôi cần người hướng dẫn trực tiếp
+s221,gap_nhan_vien,c,cho tôi nói chuyện với nhân viên y tế
+s222,nha_thuoc,q,lấy thuốc theo đơn bảo hiểm ở quầy nào
+s223,nha_thuoc,q,bác sĩ kê đơn rồi thì nhận thuốc ở đâu
+s224,nha_thuoc,q,quầy phát thuốc bảo hiểm y tế nằm ở đâu
+s225,nha_thuoc,q,mua thuốc theo toa ở chỗ nào
+s226,dang_ky_kham,q,đặt lịch trên điện thoại rồi thì đến đâu xác nhận
+s227,dang_ky_kham,q,đã hẹn khám qua mạng thì làm thủ tục ở quầy nào
+s228,dang_ky_kham,q,có quầy đăng ký riêng cho người cao tuổi không
+s229,dang_ky_kham,q,người già có được ưu tiên lấy số khám không
+s230,dang_ky_kham,q,làm thủ tục vào khám ở chỗ nào
+s231,nhac_lai,q,tôi chưa hiểu bạn hướng dẫn lại được không
+s232,nhac_lai,c,bạn chỉ đường lại một lần nữa giúp tôi
+s233,nhac_lai,c,tôi không nhớ đường bạn nói lại đi
+s234,nhac_lai,q,bạn giải thích lại chậm hơn được không
+s235,khong_ho_tro,q,vào viện có bắt buộc đeo khẩu trang không
+s236,khong_ho_tro,q,trước khi chụp có phải nhịn ăn không
+s237,khong_ho_tro,q,thuốc này uống trước hay sau bữa ăn
+s238,khong_ho_tro,q,tôi có cần tiêm phòng trước khi khám không
+s239,tien_ich,q,phòng vắt sữa cho mẹ ở đâu
+s240,tien_ich,q,chỗ thay tã cho em bé ở đâu
+s241,tien_ich,q,có chỗ nào cho mẹ cho con bú không
+s242,tien_ich,q,đường đến nhà vệ sinh đi lối nào
+s243,thoi_gian_cho,q,còn mấy người nữa thì tới lượt tôi
+s244,thoi_gian_cho,q,số của tôi còn bao lâu nữa mới được gọi
+s245,thoi_gian_cho,q,phía trước tôi còn bao nhiêu số nữa
+s246,tien_ich,q,ghế ngồi đợi khám ở chỗ nào
+s247,tien_ich,q,có khu nào để ngồi nghỉ chờ đến lượt không
+s248,tien_ich,q,chỗ ngồi chờ gần đây nhất ở đâu
+s249,dung_lai,c,chờ tôi một chút để tôi dỗ em bé
+s250,dung_lai,c,đợi tí để tôi nghe điện thoại
+s251,dung_lai,c,khoan đã cháu đang quấy
+s252,dung_lai,c,từ từ đã để tôi buộc dây giày

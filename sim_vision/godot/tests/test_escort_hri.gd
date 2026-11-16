@@ -42,7 +42,7 @@ func test_lost_by_distance_asks() -> void:
 	var ev := _run(m, EscortMonitor.LOST_M + 0.5, true, 0.2)
 	assert_eq(ev, ["ask_continue"] as Array[String])
 	assert_eq(m.state, EscortMonitor.State.ASK)
-	assert_eq(_run(m, 9.0, false, 30.0), [] as Array[String], "đang chờ trả lời thì không hỏi chồng")
+	assert_eq(_run(m, 9.0, false, EscortMonitor.ANSWER_WAIT_S - 0.5), [] as Array[String], "đang chờ trả lời thì không hỏi chồng")
 
 
 func test_lost_by_unseen_asks() -> void:
@@ -94,7 +94,8 @@ func test_answer_rest_then_asks_again_or_resumes() -> void:
 	assert_has(_run(m, 6.0, true, EscortMonitor.REST_WAIT_S + 0.2), "ask_continue")
 	var m2 := _asking()
 	m2.answer("dung_lai")
-	assert_eq(_run(m2, 1.5, true, 0.2), ["resumed"] as Array[String], "nghỉ xong tự đi lại gần")
+	assert_eq(_run(m2, 1.5, true, EscortMonitor.REST_MIN_S + 0.2), ["resumed"] as Array[String],
+			"nghỉ đủ REST_MIN_S, đang ở gần ➔ đi tiếp")
 
 
 func test_unclear_answers_end_after_two() -> void:
@@ -127,7 +128,7 @@ func test_lines_file_has_all_keys_used_by_main() -> void:
 	var a := RobotAnnouncer.new()
 	a.load_lines(RobotAnnouncer.LINES_PATH)
 	for key: String in ["start", "goal_ahead", "goal_left", "goal_right", "elevator_enter", "elevator_exit", "arrive",
-			"remind", "remind_again", "ask_continue", "ask_again", "continue_ok", "stop_ok"]:
+			"remind", "remind_again", "ask_continue", "ask_again", "continue_ok", "stop_ok", "ask_help", "excuse_me"]:
 		var t: String = a.line_text(key, {"place": "Phòng 205", "floor": 2})
 		assert_ne(t, "", "thiếu câu '%s'" % key)
 		assert_false(t.contains("{"), key)
@@ -182,3 +183,63 @@ func test_patient_hold_keeps_patient_still_and_counts_down() -> void:
 		RLEnvBridge.step_escorted_patient(human, Vector3(0, 0, -3), 0.1, trail, 0.0)
 	assert_almost_eq(human.global_position.distance_to(start), 0.0, 1e-4, "đang nghỉ ➔ đứng yên")
 	assert_almost_eq(float(human.get_meta("escort_hold_s")), 0.5, 1e-4)
+
+
+## Xin nghỉ khi đang đứng gần robot: robot không "đi tiếp" ngay mà chờ ít nhất REST_MIN_S.
+func test_rest_waits_minimum_even_when_patient_close() -> void:
+	var m := EscortMonitor.new()
+	_run(m, 6.0, true, EscortMonitor.ASK_AFTER_S + 0.2)
+	assert_eq(m.answer("dung_lai"), "rest")
+	assert_does_not_have(_run(m, 1.0, true, EscortMonitor.REST_MIN_S - 0.5), "resumed", "chưa đủ thời gian nghỉ")
+	assert_true(m.hold_robot(), "robot vẫn đứng chờ")
+	assert_has(_run(m, 1.0, true, 1.0), "resumed", "nghỉ đủ ➔ đi tiếp")
+
+
+## Người vừa giao xong không được che khỏi depth: robot phải thấy họ để đi vòng (log run_1335 / 1427 / 1500: robot
+## đẩy vào người đứng chắn lối vì 3 sector giữa báo "trống").
+func test_delivered_patient_is_not_masked_from_depth() -> void:
+	var a := Node3D.new()
+	var b := Node3D.new()
+	assert_eq(Main.depth_masked_person(a, b, false, true), a, "đang dẫn ➔ che người đang dẫn")
+	assert_eq(Main.depth_masked_person(null, b, true, true), b, "đang tiếp cận ➔ che người đang tới")
+	assert_null(Main.depth_masked_person(null, b, false, true), "quay về sau khi giao ➔ không che ai")
+	assert_null(Main.depth_masked_person(null, b, true, false), "đang tìm (chưa nhắm ai) ➔ không che ai")
+	a.free()
+	b.free()
+
+
+func test_largest_patient_h_for_unenrolled_tether() -> void:
+	var dets: Array = [
+		{"class_id": 0, "class_name": "patient", "y1": 0.2, "y2": 0.7},
+		{"class_id": 1, "class_name": "doctor", "y1": 0.1, "y2": 0.9},
+		{"class_id": 7, "class_name": "pccc_station", "y1": 0.0, "y2": 1.0},
+	]
+	assert_almost_eq(Main.largest_patient_h(dets), 0.8, 1e-5, "box người to nhất, bỏ vật")
+	assert_eq(Main.largest_patient_h([]), 0.0)
+
+
+## Log run_1932: hỏi "có dẫn tiếp không" mà lượt trả lời hỏng ➔ robot đứng chờ 190 s. Phải báo no_answer rồi tự kết thúc.
+func test_ask_without_answer_times_out() -> void:
+	var m := _asking()
+	assert_eq(_run(m, 6.0, true, EscortMonitor.ANSWER_WAIT_S - 1.0), [] as Array[String])
+	assert_eq(_run(m, 6.0, true, 1.2), ["no_answer"] as Array[String])
+	assert_eq(m.answer(""), "ask_again")
+	assert_has(_run(m, 6.0, true, EscortMonitor.ANSWER_WAIT_S + 0.2), "no_answer", "hỏi lại cũng không ai đáp")
+	assert_eq(m.answer(""), "end", "lần hai ➔ robot kết thúc ca, không đứng chịu trận")
+	assert_false(m.hold_robot())
+
+
+## Vòng 11: policy tự quay lại hỏi ➔ monitor (auto_ask = false) không tự hỏi / bỏ cuộc khi bệnh nhân ở xa, chỉ nhắc.
+func test_policy_driven_ask_continue() -> void:
+	var m := EscortMonitor.new()
+	m.auto_ask = false
+	var ev := _run(m, 6.0, false, 60.0)
+	assert_has(ev, "remind")
+	assert_does_not_have(ev, "ask_continue", "không tự hỏi")
+	assert_does_not_have(ev, "give_up")
+	assert_false(m.holds_for_dialogue(), "bệnh nhân ở xa: robot không bị giữ, policy tự quyết")
+	assert_true(m.begin_ask(), "policy hỏi")
+	assert_true(m.holds_for_dialogue(), "đang hỏi ➔ đứng chờ câu trả lời")
+	assert_false(m.begin_ask(), "đang hỏi thì không hỏi chồng")
+	assert_eq(m.answer("tiep_tuc"), "continue")
+	assert_false(m.holds_for_dialogue())

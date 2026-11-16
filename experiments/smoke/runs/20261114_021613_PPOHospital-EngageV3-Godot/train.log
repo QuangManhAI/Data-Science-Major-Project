@@ -1,0 +1,8 @@
+[02:16:21] YOLO + STT/PhoBERT (+ TTS nếu có) đã sẵn sàng
+[02:16:21] Train trong Godot | init /Users/quangmanh/Project/Data-Science-Major-Project/experiments/checkpoints/PPOHospital-EngageV3_best.pt | 1 ca train + 0 ca eval song song, ca 90s sim, 30 fps, camera 10.0 Hz | rollout 400 bước, lr 5e-05, std v 0.12 ω 0.25 | out experiments/smoke/runs/20261114_021613_PPOHospital-EngageV3-Godot
+[02:17:37] train ca 0 (50762) done: 93s sim / 71s thật | giúp 0 (dẫn tới 0) nhận việc 1 thấy 3 | hỏi thừa 0 quay lại hỏi 0 bỏ dở 0 kẹt 0 va 0 đẩy 0s | R +0.5 điểm +1.0
+[02:17:40] UPDATE 1 (chỉ critic) | n=400 bước tổng 400 | pg +0.000 v 0.250 kl 0.0000 std [0.2800000011920929, 0.28999999165534973, 0.4099999964237213, 0.4099999964237213] | ca train gần đây: điểm +1.0 giúp 0.0 | 0.1s | 0.02 h
+[02:18:45] train ca 1 (50854) done: 90s sim / 65s thật | giúp 0 (dẫn tới 0) nhận việc 1 thấy 3 | hỏi thừa 0 quay lại hỏi 0 bỏ dở 0 kẹt 0 va 0 đẩy 0s | R +5.4 điểm +1.0
+[02:19:20] UPDATE 2 | n=400 bước tổng 800 | pg -0.006 v 0.216 kl 0.0019 std [0.2800000011920929, 0.28999999165534973, 0.4099999964237213, 0.4099999964237213] | ca train gần đây: điểm +1.0 giúp 0.0 | 0.0s | 0.05 h
+[02:19:20] train ca 2 (50946) ngắt: 5s sim / 3s thật | giúp 0 (dẫn tới 0) nhận việc 0 thấy 0 | hỏi thừa 0 quay lại hỏi 0 bỏ dở 0 kẹt 0 va 0 đẩy 0s | R +0.1 điểm +0.0
+[02:19:20] Dừng sau 2 lần cập nhật, 801 bước. Checkpoint: experiments/smoke/runs/20261114_021613_PPOHospital-EngageV3-Godot/checkpoints

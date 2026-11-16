@@ -1,0 +1,11 @@
+[09:03:30] YOLO + STT/PhoBERT (+ TTS nếu có) đã sẵn sàng
+[09:03:30] Train trong Godot | init experiments/checkpoints/PPOHospital-EngageV3_best.pt | 0 ca train + 3 ca eval song song, ca 480s sim, 30 fps, camera 10.0 Hz | rollout 4096 bước, lr 5e-05, std v 0.12 ω 0.25 | out experiments/eval_godot/runs/20261114_090323_eval_PPOHospital-EngageV3_best
+[09:09:06] eval  ca 0 (60572) done: 480s sim / 330s thật | giúp 2 (dẫn tới 2) nhận việc 2 thấy 4 | hỏi thừa 6 quay lại hỏi 0 bỏ dở 0 kẹt 2 va 4 đẩy 2s | R -8.6 điểm +1.6
+[09:09:31] eval  ca 0 (60563) done: 480s sim / 357s thật | giúp 1 (dẫn tới 1) nhận việc 2 thấy 2 | hỏi thừa 3 quay lại hỏi 0 bỏ dở 0 kẹt 4 va 2 đẩy 0s | R -1.2 điểm -4.0
+[09:09:33] eval  ca 0 (60578) done: 480s sim / 352s thật | giúp 1 (dẫn tới 1) nhận việc 3 thấy 4 | hỏi thừa 3 quay lại hỏi 2 bỏ dở 0 kẹt 3 va 4 đẩy 0s | R -3.1 điểm +3.0
+[09:14:31] eval  ca 1 (60898) done: 480s sim / 322s thật | giúp 2 (dẫn tới 2) nhận việc 3 thấy 4 | hỏi thừa 5 quay lại hỏi 1 bỏ dở 0 kẹt 2 va 5 đẩy 0s | R +2.8 điểm +6.9
+[09:15:06] eval  ca 1 (60927) done: 480s sim / 332s thật | giúp 1 (dẫn tới 1) nhận việc 2 thấy 4 | hỏi thừa 2 quay lại hỏi 1 bỏ dở 0 kẹt 8 va 4 đẩy 1s | R -87.8 điểm -9.2
+[09:16:12] eval  ca 1 (60932) done: 489s sim / 397s thật | giúp 2 (dẫn tới 2) nhận việc 2 thấy 4 | hỏi thừa 3 quay lại hỏi 0 bỏ dở 0 kẹt 5 va 2 đẩy 0s | R -13.6 điểm +4.0
+[09:16:12] eval  ca 2 (61274) ngắt: 78s sim / 63s thật | giúp 0 (dẫn tới 0) nhận việc 1 thấy 2 | hỏi thừa 0 quay lại hỏi 0 bỏ dở 0 kẹt 0 va 2 đẩy 0s | R -1.7 điểm -1.0
+[09:16:12] eval  ca 2 (61265) ngắt: 82s sim / 67s thật | giúp 0 (dẫn tới 0) nhận việc 1 thấy 1 | hỏi thừa 1 quay lại hỏi 0 bỏ dở 0 kẹt 0 va 0 đẩy 0s | R -4.0 điểm -1.0
+[09:16:12] Dừng sau 0 lần cập nhật, 0 bước. Checkpoint: experiments/eval_godot/runs/20261114_090323_eval_PPOHospital-EngageV3_best/checkpoints

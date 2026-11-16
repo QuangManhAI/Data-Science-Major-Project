@@ -284,6 +284,12 @@ def main() -> None:
              "when sim_vision/godot/assets/textures/npc_faces/ exists",
     )
     parser.add_argument(
+        "--capture-hz",
+        type=float,
+        default=10.0,
+        help="Front camera frames/s sent to YOLO with --controller rl (10 = as when training in Godot; 0 = Godot default 30)",
+    )
+    parser.add_argument(
         "--no-yolo",
         "--disconnect-yolo",
         dest="no_yolo",
@@ -482,6 +488,9 @@ def main() -> None:
         extra_godot_args.append("--no-face-paste")
     if args.lag_prob is not None:
         extra_godot_args.append(f"--lag-prob={args.lag_prob}")
+    if args.controller == "rl" and args.capture_hz > 0:
+        # Camera trước gửi YOLO cùng tần số lúc train trong Godot (src/training/train_godot_v3.py --capture-hz)
+        extra_godot_args.append(f"--capture-hz={args.capture_hz}")
     if extra_godot_args:
         godot_cmd.append("--")
         godot_cmd.extend(extra_godot_args)

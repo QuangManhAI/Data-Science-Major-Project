@@ -4,3 +4,8 @@
 [09:21:58] eval  ca 0 (61416) done: 480s sim / 326s thật | giúp 2 (dẫn tới 2) nhận việc 2 thấy 3 | hỏi thừa 1 quay lại hỏi 1 bỏ dở 0 kẹt 1 va 0 đẩy 0s | R +23.6 điểm +21.0
 [09:22:07] eval  ca 0 (61409) done: 480s sim / 338s thật | giúp 4 (dẫn tới 4) nhận việc 4 thấy 5 | hỏi thừa 4 quay lại hỏi 0 bỏ dở 0 kẹt 1 va 1 đẩy 1s | R +44.2 điểm +32.8
 [09:27:08] eval  ca 1 (61734) done: 480s sim / 311s thật | giúp 3 (dẫn tới 3) nhận việc 3 thấy 5 | hỏi thừa 3 quay lại hỏi 1 bỏ dở 0 kẹt 0 va 2 đẩy 2s | R +29.4 điểm +27.5
+[09:27:47] eval  ca 1 (61744) done: 480s sim / 346s thật | giúp 3 (dẫn tới 3) nhận việc 3 thấy 4 | hỏi thừa 0 quay lại hỏi 0 bỏ dở 0 kẹt 1 va 0 đẩy 0s | R +45.6 điểm +31.0
+[09:27:55] eval  ca 1 (61758) done: 480s sim / 346s thật | giúp 2 (dẫn tới 2) nhận việc 3 thấy 3 | hỏi thừa 3 quay lại hỏi 1 bỏ dở 0 kẹt 2 va 3 đẩy 0s | R -11.3 điểm +12.9
+[09:27:55] eval  ca 2 (62080) ngắt: 63s sim / 44s thật | giúp 0 (dẫn tới 0) nhận việc 1 thấy 4 | hỏi thừa 0 quay lại hỏi 0 bỏ dở 0 kẹt 0 va 0 đẩy 0s | R +5.9 điểm +1.0
+[09:27:55] eval  ca 2 (62137) ngắt: 10s sim / 5s thật | giúp 0 (dẫn tới 0) nhận việc 0 thấy 1 | hỏi thừa 0 quay lại hỏi 0 bỏ dở 0 kẹt 0 va 0 đẩy 0s | R +0.7 điểm +0.0
+[09:27:56] Dừng sau 0 lần cập nhật, 0 bước. Checkpoint: experiments/eval_godot/runs/20261114_091615_eval_PPOHospital-EngageV3-Godot_best/checkpoints

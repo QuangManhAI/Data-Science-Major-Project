@@ -291,3 +291,18 @@ cho render, YOLO, PhoWhisper) ➔ ~3 giờ sim train / giờ thật.
 
 Chạy demo với policy train trong Godot: camera trước 10 Hz như lúc train (`run_simulation.py --capture-hz`, mặc định 10
 khi `--controller rl`).
+
+**Kết quả vòng 12** (train 6 h: 83 lần cập nhật, 340k bước, từ 11c). Đối chứng trong Godot, cùng seed, 6 ca × 480 s,
+policy tất định (`train_godot_v3.py --eval-only`):
+
+| / ca | 11c (env Python) | Godot cập nhật 52 (`_best`) | Godot cập nhật 83 (`_last`) |
+|---|---|---|---|
+| Giúp được | 1.50 | **2.83** | 2.50 |
+| Hỏi thừa | 3.67 | **2.00** | 2.00 |
+| Kẹt 45 s | 4.00 | **1.00** | 1.67 |
+| Va chạm | 3.50 | **1.33** | 1.67 |
+| Điểm Godot | +0.4 (−9.2 … +6.9) | **+25.9** (+12.9 … +32.8) | +20.0 |
+
+Đã cài cập nhật 52 làm `PPOHospital-EngageV3_best.pt` (sha 4718919c…); 11c lưu ở `PPOHospital-EngageV3_round11c_59d.pt`.
+Lỗi tìm ra lúc đối chứng: câu "bắt đầu dẫn" cắt loa giữa lúc robot đang trả lời ➔ kẹt RESPOND mãi; đã sửa (hết giờ nói
+thì tự kết thúc lượt, dialogue_manager.gd).

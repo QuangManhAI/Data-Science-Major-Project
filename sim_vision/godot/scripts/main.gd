@@ -86,7 +86,7 @@ const GOAL_ANNOUNCE_MIN_M: float = 2.0
 const GOAL_ANNOUNCE_MAX_ANGLE: float = deg_to_rad(100.0)
 const HOLD_TURN_GAIN: float = 1.8
 var patient_lag_prob: float = PATIENT_LAG_PROB
-## Dán ảnh mặt người thật lên đầu NPC (npc_face.gd) khi có texture trong assets/textures/npc_faces/; --no-face-paste tắt.
+## Dán ảnh mặt người thật 2D lên trước và sau áo NPC (npc_face.gd, tắt mặt vuông) khi có texture trong assets/textures/npc_faces/; --no-face-paste tắt.
 var face_paste: bool = true
 const FACE_LOOK_ALIASES: Dictionary = {"medical_m01": "medical_doctor", "medical_f01": "medical_nurse"}
 var announcer: RobotAnnouncer = null
@@ -2292,7 +2292,7 @@ func _apply_face_paste() -> int:
 	for t: Array in targets:
 		if NpcFace.attach(t[0], NpcFace.load_face(t[1])) != null:
 			n += 1
-	print("[FacePaste] dán mặt người thật cho %d/%d NPC%s" % [n, targets.size(),
+	print("[FacePaste] dán mặt người thật lên trước/sau áo cho %d/%d NPC%s" % [n, targets.size(),
 			"" if n > 0 else " (không có texture: chạy sim_vision/python -m identity.make_npc_faces)"])
 	return n
 

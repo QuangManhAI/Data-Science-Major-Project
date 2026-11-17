@@ -4,7 +4,7 @@ extends SceneTree
 ## Mỗi người (10 ngoại hình NPC) ✕ khoảng cách ✕ góc quay người ✕ tư thế (đứng / đang đi) ➔ PNG + dòng JSON.
 ## Chạy (cần cửa sổ để render, không --headless):
 ##   godot --path sim_vision/godot --resolution 640x480 -s tools/capture_identity.gd -- <thư_mục_ra> [--faces]
-## --faces: dán ảnh mặt người thật (npc_face.gd, texture từ identity/make_npc_faces.py) lên đầu từng NPC.
+## --faces: dán ảnh mặt người thật (npc_face.gd, texture từ identity/make_npc_faces.py) lên trước/sau áo từng NPC.
 
 const IDENTITIES: Dictionary = {
 	"patient_f02": "res://scenes/props/npc_patient_f02.tscn",

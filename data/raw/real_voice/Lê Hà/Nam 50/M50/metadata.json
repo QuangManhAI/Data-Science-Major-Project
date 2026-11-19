@@ -1,0 +1,12 @@
+{
+  "subject": {
+    "id": "M50",
+    "realAge": 50,
+    "gender": "Nam",
+    "region": "Bắc",
+    "province": "Quảng Ninh"
+  },
+  "exportDate": "2026-11-19T12:42:27.694Z",
+  "recordedFilesCount": 10,
+  "totalPrompts": 70
+}
